@@ -214,8 +214,15 @@
 
         // Firestore 컬렉션 경로 생성 함수
         function getLinksCollectionRef(db, userId, appId) {
-            // 개인 데이터를 위한 경로: /artifacts/{appId}/users/{userId}/links
-            return collection(db, `artifacts/${appId}/users/${userId}/links`);
+            const isCanvasEnvironment = typeof __firebase_config !== 'undefined' && __firebase_config;
+
+            if (isCanvasEnvironment) {
+                // Canvas 환경: 기존 경로 사용 (사용자별 분리)
+                return collection(db, `artifacts/${appId}/users/${userId}/links`);
+            } else {
+                // 외부 환경 (GitHub): 공용 경로 사용 (모든 기기 동기화)
+                return collection(db, `myLinks`);
+            }
         }
         
         // 유효성 검사 함수 (간단한 URL 검사)
@@ -505,7 +512,8 @@
             // 캐시된 링크 목록의 역순으로 타임스탬프를 할당하여 순서 유지 (최상위가 가장 큰 값)
             for (let i = 0; i < linksCount; i++) {
                 const link = cachedLinks[i];
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/links`, link.id);
+                // getLinksCollectionRef를 통해 얻은 경로를 사용합니다.
+                const docRef = doc(db, getLinksCollectionRef(db, userId, appId).path, link.id);
                 // 새로운 타임스탬프: base - (i * 1000)
                 const newTimestamp = baseTimestamp - (i * 1000); 
                 batch.update(docRef, { createdAt: newTimestamp });
@@ -620,7 +628,8 @@
             try {
                 const deletionPromises = [];
                 for (const linkId of selectedLinkIds) {
-                    const docRef = doc(db, `artifacts/${appId}/users/${userId}/links`, linkId);
+                    // getLinksCollectionRef를 통해 얻은 경로를 사용합니다.
+                    const docRef = doc(db, getLinksCollectionRef(db, userId, appId).path, linkId);
                     deletionPromises.push(deleteDoc(docRef));
                 }
                 
@@ -677,7 +686,7 @@
                     // Canvas 환경: 커스텀 토큰으로 인증
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    // 외부 환경: 익명 인증 (가장 간단하고 별도 UI/회원가입 필요 없음)
+                    // 외부 환경: 익명 인증 (모든 기기가 동일한 익명 계정으로 접근하도록 처리)
                     await signInAnonymously(auth);
                 }
 
