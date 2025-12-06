@@ -170,17 +170,7 @@
 
         // ***************************************************************
         // [필수 설정] 외부 환경(GitHub 등)에 배포할 때만 필요합니다.
-        // 1. Firebase 콘솔에서 새 프로젝트를 만듭니다.
-        // 2. 프로젝트에 웹 앱을 등록하고, 발급받은 설정 정보를 여기에 붙여넣으세요.
-        //    (주의: Canvas 환경에서는 이 설정이 무시되고 플랫폼의 설정이 자동 사용됩니다.)
-        const userFirebaseConfig = {
-             apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", 
-             authDomain: "template-3530f.firebaseapp.com",
-             projectId: "template-3530f", 
-             storageBucket: "template-3530f.firebasestorage.app",
-             messagingSenderId: "891098188622",
-             appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
-        };
+        // 이 설정은 'firebase-config.json' 파일에서 동적으로 로드됩니다.
         // ***************************************************************
         
         // 전역 변수 및 DOM 요소 설정
@@ -663,15 +653,30 @@
                     console.error("Canvas Firebase config parsing error:", e);
                     return;
                 }
-            } else if (userFirebaseConfig.projectId) {
-                // 2. 외부 환경 (GitHub): 사용자가 직접 입력한 설정을 사용
-                config = userFirebaseConfig;
             } else {
-                // 3. 설정 누락 오류 처리
-                console.error("Firebase 연결을 위한 설정 정보가 누락되었습니다. 'userFirebaseConfig' 변수를 확인하세요.");
-                loadingIndicator.classList.add('hidden');
-                linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 외부 배포를 위해 userFirebaseConfig에 설정을 입력해주세요.</p>`;
-                return;
+                // 2. 외부 환경 (GitHub): firebase-config.json 파일에서 동적으로 설정 로드
+                try {
+                    loadingIndicator.querySelector('p').textContent = '설정 파일 로드 중...';
+                    const response = await fetch('./firebase-config.json');
+                    
+                    if (!response.ok) {
+                        // 404 등 오류 발생 시
+                        throw new Error(`Failed to load firebase-config.json. Status: ${response.statusText}`);
+                    }
+                    config = await response.json();
+                } catch (error) {
+                    console.error("Firebase 설정 로드 오류:", error);
+                    loadingIndicator.classList.add('hidden');
+                    linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 'firebase-config.json' 파일을 확인하거나 누락된 경우 생성해 주세요. (오류: ${error.message})</p>`;
+                    return;
+                }
+
+                if (!config || !config.projectId) {
+                    console.error("Firebase 연결을 위한 설정 정보가 누락되었습니다.");
+                    loadingIndicator.classList.add('hidden');
+                    linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 'firebase-config.json' 파일에 projectId가 누락되었습니다. 설정을 확인해 주세요.</p>`;
+                    return;
+                }
             }
 
 
