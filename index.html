@@ -168,6 +168,21 @@
         // deleteDoc, updateDoc, writeBatch를 추가 임포트합니다.
         import { getFirestore, doc, addDoc, onSnapshot, collection, query, deleteDoc, updateDoc, writeBatch, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // ***************************************************************
+        // [필수 설정] 외부 환경(GitHub 등)에 배포할 때만 필요합니다.
+        // 1. Firebase 콘솔에서 새 프로젝트를 만듭니다.
+        // 2. 프로젝트에 웹 앱을 등록하고, 발급받은 설정 정보를 여기에 붙여넣으세요.
+        //    (주의: Canvas 환경에서는 이 설정이 무시되고 플랫폼의 설정이 자동 사용됩니다.)
+        const userFirebaseConfig = {
+             apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", 
+             authDomain: "template-3530f.firebaseapp.com",
+             projectId: "template-3530f", 
+             storageBucket: "template-3530f.firebasestorage.app",
+             messagingSenderId: "891098188622",
+             appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
+        };
+        // ***************************************************************
+        
         // 전역 변수 및 DOM 요소 설정
         const linksContainer = document.getElementById('links-container');
         const addLinkModal = document.getElementById('addLinkModal');
@@ -627,17 +642,42 @@
         // Firebase 초기화 및 인증
         async function initFirebase() {
             setLogLevel('error');
+
+            const isCanvasEnvironment = typeof __firebase_config !== 'undefined' && __firebase_config;
+            let config;
+
+            if (isCanvasEnvironment) {
+                // 1. Canvas 환경: 플랫폼이 제공하는 설정을 사용
+                try {
+                    config = JSON.parse(__firebase_config);
+                } catch (e) {
+                    console.error("Canvas Firebase config parsing error:", e);
+                    return;
+                }
+            } else if (userFirebaseConfig.projectId) {
+                // 2. 외부 환경 (GitHub): 사용자가 직접 입력한 설정을 사용
+                config = userFirebaseConfig;
+            } else {
+                // 3. 설정 누락 오류 처리
+                console.error("Firebase 연결을 위한 설정 정보가 누락되었습니다. 'userFirebaseConfig' 변수를 확인하세요.");
+                loadingIndicator.classList.add('hidden');
+                linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 외부 배포를 위해 userFirebaseConfig에 설정을 입력해주세요.</p>`;
+                return;
+            }
+
+
             try {
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(config);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
-                if (typeof __initial_auth_token !== 'undefined') {
+                // 인증 처리
+                if (isCanvasEnvironment && typeof __initial_auth_token !== 'undefined') {
+                    // Canvas 환경: 커스텀 토큰으로 인증
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
+                    // 외부 환경: 익명 인증 (가장 간단하고 별도 UI/회원가입 필요 없음)
                     await signInAnonymously(auth);
                 }
 
