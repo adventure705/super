@@ -47,9 +47,14 @@
         <h1 class="text-4xl font-bold text-gray-800 mb-6 text-center">단축 링크 모음집</h1>
         
         <!-- Auth Status & User ID Display -->
-        <div class="text-sm text-gray-500 mb-4 text-center">
-            <span id="auth-status">인증 중...</span>
-            <span id="user-id-display" class="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2"></span>
+        <div class="text-sm text-gray-500 mb-4 text-center flex justify-center items-center space-x-4">
+            <div>
+                <span id="auth-status" class="font-semibold">인증 중...</span>
+                <span id="user-id-display" class="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2"></span>
+            </div>
+            <div id="auth-buttons">
+                <!-- Buttons removed for seamless personal use -->
+            </div>
         </div>
 
         <!-- Notification/Modal Area -->
@@ -139,6 +144,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // 익명 인증을 위해 signInAnonymously를 유지하고, GoogleAuth 관련 모듈 제거
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -148,14 +154,17 @@
 
         // =========================================================================
         // === Firebase 설정 로드 URL ===
-        // ./ 를 제거하여 경로 해석 오류를 해결했습니다.
-        const FIREBASE_CONFIG_URL = 'firebase-config.json';
+        // ./ 를 다시 추가하여 표준 상대 경로 모듈 형식을 사용합니다.
+        const FIREBASE_CONFIG_URL = './firebase-config.json';
         // =========================================================================
+
+        // [핵심 변경] 모든 기기가 공유할 고정된 사용자 ID (데이터 저장 경로)를 설정합니다.
+        const MASTER_USER_ID = "SINGLE_USER_MASTER_KEY_LINK_COLLECTION_20251208"; 
 
         let db;
         let auth;
-        let userId = null;
-        let appId = null; // projectId를 저장할 변수
+        let userId = null; // 실제로 Firestore 쿼리에 사용될 ID는 MASTER_USER_ID입니다.
+        let appId = null;
         let isAuthReady = false;
         let allCategories = new Set();
         let currentFilter = '';
@@ -171,6 +180,7 @@
         const modalOverlay = document.getElementById('modal-overlay');
         const notificationArea = document.getElementById('notification-area');
         const submitButton = document.getElementById('submit-button');
+        const authButtonsDiv = document.getElementById('auth-buttons');
 
         // --- Core Initialization Function ---
         async function initFirebase() {
@@ -179,15 +189,15 @@
             // 1. 설정 파일 로드
             try {
                 authStatus.textContent = "Firebase 설정 로드 중...";
-                const response = await fetch(FIREBASE_CONFIG_URL);
+                // fetch 경로 문제 해결을 위해 './'를 명시했습니다.
+                const response = await fetch(FIREBASE_CONFIG_URL); 
                 if (!response.ok) {
-                    // JSON 파일이 존재하지만 읽지 못했을 경우
-                    throw new Error(`HTTP Error! Status: ${response.status} (파일이 웹 서버의 루트 경로에 있는지 확인하세요)`);
+                    throw new Error(`HTTP Error! Status: ${response.status}`);
                 }
                 firebaseConfig = await response.json();
             } catch (e) {
                 console.error("FATAL: Failed to load Firebase config:", e);
-                authStatus.textContent = `FATAL ERROR: Firebase 설정 로드 실패! (URL: ${FIREBASE_CONFIG_URL})`;
+                authStatus.textContent = `FATAL ERROR: Firebase 설정 로드 실패! (경로: ${FIREBASE_CONFIG_URL}. 두 파일이 동일 폴더에 있는지 확인)`;
                 return;
             }
             
@@ -198,40 +208,43 @@
                 auth = getAuth(app);
                 appId = firebaseConfig.projectId;
 
-                authStatus.textContent = "인증 대기 중...";
+                authStatus.textContent = "연결 시도 중...";
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
                 authStatus.textContent = "Firebase 초기화 실패!";
                 return;
             }
 
-            // 3. 인증 리스너 설정
+            // 3. 인증 리스너 설정 (자동 인증)
             onAuthStateChanged(auth, async (user) => {
-                if (!db) return; 
+                if (!db) return;
 
                 if (user) {
-                    userId = user.uid;
-                    authStatus.textContent = "인증 완료";
-                    userIdDisplay.textContent = `User ID: ${userId}`;
+                    // 로그인된 사용자 (익명 사용자라도 토큰은 있음)
+                    userId = MASTER_USER_ID; 
+                    authStatus.textContent = `연결됨 (마스터 키)`;
+                    userIdDisplay.textContent = `Master ID: ${userId.substring(0, 10)}...`; 
+                    
+                    authButtonsDiv.innerHTML = '';
                     isAuthReady = true;
+
                     // Start listeners
                     setupLinkListener();
                     setupCategoryFilterListener();
                     setupSearchListener();
                 } else {
-                    // 사용자 정보가 없으면 익명 인증을 시도합니다.
+                    // 사용자 정보가 없으면 익명 인증을 시도합니다. (로그인 없이 데이터 접근을 위함)
                     try {
                         await signInAnonymously(auth);
+                        // 익명 인증 성공 후 onAuthStateChanged가 다시 호출되어 데이터 로드를 시작합니다.
                     } catch (error) {
                         console.error("Authentication Error:", error);
-                        authStatus.textContent = "인증 오류 발생";
-                        userId = 'anonymous'; 
+                        authStatus.textContent = "인증 실패 (데이터 접속 불가)";
+                        userId = null; 
                         isAuthReady = true;
-                        userIdDisplay.textContent = `(Error) User ID: ${userId}`;
-                        // Fallback: 인증 오류가 나더라도 로컬에서 리스너 설정 (빈 목록이 됨)
-                        setupLinkListener();
-                        setupCategoryFilterListener();
-                        setupSearchListener();
+                        linkList.innerHTML = `<p class="text-center text-red-500 p-4">데이터 접근을 위한 기본 인증에 실패했습니다. (콘솔 확인)</p>`;
+                        document.getElementById('link-list-header').classList.remove('grid');
+                        document.getElementById('link-list-header').classList.add('hidden');
                     }
                 }
             });
@@ -245,16 +258,16 @@
 
         /**
          * Firestore의 Private 컬렉션 경로를 반환합니다.
-         * @param {string} userId - 현재 사용자의 ID.
+         * 모든 기기가 MASTER_USER_ID 경로를 사용하도록 userId 인자를 무시합니다.
          * @returns {import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js").CollectionReference | null}
          */
-        const getPrivateCollectionRef = (userId) => {
+        const getPrivateCollectionRef = () => {
             if (!db || !appId) return null; // Guard against uninitialized db or missing appId
-            // 경로: /artifacts/{projectId}/users/{userId}/short_links
-            return collection(db, `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}`);
+            // 경로: /artifacts/{projectId}/users/{MASTER_USER_ID}/short_links
+            return collection(db, `/artifacts/${appId}/users/${MASTER_USER_ID}/${COLLECTION_NAME}`);
         };
 
-        // --- Helper Functions ---
+        // --- Helper Functions (나머지 복사본 유지) ---
 
         /**
          * 사용자에게 메시지를 보여주는 토스트 알림을 생성합니다.
@@ -372,11 +385,11 @@
         linkForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!isAuthReady || !userId) {
-                showNotification('인증 대기 중입니다. 잠시 후 다시 시도해 주세요.', 'info');
+                showNotification('데이터베이스 연결 중입니다. 잠시 후 다시 시도해 주세요.', 'info');
                 return;
             }
             
-            const collectionRef = getPrivateCollectionRef(userId);
+            const collectionRef = getPrivateCollectionRef();
             if (!collectionRef) {
                  showNotification('데이터베이스 초기화 실패로 링크를 추가할 수 없습니다.', 'error');
                  return;
@@ -396,7 +409,7 @@
             };
 
             try {
-                const docRef = await addDoc(collectionRef, data);
+                await addDoc(collectionRef, data);
                 showNotification('링크가 성공적으로 추가되었습니다!', 'success');
                 linkForm.reset();
             } catch (error) {
@@ -413,9 +426,9 @@
          * @param {string} docId - 삭제할 문서 ID.
          */
         async function deleteLink(docId) {
-            if (!isAuthReady || !userId) return showNotification('인증 오류. 다시 로그인해주세요.', 'error');
+            if (!isAuthReady || !userId) return showNotification('데이터베이스 연결 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
             
-            const collectionRef = getPrivateCollectionRef(userId);
+            const collectionRef = getPrivateCollectionRef();
             if (!collectionRef) {
                  showNotification('데이터베이스 초기화 실패로 삭제할 수 없습니다.', 'error');
                  return;
@@ -443,9 +456,9 @@
          * @param {Object} data - 현재 문서 데이터.
          */
         function editLink(docId, data) {
-            if (!isAuthReady || !userId) return showNotification('인증 오류. 다시 로그인해주세요.', 'error');
+            if (!isAuthReady || !userId) return showNotification('데이터베이스 연결 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
             
-            const collectionRef = getPrivateCollectionRef(userId);
+            const collectionRef = getPrivateCollectionRef();
             if (!collectionRef) {
                  showNotification('데이터베이스 초기화 실패로 편집할 수 없습니다.', 'error');
                  return;
@@ -539,9 +552,9 @@
          * Firestore에서 링크 데이터를 실시간으로 가져와 렌더링합니다.
          */
         function setupLinkListener() {
-            if (!isAuthReady || !userId) return;
+            if (!isAuthReady || !userId) return; // 연결 안 됐으면 리스너 실행 안 함
             
-            const collectionRef = getPrivateCollectionRef(userId);
+            const collectionRef = getPrivateCollectionRef();
             if (!collectionRef) {
                  console.warn('데이터베이스 초기화 실패로 리스너를 설정할 수 없습니다.');
                  linkList.innerHTML = `<p class="text-center text-red-500 p-4">데이터베이스 연결 실패. 관리자에게 문의하세요.</p>`;
