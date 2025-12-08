@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>단축 링크 모음집</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font (for a clean look) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        /* Custom scrollbar for better aesthetics */
+        .link-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .link-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .link-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        /* Custom class for button placement next to link */
+        .link-action-container {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Spacing between link and button */
+        }
+        /* Hide action buttons on mobile when they are part of the detailed card view */
+        @media (max-width: 768px) {
+            .mobile-action-button-group {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="container mx-auto">
+        <h1 class="text-4xl font-bold text-gray-800 mb-6 text-center">단축 링크 모음집</h1>
+        
+        <!-- Auth Status & User ID Display -->
+        <div class="text-sm text-gray-500 mb-4 text-center">
+            <span id="auth-status">인증 중...</span>
+            <span id="user-id-display" class="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2"></span>
+        </div>
+
+        <!-- Notification/Modal Area -->
+        <div id="notification-area" class="fixed top-5 right-5 z-50"></div>
+        <div id="modal-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-40 items-center justify-center">
+            <!-- Modal will be inserted here -->
+        </div>
+
+        <!-- 1. Link Input Form -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">새 링크 추가 (입력 공간)</h2>
+            <form id="link-form" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                <!-- 제목 -->
+                <div class="md:col-span-1">
+                    <label for="title" class="block text-sm font-medium text-gray-700">제목</label>
+                    <input type="text" id="title" required placeholder="Google" class="mt-1 p-2 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <!-- 본 링크 -->
+                <div class="md:col-span-2">
+                    <label for="originalLink" class="block text-sm font-medium text-gray-700">본 링크 (URL)</label>
+                    <input type="url" id="originalLink" required placeholder="https://www.google.com" class="mt-1 p-2 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <!-- 단축 링크 -->
+                <div class="md:col-span-1">
+                    <label for="shortLink" class="block text-sm font-medium text-gray-700">단축 링크 (선택)</label>
+                    <input type="url" id="shortLink" placeholder="https://goo.gl/..." class="mt-1 p-2 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <!-- 설명 -->
+                <div class="md:col-span-1">
+                    <label for="description" class="block text-sm font-medium text-gray-700">설명</label>
+                    <input type="text" id="description" placeholder="자주 쓰는 검색 엔진" class="mt-1 p-2 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <!-- 카테고리 -->
+                <div class="md:col-span-1">
+                    <label for="category" class="block text-sm font-medium text-gray-700">카테고리</label>
+                    <input type="text" id="category" required placeholder="업무, 개인 등" class="mt-1 p-2 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                
+                <!-- 추가 버튼 -->
+                <button type="submit" id="submit-button" class="md:col-span-6 bg-indigo-600 text-white p-3 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md font-semibold">
+                    링크 추가
+                </button>
+            </form>
+        </div>
+
+        <!-- 2. Link List Header and Filter & Search -->
+        <div class="bg-gray-100 p-4 rounded-t-xl shadow-md mb-2 space-y-3">
+            <h2 class="text-xl font-semibold text-gray-700">링크 목록 (결과 영역)</h2>
+            
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
+                <!-- Search Input (검색 필드) -->
+                <div class="w-full md:w-2/3">
+                    <label for="search-term" class="sr-only">검색</label>
+                    <div class="relative">
+                        <input type="text" id="search-term" placeholder="제목, 링크, 설명, 카테고리 검색" class="p-2 pl-10 w-full border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                </div>
+
+                <!-- Category Filter (드롭다운) -->
+                <div class="flex items-center space-x-2 w-full md:w-auto md:max-w-xs">
+                    <label for="category-filter" class="text-sm font-medium text-gray-700 whitespace-nowrap">카테고리 필터:</label>
+                    <select id="category-filter" class="p-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500 w-full">
+                        <option value="">전체 카테고리</option>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Link List Table/Grid Header -->
+        <div id="link-list-header" class="hidden md:grid grid-cols-12 gap-4 text-sm font-semibold text-gray-600 border-b border-gray-300 py-2 px-4 bg-gray-50 rounded-b-lg">
+            <div class="col-span-2">제목</div>
+            <div class="col-span-3">본 링크</div>
+            <div class="col-span-2">단축 링크</div>
+            <div class="col-span-2">설명</div>
+            <div class="col-span-1">카테고리</div>
+            <div class="col-span-2 text-center">액션</div>
+        </div>
+        
+        <!-- 3. Link List Body -->
+        <div id="link-list" class="link-list space-y-3 pt-3">
+            <p class="text-center text-gray-500 p-4" id="loading-message">링크 데이터를 로드 중입니다...</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Debugging logs for Firestore
+        setLogLevel('Debug');
+
+        // =========================================================================
+        // === Firebase 설정 로드 URL ===
+        // ./ 를 제거하여 경로 해석 오류를 해결했습니다.
+        const FIREBASE_CONFIG_URL = 'firebase-config.json';
+        // =========================================================================
+
+        let db;
+        let auth;
+        let userId = null;
+        let appId = null; // projectId를 저장할 변수
+        let isAuthReady = false;
+        let allCategories = new Set();
+        let currentFilter = '';
+        let currentSearchTerm = '';
+        
+        // DOM Elements
+        const linkForm = document.getElementById('link-form');
+        const linkList = document.getElementById('link-list');
+        const categoryFilter = document.getElementById('category-filter');
+        const searchTermInput = document.getElementById('search-term');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const authStatus = document.getElementById('auth-status');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const notificationArea = document.getElementById('notification-area');
+        const submitButton = document.getElementById('submit-button');
+
+        // --- Core Initialization Function ---
+        async function initFirebase() {
+            let firebaseConfig;
+
+            // 1. 설정 파일 로드
+            try {
+                authStatus.textContent = "Firebase 설정 로드 중...";
+                const response = await fetch(FIREBASE_CONFIG_URL);
+                if (!response.ok) {
+                    // JSON 파일이 존재하지만 읽지 못했을 경우
+                    throw new Error(`HTTP Error! Status: ${response.status} (파일이 웹 서버의 루트 경로에 있는지 확인하세요)`);
+                }
+                firebaseConfig = await response.json();
+            } catch (e) {
+                console.error("FATAL: Failed to load Firebase config:", e);
+                authStatus.textContent = `FATAL ERROR: Firebase 설정 로드 실패! (URL: ${FIREBASE_CONFIG_URL})`;
+                return;
+            }
+            
+            // 2. Firebase 초기화 및 변수 설정
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                appId = firebaseConfig.projectId;
+
+                authStatus.textContent = "인증 대기 중...";
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                authStatus.textContent = "Firebase 초기화 실패!";
+                return;
+            }
+
+            // 3. 인증 리스너 설정
+            onAuthStateChanged(auth, async (user) => {
+                if (!db) return; 
+
+                if (user) {
+                    userId = user.uid;
+                    authStatus.textContent = "인증 완료";
+                    userIdDisplay.textContent = `User ID: ${userId}`;
+                    isAuthReady = true;
+                    // Start listeners
+                    setupLinkListener();
+                    setupCategoryFilterListener();
+                    setupSearchListener();
+                } else {
+                    // 사용자 정보가 없으면 익명 인증을 시도합니다.
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Authentication Error:", error);
+                        authStatus.textContent = "인증 오류 발생";
+                        userId = 'anonymous'; 
+                        isAuthReady = true;
+                        userIdDisplay.textContent = `(Error) User ID: ${userId}`;
+                        // Fallback: 인증 오류가 나더라도 로컬에서 리스너 설정 (빈 목록이 됨)
+                        setupLinkListener();
+                        setupCategoryFilterListener();
+                        setupSearchListener();
+                    }
+                }
+            });
+        }
+        
+        // 스크립트 실행 시작
+        initFirebase();
+
+
+        const COLLECTION_NAME = 'short_links';
+
+        /**
+         * Firestore의 Private 컬렉션 경로를 반환합니다.
+         * @param {string} userId - 현재 사용자의 ID.
+         * @returns {import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js").CollectionReference | null}
+         */
+        const getPrivateCollectionRef = (userId) => {
+            if (!db || !appId) return null; // Guard against uninitialized db or missing appId
+            // 경로: /artifacts/{projectId}/users/{userId}/short_links
+            return collection(db, `/artifacts/${appId}/users/${userId}/${COLLECTION_NAME}`);
+        };
+
+        // --- Helper Functions ---
+
+        /**
+         * 사용자에게 메시지를 보여주는 토스트 알림을 생성합니다.
+         * @param {string} message - 표시할 메시지.
+         * @param {string} type - 알림 타입 ('success', 'error', 'info').
+         */
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+            
+            const notification = document.createElement('div');
+            notification.className = `${colors[type]} text-white p-3 rounded-lg shadow-xl mb-3 transition transform duration-300 ease-out opacity-0 translate-x-full`;
+            notification.textContent = message;
+            
+            notificationArea.appendChild(notification);
+
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('opacity-0', 'translate-x-full');
+                notification.classList.add('opacity-100', 'translate-x-0');
+            }, 10);
+            
+            // Animate out and remove
+            setTimeout(() => {
+                notification.classList.remove('opacity-100', 'translate-x-0');
+                notification.classList.add('opacity-0', 'translate-x-full');
+            }, 3000);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 3500);
+        }
+
+        /**
+         * 텍스트를 클립보드에 복사합니다.
+         * @param {string} text - 복사할 텍스트.
+         */
+        function copyToClipboard(text) {
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showNotification('클립보드에 복사되었습니다!', 'success');
+                } else {
+                    throw new Error("Copy command failed.");
+                }
+            } catch (err) {
+                console.error('Copy Error:', err);
+                showNotification('복사 실패: 콘솔을 확인해주세요.', 'error');
+            }
+            document.body.removeChild(tempInput);
+        }
+
+        // --- Modal/Confirmation Logic ---
+        /**
+         * 사용자 정의 모달을 표시합니다. (alert(), confirm() 대체)
+         * @param {string} title - 모달 제목.
+         * @param {string} message - 모달 메시지.
+         * @param {function} onConfirm - '확인' 버튼 클릭 시 실행할 콜백.
+         * @param {function} [onCancel] - '취소' 버튼 클릭 시 실행할 콜백 (선택 사항).
+         */
+        function showCustomModal(title, message, onConfirm, onCancel = null) {
+            modalOverlay.innerHTML = '';
+            modalOverlay.classList.remove('hidden');
+            modalOverlay.classList.add('flex');
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm transform transition-all scale-90';
+            
+            modalContent.innerHTML = `
+                <h3 class="text-lg font-bold text-gray-800 mb-2">${title}</h3>
+                <p class="text-gray-600 mb-6">${message}</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150 font-semibold">취소</button>
+                    <button id="modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-150 font-semibold">확인</button>
+                </div>
+            `;
+            
+            modalOverlay.appendChild(modalContent);
+            
+            const closeModal = () => {
+                modalOverlay.classList.remove('flex');
+                modalOverlay.classList.add('hidden');
+            };
+
+            document.getElementById('modal-cancel').onclick = () => {
+                if (onCancel) onCancel();
+                closeModal();
+            };
+            
+            document.getElementById('modal-confirm').onclick = () => {
+                onConfirm();
+                closeModal();
+            };
+
+            // Initial scale animation
+            setTimeout(() => {
+                modalContent.classList.remove('scale-90');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        // --- Firestore CRUD & Display Logic ---
+
+        /**
+         * 링크를 Firestore에 추가합니다.
+         */
+        linkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAuthReady || !userId) {
+                showNotification('인증 대기 중입니다. 잠시 후 다시 시도해 주세요.', 'info');
+                return;
+            }
+            
+            const collectionRef = getPrivateCollectionRef(userId);
+            if (!collectionRef) {
+                 showNotification('데이터베이스 초기화 실패로 링크를 추가할 수 없습니다.', 'error');
+                 return;
+            }
+
+
+            submitButton.disabled = true;
+            submitButton.textContent = '추가 중...';
+
+            const data = {
+                title: document.getElementById('title').value.trim(),
+                originalLink: document.getElementById('originalLink').value.trim(),
+                shortLink: document.getElementById('shortLink').value.trim(),
+                description: document.getElementById('description').value.trim(),
+                category: document.getElementById('category').value.trim(),
+                createdAt: Date.now()
+            };
+
+            try {
+                const docRef = await addDoc(collectionRef, data);
+                showNotification('링크가 성공적으로 추가되었습니다!', 'success');
+                linkForm.reset();
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                showNotification('링크 추가에 실패했습니다. 콘솔을 확인해주세요.', 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = '링크 추가';
+            }
+        });
+
+        /**
+         * 링크를 삭제합니다.
+         * @param {string} docId - 삭제할 문서 ID.
+         */
+        async function deleteLink(docId) {
+            if (!isAuthReady || !userId) return showNotification('인증 오류. 다시 로그인해주세요.', 'error');
+            
+            const collectionRef = getPrivateCollectionRef(userId);
+            if (!collectionRef) {
+                 showNotification('데이터베이스 초기화 실패로 삭제할 수 없습니다.', 'error');
+                 return;
+            }
+
+            showCustomModal(
+                '링크 삭제 확인',
+                `정말로 "${docId.substring(0, 8)}..." 링크를 삭제하시겠습니까?`,
+                async () => {
+                    try {
+                        const docRef = doc(collectionRef, docId);
+                        await deleteDoc(docRef);
+                        showNotification('링크가 삭제되었습니다.', 'info');
+                    } catch (error) {
+                        console.error("Error deleting document: ", error);
+                        showNotification('링크 삭제에 실패했습니다.', 'error');
+                    }
+                }
+            );
+        }
+
+        /**
+         * 링크를 편집하는 모달을 엽니다.
+         * @param {string} docId - 편집할 문서 ID.
+         * @param {Object} data - 현재 문서 데이터.
+         */
+        function editLink(docId, data) {
+            if (!isAuthReady || !userId) return showNotification('인증 오류. 다시 로그인해주세요.', 'error');
+            
+            const collectionRef = getPrivateCollectionRef(userId);
+            if (!collectionRef) {
+                 showNotification('데이터베이스 초기화 실패로 편집할 수 없습니다.', 'error');
+                 return;
+            }
+
+
+            modalOverlay.innerHTML = '';
+            modalOverlay.classList.remove('hidden');
+            modalOverlay.classList.add('flex');
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg transform transition-all scale-90';
+            
+            modalContent.innerHTML = `
+                <h3 class="text-xl font-bold text-gray-800 mb-4">링크 편집: ${data.title}</h3>
+                <form id="edit-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">제목</label>
+                        <input type="text" id="edit-title" value="${data.title || ''}" required class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">본 링크 (URL)</label>
+                        <input type="url" id="edit-originalLink" value="${data.originalLink || ''}" required class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">단축 링크 (선택)</label>
+                        <input type="url" id="edit-shortLink" value="${data.shortLink || ''}" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">설명</label>
+                        <input type="text" id="edit-description" value="${data.description || ''}" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">카테고리</label>
+                        <input type="text" id="edit-category" value="${data.category || ''}" required class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" id="modal-edit-cancel" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-150 font-semibold">취소</button>
+                        <button type="submit" id="modal-edit-submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150 font-semibold">수정 완료</button>
+                    </div>
+                </form>
+            `;
+            
+            modalOverlay.appendChild(modalContent);
+            const editForm = document.getElementById('edit-form');
+            const editSubmitButton = document.getElementById('modal-edit-submit');
+
+            const closeModal = () => {
+                modalOverlay.classList.remove('flex');
+                modalOverlay.classList.add('hidden');
+            };
+
+            document.getElementById('modal-edit-cancel').onclick = closeModal;
+            
+            editForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                editSubmitButton.disabled = true;
+                editSubmitButton.textContent = '저장 중...';
+
+                const updatedData = {
+                    title: document.getElementById('edit-title').value.trim(),
+                    originalLink: document.getElementById('edit-originalLink').value.trim(),
+                    shortLink: document.getElementById('edit-shortLink').value.trim(),
+                    description: document.getElementById('edit-description').value.trim(),
+                    category: document.getElementById('edit-category').value.trim(),
+                };
+
+                try {
+                    const docRef = doc(collectionRef, docId);
+                    await updateDoc(docRef, updatedData);
+                    showNotification('링크가 성공적으로 업데이트되었습니다.', 'success');
+                    closeModal();
+                } catch (error) {
+                    console.error("Error updating document: ", error);
+                    showNotification('업데이트에 실패했습니다.', 'error');
+                } finally {
+                    editSubmitButton.disabled = false;
+                    editSubmitButton.textContent = '수정 완료';
+                }
+            });
+            
+            // Initial scale animation
+            setTimeout(() => {
+                modalContent.classList.remove('scale-90');
+                modalContent.classList.add('scale-100');
+            }, 10);
+        }
+
+        /**
+         * Firestore에서 링크 데이터를 실시간으로 가져와 렌더링합니다.
+         */
+        function setupLinkListener() {
+            if (!isAuthReady || !userId) return;
+            
+            const collectionRef = getPrivateCollectionRef(userId);
+            if (!collectionRef) {
+                 console.warn('데이터베이스 초기화 실패로 리스너를 설정할 수 없습니다.');
+                 linkList.innerHTML = `<p class="text-center text-red-500 p-4">데이터베이스 연결 실패. 관리자에게 문의하세요.</p>`;
+                 return;
+            }
+
+            // Firebase Index 오류를 피하기 위해, ORDER BY만 사용하고 필터링은 클라이언트 측에서 처리합니다.
+            let q = query(
+                collectionRef,
+                orderBy('createdAt', 'desc') // 시간 순 정렬만 서버에서 수행
+            );
+
+            onSnapshot(q, (snapshot) => {
+                linkList.innerHTML = ''; // Clear existing list
+                allCategories.clear();
+                allCategories.add('전체'); // Add default 'All' category
+
+                let linksToRender = [];
+                const searchLower = currentSearchTerm.toLowerCase();
+                
+                // 1. 카테고리 수집 및 클라이언트 측 필터링 수행
+                snapshot.docs.forEach(docSnapshot => {
+                    const data = docSnapshot.data();
+                    const docId = docSnapshot.id;
+                    const category = data.category || '';
+
+                    // Collect all unique categories
+                    if (category) {
+                        allCategories.add(category);
+                    }
+                    
+                    // --- 클라이언트 측 필터링: 카테고리 및 검색어 ---
+                    const isCategoryMatch = currentFilter === '' || currentFilter === '전체' || category === currentFilter;
+
+                    let isSearchMatch = true;
+                    if (searchLower) {
+                        isSearchMatch = Object.values(data).some(value => 
+                            String(value).toLowerCase().includes(searchLower)
+                        );
+                    }
+
+                    if (isCategoryMatch && isSearchMatch) {
+                         linksToRender.push({ id: docId, data: data });
+                    }
+                });
+
+                if (linksToRender.length === 0) {
+                    // Check if the original snapshot was empty or if filtering resulted in an empty list
+                    if (snapshot.empty) {
+                        linkList.innerHTML = `<p class="text-center text-gray-500 p-4">저장된 링크가 없습니다. 위에 링크를 추가해보세요!</p>`;
+                    } else {
+                        linkList.innerHTML = `<p class="text-center text-gray-500 p-4">현재 필터/검색 조건에 해당하는 링크가 없습니다.</p>`;
+                    }
+                    // Hide header if list is empty
+                    document.getElementById('link-list-header').classList.remove('grid');
+                    document.getElementById('link-list-header').classList.add('hidden');
+                    // Update filter dropdown with collected categories
+                    updateCategoryFilter();
+                    return;
+                }
+                
+                // Show header if list is not empty
+                document.getElementById('link-list-header').classList.remove('hidden');
+                document.getElementById('link-list-header').classList.add('grid');
+
+                // 2. 렌더링
+                linksToRender.forEach(link => {
+                    const docId = link.id;
+                    const data = link.data;
+                    const { title, originalLink, shortLink, description, category } = data;
+                    
+                    const card = document.createElement('div');
+                    card.id = `link-${docId}`;
+                    card.className = 'bg-white p-4 rounded-xl shadow-md border-l-4 border-indigo-400 hover:shadow-lg transition duration-150';
+                    
+                    // --- Mobile View ---
+                    // Display links as cards on mobile
+                    let mobileContent = `
+                        <div class="md:hidden space-y-2">
+                            <p class="font-bold text-lg text-gray-800">${title}</p>
+                            <div class="text-sm text-gray-600 space-y-1">
+                                <!-- 본 링크와 복사 버튼을 함께 배치 -->
+                                <div class="link-action-container">
+                                    <span class="font-medium text-indigo-600">본 링크:</span>
+                                    <a href="${originalLink}" target="_blank" class="text-indigo-600 hover:underline truncate max-w-[calc(100%-40px)]">${originalLink}</a>
+                                    <button data-action="copy-original" data-link="${originalLink}" class="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-150 flex-shrink-0" title="본 링크 복사">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.881a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                                    </button>
+                                </div>
+                                <p><span class="font-medium text-indigo-600">단축 링크:</span> <a href="${shortLink || originalLink}" target="_blank" class="text-green-600 hover:underline">${shortLink || 'N/A'}</a></p>
+                                <p><span class="font-medium">설명:</span> ${description || '없음'}</p>
+                                <p><span class="font-medium">카테고리:</span> <span class="bg-gray-200 text-xs px-2 py-0.5 rounded-full">${category || '없음'}</span></p>
+                            </div>
+                            <!-- Mobile Action Buttons Group (Other buttons) -->
+                            <div class="flex justify-end space-x-2 pt-2">
+                                <!-- 단축 링크 복사 -->
+                                <button data-action="copy-short" data-link="${shortLink || originalLink}" class="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition duration-150" title="단축 링크 복사">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m-2 2H8m8 0h2M9 16h6"/></svg>
+                                </button>
+                                <!-- 편집 버튼 -->
+                                <button data-action="edit" data-id="${docId}" class="p-2 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition duration-150" title="편집">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                </button>
+                                <!-- 삭제 버튼 -->
+                                <button data-action="delete" data-id="${docId}" class="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition duration-150" title="삭제">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    // --- Desktop View ---
+                    // Display links as a grid row on desktop
+                    let desktopContent = `
+                        <div class="hidden md:grid grid-cols-12 gap-4 items-center">
+                            <div class="col-span-2 truncate font-semibold">${title}</div>
+                            <!-- 본 링크와 복사 버튼을 함께 배치 -->
+                            <div class="col-span-3 link-action-container">
+                                <div class="truncate text-sm text-gray-600 hover:text-indigo-500">
+                                    <a href="${originalLink}" target="_blank">${originalLink}</a>
+                                </div>
+                                <button data-action="copy-original" data-link="${originalLink}" class="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-150 flex-shrink-0" title="본 링크 복사">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.881a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                                </button>
+                            </div>
+                            <div class="col-span-2 truncate text-sm text-green-600">
+                                <a href="${shortLink || originalLink}" target="_blank">${shortLink || 'N/A'}</a>
+                            </div>
+                            <div class="col-span-2 truncate text-sm text-gray-500">${description || '—'}</div>
+                            <div class="col-span-1 text-xs text-center">
+                                <span class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">${category || '—'}</span>
+                            </div>
+                            
+                            <!-- Action Buttons (Desktop only) -->
+                            <div class="col-span-2 hidden md:flex justify-end space-x-2">
+                                <!-- 단축 링크 복사 -->
+                                <button data-action="copy-short" data-link="${shortLink || originalLink}" class="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition duration-150" title="단축 링크 복사">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m-2 2H8m8 0h2M9 16h6"/></svg>
+                                </button>
+                                <!-- 편집 버튼 -->
+                                <button data-action="edit" data-id="${docId}" class="p-2 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition duration-150" title="편집">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                </button>
+                                <!-- 삭제 버튼 -->
+                                <button data-action="delete" data-id="${docId}" class="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition duration-150" title="삭제">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    // Combine mobile and desktop layouts
+                    card.innerHTML = mobileContent + desktopContent;
+
+                    // Attach click handlers to the card's buttons
+                    card.querySelectorAll('button').forEach(button => {
+                        const action = button.dataset.action;
+                        // Since we are iterating over linksToRender, 'data' is the source of truth for actions like 'edit'
+                        const linkData = data; 
+
+                        button.addEventListener('click', () => {
+                            if (action === 'copy-original' || action === 'copy-short') {
+                                copyToClipboard(button.dataset.link);
+                            } else if (action === 'edit' && linkData) {
+                                editLink(docId, linkData);
+                            } else if (action === 'delete') {
+                                deleteLink(docId);
+                            }
+                        });
+                    });
+
+                    linkList.appendChild(card);
+                });
+                
+                // Update category filter dropdown
+                updateCategoryFilter();
+
+            }, (error) => {
+                // Keep the error handler clean and log the error for debugging
+                console.error("Error fetching data: ", error);
+                // Ensure to avoid index errors by telling the user the data failed to load
+                linkList.innerHTML = `<p class="text-center text-red-500 p-4">데이터 로드 중 오류가 발생했습니다. (자세한 내용은 콘솔 확인)</p>`;
+            });
+        }
+
+        /**
+         * 수집된 카테고리로 드롭다운을 업데이트합니다.
+         */
+        function updateCategoryFilter() {
+            const currentSelected = categoryFilter.value;
+            categoryFilter.innerHTML = '';
+            
+            // Sort categories alphabetically (case-insensitive)
+            const sortedCategories = Array.from(allCategories).sort((a, b) => {
+                if (a === '전체') return -1; // '전체' should always be first
+                if (b === '전체') return 1;
+                return a.localeCompare(b);
+            });
+
+            sortedCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category === '전체' ? '' : category;
+                option.textContent = category;
+                if (category === currentFilter || (!currentFilter && category === '전체')) {
+                    option.selected = true;
+                }
+                categoryFilter.appendChild(option);
+            });
+            
+            // Re-apply the filter after categories are updated
+            currentFilter = categoryFilter.value === '' ? '전체' : categoryFilter.value;
+        }
+
+        /**
+         * 카테고리 필터 변경 리스너를 설정합니다.
+         */
+        function setupCategoryFilterListener() {
+            categoryFilter.addEventListener('change', (e) => {
+                currentFilter = e.target.value === '' ? '전체' : e.target.value;
+                // Reruns the onSnapshot query with the new filter
+                setupLinkListener(); 
+            });
+        }
+        
+        /**
+         * 검색어 변경 리스너를 설정합니다. (debounce 적용)
+         */
+        function setupSearchListener() {
+            let timeout = null;
+            searchTermInput.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    currentSearchTerm = e.target.value.trim();
+                    setupLinkListener(); // Re-run listener to apply client-side filtering
+                }, 300); // 300ms debounce
+            });
+        }
+
+        // Expose functions to the global scope for event listeners (e.g. from the rendered list)
+        // Note: The click handlers are attached dynamically inside setupLinkListener, so this is mainly for debugging if needed.
+        window.deleteLink = deleteLink;
+        window.editLink = editLink;
+        window.copyToClipboard = copyToClipboard;
+        
+    </script>
+</body>
+</html>
