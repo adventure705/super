@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔒 통합 관리자 </title>
+    <title>🔒 통합 관리자</title>
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☁️</text></svg>">
     <style>
         :root {
             /* 다크 모드 컬러 팔레트 */
-            --primary-color: #3b82f6;
-            --primary-hover: #2563eb;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --success-color: #10b981;
+            --primary-color: #3b82f6; /* Blue 500 */
+            --primary-hover: #2563eb; /* Blue 600 */
+            --danger-color: #ef4444; /* Red 500 */
+            --warning-color: #f59e0b; /* Amber 500 */
+            --success-color: #10b981; /* Emerald 500 */
             
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --input-bg: #334155;
-            --border-color: #475569;
+            --bg-color: #0f172a;      /* Slate 900 */
+            --card-bg: #1e293b;       /* Slate 800 */
+            --input-bg: #334155;      /* Slate 700 */
+            --border-color: #475569;  /* Slate 600 */
             
             /* 텍스트 컬러 */
-            --text-main: #ffffff;
-            --text-sub: #cbd5e1;
+            --text-main: #ffffff;     /* Pure White */
+            --text-sub: #cbd5e1;      /* Slate 300 */
             --text-placeholder: #94a3b8;
             
             --tab-active-bg: #334155;
@@ -276,7 +276,7 @@
 </div>
 
 <div class="container">
-    <h2>📂 통합 관리자 </h2>
+    <h2>🔒 통합 관리자 </h2>
     
     <!-- 탭 네비게이션 -->
     <nav class="tabs">
@@ -535,27 +535,21 @@
     let localData = { api: [], youtube: [], adsense: [], subscription: [] };
     let pendingModalAction = null;
     let unsubscribes = {}; 
-    let remotePassword = ""; // settings.json에서 로드
+    let remotePassword = ""; 
 
     // --- 로그인 체크 함수 ---
     window.checkLogin = () => {
         const inputPw = document.getElementById('app-password').value;
         const errorMsg = document.getElementById('login-error');
         
-        // remotePassword가 아직 로드되지 않았을 경우 (네트워크 지연 등)
         if(!remotePassword) {
-            alert("설정 파일을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+            alert("설정 파일을 불러오는 중입니다. 잠시 후 다시 시도해주세요. (설정 로드 실패 시 '1234')");
             return;
         }
 
         if(inputPw === remotePassword) {
             document.getElementById('login-overlay').style.display = 'none';
             document.querySelector('.container').style.display = 'block';
-            
-            // 로그인 성공 후 Firebase 리스너 등 세팅 (init의 나머지 부분 실행)
-            // 여기서 Firebase 연결 시작은 이미 init에서 호출했으나, UI만 보여주는 식임.
-            // 실제로는 보안을 위해 인증 후에 Firebase 연결을 하는 것이 좋지만, 
-            // 현재 구조상 Firebase Config 로드와 패스워드 로드가 묶여있어 UI show/hide로 처리함.
         } else {
             errorMsg.style.display = 'block';
             document.getElementById('app-password').value = '';
@@ -566,18 +560,26 @@
     // --- 초기화 ---
     async function init() {
         try {
-            // 1. settings.json 로드 (비밀번호)
+            // 1. settings.json 로드
             try {
-                const settingsRes = await fetch('./settings.json');
+                let settingsRes = await fetch('./settings.json');
+                if(!settingsRes.ok) {
+                    console.log("'settings.json' not found, trying 'setting.json'...");
+                    settingsRes = await fetch('./setting.json');
+                }
+
                 if(settingsRes.ok) {
                     const settings = await settingsRes.json();
                     remotePassword = settings.appPassword;
+                    console.log("Password loaded successfully.");
                 } else {
-                    console.warn("settings.json을 찾을 수 없어 기본 비밀번호를 사용합니다.");
+                    console.error("settings.json and setting.json both missing.");
+                    alert("설정 파일(settings.json)을 찾을 수 없습니다. 기본 비밀번호 '1234'를 사용합니다.\n(GitHub Pages 반영에 시간이 걸릴 수 있습니다.)");
                     remotePassword = "1234"; // Fallback
                 }
             } catch(e) {
                 console.error("Settings load fail:", e);
+                alert("설정 파일 로드 중 오류가 발생했습니다: " + e.message + "\n기본 비밀번호 '1234'를 사용합니다.");
                 remotePassword = "1234"; // Fallback
             }
 
@@ -622,12 +624,14 @@
         }
     }
 
-    // --- Firestore 리스너 ---
+    // --- Firestore 리스너 (Public Path로 수정됨) ---
     function setupListeners() {
         const collections = ['api', 'youtube', 'adsense', 'subscription'];
         
         collections.forEach(colName => {
-            const q = query(collection(db, 'artifacts', appId, 'users', userId, colName));
+            // 변경된 부분: users/{userId} -> public/data
+            // 이렇게 하면 모든 기기에서 동일한 경로(공용 데이터)를 바라보게 됩니다.
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', colName));
             
             if (unsubscribes[colName]) unsubscribes[colName]();
 
@@ -664,7 +668,7 @@
         renderCurrentTable();
     }
 
-    // --- CRUD Operations ---
+    // --- CRUD Operations (Public Path로 수정됨) ---
 
     window.addData = async (type) => {
         if (!userId) return alert("데이터베이스 연결 중입니다...");
@@ -735,7 +739,8 @@
         }
 
         try {
-            await addDoc(collection(db, 'artifacts', appId, 'users', userId, type), newData);
+            // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', type), newData);
             clearInputs('tab-' + type);
         } catch (e) {
             alert("저장 실패: " + e.message);
@@ -812,7 +817,8 @@
         }
 
         try {
-            await updateDoc(doc(db, 'artifacts', appId, 'users', userId, currentTab, id), updates);
+            // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id), updates);
         } catch (e) {
             alert("수정 실패: " + e.message);
         }
@@ -821,7 +827,8 @@
     window.confirmDelete = (id) => {
         showModal('delete', '⚠️ 삭제 확인', '정말로 삭제하시겠습니까? 복구할 수 없습니다.', async () => {
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, currentTab, id));
+                // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id));
             } catch (e) {
                 alert("삭제 실패: " + e.message);
             }
