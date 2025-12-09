@@ -9,7 +9,7 @@
     <style>
         :root {
             /* 다크 모드 컬러 팔레트 */
-            --primary-color: #3b82f6; /* Blue 500 (조금 더 진한 파랑으로 변경하여 흰 글씨와 대비 확보) */
+            --primary-color: #3b82f6; /* Blue 500 */
             --primary-hover: #2563eb; /* Blue 600 */
             --danger-color: #ef4444; /* Red 500 */
             --warning-color: #f59e0b; /* Amber 500 */
@@ -20,13 +20,13 @@
             --input-bg: #334155;      /* Slate 700 */
             --border-color: #475569;  /* Slate 600 */
             
-            /* 텍스트 컬러 (더 밝은 화이트 계열) */
+            /* 텍스트 컬러 */
             --text-main: #ffffff;     /* Pure White */
-            --text-sub: #cbd5e1;      /* Slate 300 (더 밝은 회색) */
+            --text-sub: #cbd5e1;      /* Slate 300 */
             --text-placeholder: #94a3b8;
             
             --tab-active-bg: #334155;
-            --tab-active-text: #ffffff; /* 활성 탭 텍스트 흰색 */
+            --tab-active-text: #ffffff;
         }
 
         body {
@@ -48,11 +48,7 @@
             border: 1px solid var(--border-color);
         }
 
-        /* 제목 스타일 */
-        h2 {
-            color: #ffffff;
-            font-weight: 700;
-        }
+        h2 { color: #ffffff; font-weight: 700; }
 
         /* 탭 네비게이션 */
         .tabs {
@@ -70,7 +66,7 @@
             background: transparent;
             font-size: 15px;
             font-weight: 600;
-            color: var(--text-sub); /* 기본 탭 텍스트 밝은 회색 */
+            color: var(--text-sub);
             cursor: pointer;
             border-radius: 8px;
             transition: all 0.2s;
@@ -84,7 +80,7 @@
         
         .tab-btn.active {
             background-color: var(--tab-active-bg);
-            color: var(--tab-active-text); /* 활성 탭 흰색 */
+            color: var(--tab-active-text);
             border: 1px solid var(--border-color);
         }
 
@@ -116,7 +112,7 @@
 
         /* 입력 폼 */
         .input-wrapper {
-            background-color: #0f172a40; /* Slightly transparent dark */
+            background-color: #0f172a40;
             padding: 20px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
@@ -130,6 +126,15 @@
             margin-bottom: 12px;
         }
 
+        /* 입력 레이블 (날짜 등) */
+        .input-label {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-bottom: 4px;
+            margin-left: 4px;
+            display: block;
+        }
+
         input, select {
             padding: 12px;
             background-color: var(--input-bg);
@@ -139,6 +144,12 @@
             width: 100%;
             box-sizing: border-box;
             color: var(--text-main);
+        }
+        
+        /* 날짜 입력 아이콘 색상 조정 */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
         }
         
         input::placeholder { color: var(--text-placeholder); }
@@ -152,13 +163,13 @@
         /* 버튼 */
         button { cursor: pointer; border: none; border-radius: 8px; transition: all 0.2s; font-weight: 600; }
         
-        .btn-add { background-color: var(--primary-color); color: #ffffff; padding: 12px; width: 100%; } /* 흰색 텍스트 */
+        .btn-add { background-color: var(--primary-color); color: #ffffff; padding: 12px; width: 100%; }
         .btn-add:hover { background-color: var(--primary-hover); }
 
         .btn-copy { background-color: var(--input-bg); color: #ffffff; padding: 4px 8px; font-size: 11px; margin-left: 5px; border-radius: 4px; vertical-align: middle; border: 1px solid var(--border-color);}
         .btn-copy:hover { background-color: var(--border-color); }
 
-        .btn-action { padding: 6px 10px; font-size: 14px; margin: 0 2px; color: #ffffff; } /* 흰색 텍스트 */
+        .btn-action { padding: 6px 10px; font-size: 14px; margin: 0 2px; color: #ffffff; }
         .btn-edit { background-color: var(--primary-color); }
         .btn-delete { background-color: var(--danger-color); } 
         .btn-save { background-color: var(--success-color); }
@@ -166,19 +177,19 @@
         
         /* 테이블 */
         .table-container { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1000px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1200px; }
         
         th, td { 
             padding: 14px 10px; 
             text-align: left; 
             border-bottom: 1px solid var(--border-color); 
             vertical-align: middle; 
-            color: var(--text-main); /* 목록 텍스트 흰색 */
+            color: var(--text-main);
         }
         
         th { 
             background-color: var(--input-bg); 
-            color: #ffffff; /* 헤더 텍스트 완전 흰색 */
+            color: #ffffff;
             font-weight: 700; 
             cursor: pointer; 
             user-select: none; 
@@ -222,14 +233,13 @@
         .btn-modal-confirm { background-color: var(--primary-color); color: #ffffff; padding: 8px 16px; }
         .btn-modal-delete { background-color: var(--danger-color); color: white; padding: 8px 16px; }
 
-        /* 로딩 인디케이터 */
         #loading { display: none; color: var(--primary-color); font-weight: bold; margin-right: 10px;}
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📂 통합 계정 & 자산 관리자</h2>
+    <h2>📂 통합 계정 & 자산 관리자 (Firebase)</h2>
     
     <!-- 탭 네비게이션 -->
     <nav class="tabs">
@@ -239,7 +249,7 @@
         <button class="tab-btn" onclick="switchTab('subscription')">💳 구독 관리</button>
     </nav>
 
-    <!-- 공통 헤더 (검색 및 통계) -->
+    <!-- 공통 헤더 -->
     <div class="section-header">
         <div style="display:flex; align-items:center;">
             <span id="loading">📡 동기화 중...</span>
@@ -250,7 +260,7 @@
         </div>
     </div>
 
-    <!-- 1. API Key 매니저 탭 -->
+    <!-- 1. API Key 매니저 -->
     <div id="tab-api" class="tab-content active">
         <div class="input-wrapper">
             <div class="input-group">
@@ -288,7 +298,7 @@
         </div>
     </div>
 
-    <!-- 2. 유튜브 채널 관리 탭 -->
+    <!-- 2. 유튜브 채널 관리 -->
     <div id="tab-youtube" class="tab-content">
         <div class="input-wrapper">
             <div class="input-group" style="grid-template-columns: 1fr 1fr 1fr;">
@@ -337,7 +347,7 @@
         </div>
     </div>
 
-    <!-- 3. 애드센스 탭 -->
+    <!-- 3. 애드센스 -->
     <div id="tab-adsense" class="tab-content">
         <div class="input-wrapper">
             <div class="input-group">
@@ -382,23 +392,46 @@
         </div>
     </div>
 
-    <!-- 4. 구독 관리 탭 -->
+    <!-- 4. 구독 관리 (업데이트됨) -->
     <div id="tab-subscription" class="tab-content">
         <div class="input-wrapper">
-            <div class="input-group">
+            <!-- Row 1: 서비스 기본 정보 & 주기 -->
+            <div class="input-group" style="grid-template-columns: 1.5fr 1fr 0.8fr 0.8fr;">
                 <input type="text" id="sub_service" placeholder="서비스명 (Netflix, ChatGPT)">
                 <input type="number" id="sub_cost" placeholder="결제 금액">
                 <select id="sub_currency">
                     <option value="KRW">₩ (KRW)</option>
                     <option value="USD">$ (USD)</option>
                 </select>
-                <input type="number" id="sub_date" placeholder="결제일 (매월 OO일)" min="1" max="31">
+                <select id="sub_cycle">
+                    <option value="월간">월간</option>
+                    <option value="연간">연간</option>
+                </select>
             </div>
+            
+            <!-- Row 2: 날짜 & 구매처 -->
+            <div class="input-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">결제일</label>
+                    <input type="date" id="sub_date" placeholder="결제일">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">만료일</label>
+                    <input type="date" id="sub_expire" placeholder="만료일">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">구매처</label>
+                    <input type="text" id="sub_vendor" placeholder="구매처 (App Store, Web)">
+                </div>
+            </div>
+
+            <!-- Row 3: 계정 정보 -->
             <div class="input-group">
-                <input type="text" id="sub_expire" placeholder="만료일 (예: 2024-12-31)">
                 <input type="text" id="sub_account" placeholder="로그인 계정 (ID/Email)">
                 <input type="text" id="sub_pw" placeholder="비밀번호">
             </div>
+
+            <!-- Row 4: 결제수단 & 상태 -->
             <div class="input-group">
                 <input type="text" id="sub_method" placeholder="결제 수단 (현대카드, 카카오페이)">
                 <select id="sub_status">
@@ -406,6 +439,11 @@
                     <option value="해지예정">🟡 해지예정</option>
                     <option value="종료">⚪ 종료됨</option>
                 </select>
+            </div>
+
+            <!-- Row 5: 비고 & 추가 -->
+            <div class="input-group" style="grid-template-columns: 3fr 1fr;">
+                <input type="text" id="sub_note" placeholder="비고 (특이사항)">
                 <button class="btn-add" onclick="addData('subscription')">+ 구독 추가</button>
             </div>
         </div>
@@ -415,12 +453,15 @@
                     <tr>
                         <th onclick="sortTable('service')">서비스명 ↕</th>
                         <th onclick="sortTable('cost')">금액 ↕</th>
+                        <th onclick="sortTable('cycle')">주기</th>
+                        <th onclick="sortTable('vendor')">구매처</th>
                         <th onclick="sortTable('date')">결제일 ↕</th>
                         <th onclick="sortTable('expire')">만료일 ↕</th>
                         <th onclick="sortTable('account')">계정</th>
                         <th onclick="sortTable('pw')">비번</th>
                         <th onclick="sortTable('method')">결제수단</th>
                         <th onclick="sortTable('status')">상태 ↕</th>
+                        <th onclick="sortTable('note')">비고</th>
                         <th style="width:100px; text-align:center;">관리</th>
                     </tr>
                 </thead>
@@ -448,7 +489,7 @@
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     // --- 상태 관리 ---
-    let db; // Firestore 인스턴스
+    let db; 
     let auth;
     let userId = null;
     let appId = 'default-app-id';
@@ -456,27 +497,23 @@
     let sortState = { col: null, dir: 'asc' };
     let localData = { api: [], youtube: [], adsense: [], subscription: [] };
     let pendingModalAction = null;
-    let unsubscribes = {}; // 리스너 해제용
+    let unsubscribes = {}; 
 
-    // --- 초기화 (Firebase Environment Variables) ---
+    // --- 초기화 ---
     async function init() {
         try {
-            // 1. AI 환경 변수 체크
             let firebaseConfig;
-            
             if (typeof __firebase_config !== 'undefined') {
-                // AI 미리보기 환경
                 firebaseConfig = JSON.parse(__firebase_config);
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             } else {
-                // 2. GitHub Pages / 로컬 환경 (config.json 로드)
                 try {
                     const response = await fetch('./firebase-config.json');
                     if (!response.ok) throw new Error("firebase-config.json 파일을 찾을 수 없습니다.");
                     firebaseConfig = await response.json();
                     if(firebaseConfig.appId) appId = firebaseConfig.appId;
                 } catch (e) {
-                    throw new Error("설정 로드 실패: firebase-config.json 파일을 확인해주세요. (" + e.message + ")");
+                    throw new Error("설정 로드 실패: firebase-config.json 확인 (" + e.message + ")");
                 }
             }
 
@@ -484,7 +521,6 @@
             db = getFirestore(app);
             auth = getAuth(app);
 
-            // 인증 로직 (Custom Token 우선, 실패시 익명 로그인)
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 await signInWithCustomToken(auth, __initial_auth_token);
             } else {
@@ -494,8 +530,7 @@
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     userId = user.uid;
-                    console.log("Logged in as:", userId);
-                    setupListeners(); // 데이터 동기화 시작
+                    setupListeners(); 
                 } else {
                     console.error("로그인 실패");
                 }
@@ -507,15 +542,13 @@
         }
     }
 
-    // --- Firestore 리스너 설정 ---
+    // --- Firestore 리스너 ---
     function setupListeners() {
         const collections = ['api', 'youtube', 'adsense', 'subscription'];
         
         collections.forEach(colName => {
-            // Firestore 경로: artifacts/{appId}/users/{userId}/{collectionName}
             const q = query(collection(db, 'artifacts', appId, 'users', userId, colName));
             
-            // 기존 리스너 해제
             if (unsubscribes[colName]) unsubscribes[colName]();
 
             document.getElementById('loading').style.display = 'inline';
@@ -524,7 +557,7 @@
                 localData[colName] = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data(),
-                    isEditing: false // UI 상태값은 로컬에서만 관리
+                    isEditing: false 
                 }));
                 if (currentTab === colName) renderCurrentTable();
                 document.getElementById('loading').style.display = 'none';
@@ -551,9 +584,8 @@
         renderCurrentTable();
     }
 
-    // --- CRUD Operations (Firestore) ---
+    // --- CRUD Operations ---
 
-    // 1. 추가 (Add)
     window.addData = async (type) => {
         if (!userId) return alert("데이터베이스 연결 중입니다...");
         
@@ -562,7 +594,7 @@
         if(type === 'api') {
             const acc = document.getElementById('api_account').value;
             const key = document.getElementById('api_key').value;
-            if(!acc || !key) return alert('계정과 API Key는 필수입니다.');
+            if(!acc || !key) return alert('필수 입력 누락');
             newData = {
                 account: acc, apiKey: key,
                 usage: document.getElementById('api_usage').value,
@@ -571,7 +603,6 @@
                 maxQuota: parseFloat(document.getElementById('api_max').value) || 0,
                 note: document.getElementById('api_note').value
             };
-            clearInputs('tab-api');
         } 
         else if(type === 'youtube') {
             const ch = document.getElementById('yt_channel').value;
@@ -588,7 +619,6 @@
                 address: document.getElementById('yt_address').value,
                 note: document.getElementById('yt_note').value
             };
-            clearInputs('tab-youtube');
         }
         else if(type === 'adsense') {
             const pub = document.getElementById('ad_pubid').value;
@@ -604,7 +634,6 @@
                 status: document.getElementById('ad_status').value,
                 note: document.getElementById('ad_note').value
             };
-            clearInputs('tab-adsense');
         }
         else if(type === 'subscription') {
             const svc = document.getElementById('sub_service').value;
@@ -613,19 +642,21 @@
                 service: svc,
                 cost: document.getElementById('sub_cost').value,
                 currency: document.getElementById('sub_currency').value,
+                cycle: document.getElementById('sub_cycle').value, 
+                vendor: document.getElementById('sub_vendor').value,
                 date: document.getElementById('sub_date').value,
                 expire: document.getElementById('sub_expire').value,
                 account: document.getElementById('sub_account').value,
                 pw: document.getElementById('sub_pw').value,
                 method: document.getElementById('sub_method').value,
-                status: document.getElementById('sub_status').value
+                status: document.getElementById('sub_status').value,
+                note: document.getElementById('sub_note').value // New
             };
-            clearInputs('tab-subscription');
         }
 
         try {
-            // Firestore 경로: artifacts/{appId}/users/{userId}/{collectionName}
             await addDoc(collection(db, 'artifacts', appId, 'users', userId, type), newData);
+            clearInputs('tab-' + type);
         } catch (e) {
             alert("저장 실패: " + e.message);
         }
@@ -635,23 +666,20 @@
         document.querySelectorAll(`#${tabId} input`).forEach(i => i.value = '');
     }
 
-    // 2. 수정 모드 토글
     window.setEditMode = (id, mode) => {
         const item = localData[currentTab].find(d => d.id === id);
         if(item) {
             item.isEditing = mode;
-            renderCurrentTable(); // 로컬 상태만 변경 후 리렌더링
+            renderCurrentTable(); 
         }
     }
 
-    // 3. 저장 (Update)
     window.saveEdit = async (id) => {
         const item = localData[currentTab].find(d => d.id === id);
         if(!item) return;
 
         let updates = {};
         
-        // ID별 input 값 수집
         if(currentTab === 'api') {
             updates = {
                 account: document.getElementById(`e_acc_${id}`).value,
@@ -691,24 +719,25 @@
                 service: document.getElementById(`e_svc_${id}`).value,
                 cost: document.getElementById(`e_cost_${id}`).value,
                 currency: document.getElementById(`e_curr_${id}`).value,
+                cycle: document.getElementById(`e_cycle_${id}`).value,
+                vendor: document.getElementById(`e_vendor_${id}`).value,
                 date: document.getElementById(`e_date_${id}`).value,
                 expire: document.getElementById(`e_exp_${id}`).value,
                 account: document.getElementById(`e_acc_${id}`).value,
                 pw: document.getElementById(`e_pw_${id}`).value,
                 method: document.getElementById(`e_met_${id}`).value,
-                status: document.getElementById(`e_stat_${id}`).value
+                status: document.getElementById(`e_stat_${id}`).value,
+                note: document.getElementById(`e_note_${id}`).value // New
             };
         }
 
         try {
             await updateDoc(doc(db, 'artifacts', appId, 'users', userId, currentTab, id), updates);
-            // 성공하면 리스너가 자동으로 UI 업데이트함
         } catch (e) {
             alert("수정 실패: " + e.message);
         }
     }
 
-    // 4. 삭제 (Delete)
     window.confirmDelete = (id) => {
         showModal('delete', '⚠️ 삭제 확인', '정말로 삭제하시겠습니까? 복구할 수 없습니다.', async () => {
             try {
@@ -719,7 +748,7 @@
         });
     }
 
-    // --- 렌더링 로직 (기존 HTML 구조 재사용) ---
+    // --- 렌더링 로직 ---
     window.renderCurrentTable = (filterText = '') => {
         if (!localData[currentTab]) return;
         
@@ -728,13 +757,11 @@
         tbody.innerHTML = '';
 
         const filtered = localData[currentTab].filter(item => {
-            // isEditing 같은 내부 플래그 제외하고 검색
             const { isEditing, id, ...rest } = item; 
             const valStr = Object.values(rest).join(' ').toLowerCase();
             return valStr.includes(filterVal.toLowerCase());
         });
 
-        // 정렬
         if (sortState.col) {
             filtered.sort((a, b) => {
                 let va = a[sortState.col] || '';
@@ -744,7 +771,7 @@
                     va = (a.maxQuota > 0) ? (a.currentUsed / a.maxQuota) : 0;
                     vb = (b.maxQuota > 0) ? (b.currentUsed / b.maxQuota) : 0;
                 }
-                if (currentTab === 'subscription' && (sortState.col === 'cost' || sortState.col === 'date')) {
+                if (currentTab === 'subscription' && (sortState.col === 'cost')) {
                     va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
                 }
 
@@ -757,12 +784,9 @@
         document.getElementById('statsText').innerText = `총 ${filtered.length}개 항목`;
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:var(--text-sub);">데이터가 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px; color:var(--text-sub);">데이터가 없습니다.</td></tr>`;
             return;
         }
-
-        // 기존 뷰/편집 HTML 생성 함수 재사용 (문자열 생성 방식 유지)
-        // ... (이전 코드의 getViewRowHTML, getEditRowHTML 로직을 그대로 사용하되 스타일 클래스 매칭)
         
         filtered.forEach(item => {
             const tr = document.createElement('tr');
@@ -771,8 +795,7 @@
         });
     }
 
-    // --- (이전과 동일한) Row HTML Generators (다크모드용 클래스 적용됨) ---
-    // *주의: JS 모듈 내부이므로 window 객체에 할당된 함수들을 onclick에서 부름*
+    // --- Row Generators ---
     
     function getViewRowHTML(item) {
         const id = item.id;
@@ -853,7 +876,9 @@
             return `
                 <td style="font-weight:bold;">${item.service}</td>
                 <td>${currencySymbol} ${Number(item.cost).toLocaleString()}</td>
-                <td>매월 ${item.date}일</td>
+                <td>${item.cycle || '월간'}</td>
+                <td>${item.vendor || '-'}</td>
+                <td>${item.date || '-'}</td>
                 <td style="color:var(--text-sub);">${item.expire || '-'}</td>
                 <td>${item.account || '-'}</td>
                 <td>
@@ -861,6 +886,7 @@
                 </td>
                 <td>${item.method}</td>
                 <td><span class="badge ${stClass}">${item.status}</span></td>
+                <td>${item.note || '-'}</td>
                 <td style="text-align:center;">
                     <button class="btn-action btn-edit" onclick="setEditMode('${id}', true)">✏️</button>
                     <button class="btn-action btn-delete" onclick="confirmDelete('${id}')">🗑️</button>
@@ -895,7 +921,6 @@
                 </td>
             `;
         } else if (currentTab === 'youtube') {
-            // ... (HTML 구조 동일, ID 매칭)
              return `
                 <td>
                     <input id="e_own_${id}" value="${item.owner || item.email || ''}" placeholder="소유자">
@@ -960,8 +985,15 @@
                         <option value="USD" ${item.currency==='USD'?'selected':''}>$</option>
                     </select>
                 </td>
-                <td><input id="e_date_${id}" value="${item.date}" type="number" min="1" max="31"></td>
-                <td><input id="e_exp_${id}" value="${item.expire || ''}"></td>
+                <td>
+                    <select id="e_cycle_${id}">
+                        <option value="월간" ${item.cycle==='월간'?'selected':''}>월간</option>
+                        <option value="연간" ${item.cycle==='연간'?'selected':''}>연간</option>
+                    </select>
+                </td>
+                <td><input id="e_vendor_${id}" value="${item.vendor || ''}"></td>
+                <td><input id="e_date_${id}" value="${item.date}" type="date"></td>
+                <td><input id="e_exp_${id}" value="${item.expire || ''}" type="date"></td>
                 <td><input id="e_acc_${id}" value="${item.account || ''}"></td>
                 <td><input id="e_pw_${id}" value="${item.pw || ''}"></td>
                 <td><input id="e_met_${id}" value="${item.method}"></td>
@@ -972,6 +1004,7 @@
                         <option value="종료" ${item.status==='종료'?'selected':''}>종료</option>
                     </select>
                 </td>
+                <td><input id="e_note_${id}" value="${item.note || ''}"></td>
                 <td style="text-align:center;">
                     <button class="btn-action btn-save" onclick="saveEdit('${id}')">💾</button>
                     <button class="btn-action btn-cancel" onclick="setEditMode('${id}', false)">❌</button>
