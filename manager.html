@@ -229,7 +229,7 @@
 <body>
 
 <div class="container">
-    <h2>📂 통합 계정 & 자산 관리자 (Firebase)</h2>
+    <h2>📂 통합 계정 & 자산 관리자</h2>
     
     <!-- 탭 네비게이션 -->
     <nav class="tabs">
@@ -461,9 +461,24 @@
     // --- 초기화 (Firebase Environment Variables) ---
     async function init() {
         try {
-            // 시스템 환경변수에서 Firebase 설정 로드
-            const firebaseConfig = JSON.parse(__firebase_config);
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // 1. AI 환경 변수 체크
+            let firebaseConfig;
+            
+            if (typeof __firebase_config !== 'undefined') {
+                // AI 미리보기 환경
+                firebaseConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            } else {
+                // 2. GitHub Pages / 로컬 환경 (config.json 로드)
+                try {
+                    const response = await fetch('./firebase-config.json');
+                    if (!response.ok) throw new Error("firebase-config.json 파일을 찾을 수 없습니다.");
+                    firebaseConfig = await response.json();
+                    if(firebaseConfig.appId) appId = firebaseConfig.appId;
+                } catch (e) {
+                    throw new Error("설정 로드 실패: firebase-config.json 파일을 확인해주세요. (" + e.message + ")");
+                }
+            }
 
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
