@@ -117,6 +117,18 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header-left {
+            display: flex; align-items: center;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
         .search-box input {
@@ -194,6 +206,21 @@
 
         .btn-copy { background-color: var(--input-bg); color: #ffffff; padding: 4px 8px; font-size: 11px; margin-left: 5px; border-radius: 4px; vertical-align: middle; border: 1px solid var(--border-color);}
         .btn-copy:hover { background-color: var(--border-color); }
+
+        /* 헤더 버튼용 스타일 추가 */
+        .btn-header {
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            padding: 10px 16px;
+            font-size: 14px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-header:hover {
+            background-color: var(--border-color);
+        }
 
         .btn-action { padding: 6px 10px; font-size: 14px; margin: 0 2px; color: #ffffff; }
         .btn-edit { background-color: var(--primary-color); }
@@ -276,7 +303,7 @@
 </div>
 
 <div class="container">
-    <h2>🔒 통합 관리자 </h2>
+    <h2>🔒 통합 관리자</h2>
     
     <!-- 탭 네비게이션 -->
     <nav class="tabs">
@@ -288,16 +315,23 @@
 
     <!-- 공통 헤더 -->
     <div class="section-header">
-        <div style="display:flex; align-items:center;">
+        <div class="header-left">
             <span id="loading">📡 동기화 중...</span>
             <div id="statsText" style="color: var(--text-sub); font-size: 14px;">데이터 로딩 중...</div>
         </div>
-        <div class="search-box">
-            <input type="text" id="searchInput" onkeyup="filterCurrentTable()" placeholder="검색어를 입력하세요...">
+        <div class="header-right">
+            <!-- 검색창 -->
+            <div class="search-box">
+                <input type="text" id="searchInput" onkeyup="filterCurrentTable()" placeholder="검색어를 입력하세요...">
+            </div>
+            <!-- 내보내기/가져오기 버튼 -->
+            <button class="btn-header" onclick="exportData()">📤 내보내기</button>
+            <button class="btn-header" onclick="triggerImport()">📥 가져오기</button>
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="processImport(this)">
         </div>
     </div>
 
-    <!-- 1. API Key 매니저 -->
+    <!-- 1. API Key 매니저 (수정됨: 사용량 제거) -->
     <div id="tab-api" class="tab-content active">
         <div class="input-wrapper">
             <div class="input-group">
@@ -310,9 +344,7 @@
                     <option value="만료">🔴 만료</option>
                 </select>
             </div>
-            <div class="input-group">
-                <input type="number" id="api_current" placeholder="사용량($)" step="0.01">
-                <input type="number" id="api_max" placeholder="할당량($)" step="0.01">
+            <div class="input-group" style="grid-template-columns: 3fr 1fr;">
                 <input type="text" id="api_note" placeholder="비고">
                 <button class="btn-add" onclick="addData('api')">+ API 키 추가</button>
             </div>
@@ -324,7 +356,6 @@
                         <th onclick="sortTable('account')">계정 ↕</th>
                         <th onclick="sortTable('apiKey')">API Key</th>
                         <th onclick="sortTable('usage')">용도 ↕</th>
-                        <th onclick="sortTable('percentage')">Quota ($) ↕</th>
                         <th onclick="sortTable('limitStatus')">상태 ↕</th>
                         <th onclick="sortTable('note')">비고</th>
                         <th style="width:100px; text-align:center;">관리</th>
@@ -429,7 +460,7 @@
         </div>
     </div>
 
-    <!-- 4. 구독 관리 (업데이트됨) -->
+    <!-- 4. 구독 관리 -->
     <div id="tab-subscription" class="tab-content">
         <div class="input-wrapper">
             <!-- Row 1: 서비스 기본 정보 & 주기 -->
@@ -522,7 +553,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     // --- 상태 관리 ---
@@ -629,8 +660,6 @@
         const collections = ['api', 'youtube', 'adsense', 'subscription'];
         
         collections.forEach(colName => {
-            // 변경된 부분: users/{userId} -> public/data
-            // 이렇게 하면 모든 기기에서 동일한 경로(공용 데이터)를 바라보게 됩니다.
             const q = query(collection(db, 'artifacts', appId, 'public', 'data', colName));
             
             if (unsubscribes[colName]) unsubscribes[colName]();
@@ -668,6 +697,88 @@
         renderCurrentTable();
     }
 
+    // --- 데이터 내보내기/가져오기 (Modified) ---
+    window.exportData = () => {
+        try {
+            // Check if there is data to export
+            let hasData = false;
+            for(const key in localData) {
+                if (localData[key].length > 0) hasData = true;
+            }
+
+            if (!hasData) {
+                alert("내보낼 데이터가 없습니다.");
+                return;
+            }
+
+            if (!confirm("현재 저장된 모든 데이터를 JSON 파일로 다운로드하시겠습니까?")) return;
+            
+            // 데이터 클론 및 UI 속성 제거
+            const exportObj = JSON.parse(JSON.stringify(localData));
+            for(const key in exportObj) {
+                exportObj[key].forEach(item => {
+                    delete item.isEditing;
+                });
+            }
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "backup_" + new Date().toISOString().slice(0,10) + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        } catch (e) {
+            alert("내보내기 중 오류 발생: " + e.message);
+        }
+    }
+
+    window.triggerImport = () => document.getElementById('importFile').click();
+
+    window.processImport = async (input) => {
+        const file = input.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if(!confirm("⚠️ 경고: 현재 데이터를 덮어쓰거나 새로 추가하시겠습니까?\n(기존 ID가 같으면 수정되고, 없으면 추가됩니다.)")) return;
+                
+                showModal('alert', '데이터 가져오기', '데이터를 업로드 중입니다...', null); 
+                
+                const batchPromises = [];
+                const collections = ['api', 'youtube', 'adsense', 'subscription'];
+                
+                for (const key of collections) {
+                    if (importedData[key] && Array.isArray(importedData[key])) {
+                        for (const item of importedData[key]) {
+                            const { id, isEditing, ...data } = item;
+                            
+                            if(id) {
+                                // ID가 있으면 해당 ID로 저장 (덮어쓰기/수정 효과)
+                                batchPromises.push(setDoc(doc(db, 'artifacts', appId, 'public', 'data', key, id), data));
+                            } else {
+                                // ID가 없으면 새로 생성
+                                batchPromises.push(addDoc(collection(db, 'artifacts', appId, 'public', 'data', key), data));
+                            }
+                        }
+                    }
+                }
+                
+                await Promise.all(batchPromises);
+                alert("✅ 데이터 가져오기가 완료되었습니다!");
+                closeModal();
+            } catch (err) {
+                console.error(err);
+                alert("❌ 파일 읽기 또는 업로드 실패: " + err.message);
+                closeModal();
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // 초기화
+    }
+
     // --- CRUD Operations (Public Path로 수정됨) ---
 
     window.addData = async (type) => {
@@ -683,8 +794,7 @@
                 account: acc, apiKey: key,
                 usage: document.getElementById('api_usage').value,
                 limitStatus: document.getElementById('api_status').value,
-                currentUsed: parseFloat(document.getElementById('api_current').value) || 0,
-                maxQuota: parseFloat(document.getElementById('api_max').value) || 0,
+                // 사용량, 할당량 제거됨
                 note: document.getElementById('api_note').value
             };
         } 
@@ -734,7 +844,7 @@
                 pw: document.getElementById('sub_pw').value,
                 method: document.getElementById('sub_method').value,
                 status: document.getElementById('sub_status').value,
-                note: document.getElementById('sub_note').value
+                note: document.getElementById('sub_note').value 
             };
         }
 
@@ -770,8 +880,7 @@
                 account: document.getElementById(`e_acc_${id}`).value,
                 apiKey: document.getElementById(`e_key_${id}`).value,
                 usage: document.getElementById(`e_use_${id}`).value,
-                currentUsed: parseFloat(document.getElementById(`e_cur_${id}`).value) || 0,
-                maxQuota: parseFloat(document.getElementById(`e_max_${id}`).value) || 0,
+                // 사용량, 할당량 제거됨
                 limitStatus: document.getElementById(`e_stat_${id}`).value,
                 note: document.getElementById(`e_note_${id}`).value
             };
@@ -817,7 +926,6 @@
         }
 
         try {
-            // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id), updates);
         } catch (e) {
             alert("수정 실패: " + e.message);
@@ -827,7 +935,6 @@
     window.confirmDelete = (id) => {
         showModal('delete', '⚠️ 삭제 확인', '정말로 삭제하시겠습니까? 복구할 수 없습니다.', async () => {
             try {
-                // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id));
             } catch (e) {
                 alert("삭제 실패: " + e.message);
@@ -854,10 +961,6 @@
                 let va = a[sortState.col] || '';
                 let vb = b[sortState.col] || '';
                 
-                if (currentTab === 'api' && sortState.col === 'percentage') {
-                    va = (a.maxQuota > 0) ? (a.currentUsed / a.maxQuota) : 0;
-                    vb = (b.maxQuota > 0) ? (b.currentUsed / b.maxQuota) : 0;
-                }
                 if (currentTab === 'subscription' && (sortState.col === 'cost')) {
                     va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
                 }
@@ -888,22 +991,12 @@
         const id = item.id;
         
         if (currentTab === 'api') {
-            const percent = (item.maxQuota > 0) ? Math.min((item.currentUsed / item.maxQuota) * 100, 100) : 0;
-            let barColor = 'var(--success-color)';
-            if(percent >= 70) barColor = 'var(--warning-color)';
-            if(percent >= 90) barColor = 'var(--danger-color)';
             const statusClass = item.limitStatus === '정상' ? 'bg-green' : (item.limitStatus === '제한됨' ? 'bg-yellow' : 'bg-red');
 
             return `
                 <td>${item.account}</td>
                 <td><span class="key-text" title="${item.apiKey}">${maskString(item.apiKey, 8)}</span> <button class="btn-copy" onclick="copyText('${item.apiKey}')">Copy</button></td>
                 <td>${item.usage}</td>
-                <td>
-                    <div style="font-size:11px; display:flex; justify-content:space-between;">
-                        <span>$${item.currentUsed}</span><span>$${item.maxQuota}</span>
-                    </div>
-                    <div class="usage-bar-bg"><div class="usage-bar-fill" style="width:${percent}%; background:${barColor}"></div></div>
-                </td>
                 <td><span class="badge ${statusClass}">${item.limitStatus}</span></td>
                 <td>${item.note}</td>
                 <td style="text-align:center;">
@@ -990,10 +1083,6 @@
                 <td><input id="e_acc_${id}" value="${item.account}"></td>
                 <td><input id="e_key_${id}" value="${item.apiKey}"></td>
                 <td><input id="e_use_${id}" value="${item.usage}"></td>
-                <td>
-                    <input id="e_cur_${id}" value="${item.currentUsed}" type="number" step="0.01" style="width:45%"> / 
-                    <input id="e_max_${id}" value="${item.maxQuota}" type="number" step="0.01" style="width:45%">
-                </td>
                 <td>
                     <select id="e_stat_${id}">
                         <option value="정상" ${item.limitStatus==='정상'?'selected':''}>정상</option>
