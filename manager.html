@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔒통합 관리자 </title>
+    <title> 🔒 통합 관리자 </title>
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔐</text></svg>">
     <style>
         :root {
             /* 다크 모드 컬러 팔레트 */
-            --primary-color: #3b82f6; /* Blue 500 */
-            --primary-hover: #2563eb; /* Blue 600 */
-            --danger-color: #ef4444; /* Red 500 */
-            --warning-color: #f59e0b; /* Amber 500 */
-            --success-color: #10b981; /* Emerald 500 */
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --success-color: #10b981;
             
-            --bg-color: #0f172a;      /* Slate 900 */
-            --card-bg: #1e293b;       /* Slate 800 */
-            --input-bg: #334155;      /* Slate 700 */
-            --border-color: #475569;  /* Slate 600 */
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --input-bg: #334155;
+            --border-color: #475569;
             
             /* 텍스트 컬러 */
-            --text-main: #ffffff;     /* Pure White */
-            --text-sub: #cbd5e1;      /* Slate 300 */
+            --text-main: #ffffff;
+            --text-sub: #cbd5e1;
             --text-placeholder: #94a3b8;
             
             --tab-active-bg: #334155;
@@ -38,6 +38,32 @@
             transition: background-color 0.3s;
         }
 
+        /* --- 로그인 화면 스타일 --- */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: var(--bg-color);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .login-box {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 300px;
+        }
+        .login-box h2 { margin-bottom: 20px; color: var(--text-main); }
+        .login-box input { margin-bottom: 15px; text-align: center; letter-spacing: 5px; font-size: 18px; }
+        .login-error { color: var(--danger-color); font-size: 14px; margin-top: 10px; display: none; }
+
+        /* 메인 컨테이너 (초기에 숨김) */
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -46,6 +72,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
             border: 1px solid var(--border-color);
+            display: none; /* 로그인 전까지 숨김 */
         }
 
         h2 { color: #ffffff; font-weight: 700; }
@@ -126,7 +153,7 @@
             margin-bottom: 12px;
         }
 
-        /* 입력 레이블 (날짜 등) */
+        /* 입력 레이블 */
         .input-label {
             font-size: 12px;
             color: var(--text-sub);
@@ -146,7 +173,6 @@
             color: var(--text-main);
         }
         
-        /* 날짜 입력 아이콘 색상 조정 */
         input[type="date"]::-webkit-calendar-picker-indicator {
             filter: invert(1);
             cursor: pointer;
@@ -237,6 +263,17 @@
     </style>
 </head>
 <body>
+
+<!-- 로그인 오버레이 -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔒 접근 제한</h2>
+        <p style="color:var(--text-sub); margin-bottom:20px; font-size:14px;">비밀번호를 입력하세요.</p>
+        <input type="password" id="app-password" placeholder="Password" onkeyup="if(event.key === 'Enter') checkLogin()">
+        <button class="btn-add" onclick="checkLogin()">로그인</button>
+        <div id="login-error" class="login-error">비밀번호가 올바르지 않습니다.</div>
+    </div>
+</div>
 
 <div class="container">
     <h2>📂 통합 관리자 </h2>
@@ -498,10 +535,53 @@
     let localData = { api: [], youtube: [], adsense: [], subscription: [] };
     let pendingModalAction = null;
     let unsubscribes = {}; 
+    let remotePassword = ""; // settings.json에서 로드
+
+    // --- 로그인 체크 함수 ---
+    window.checkLogin = () => {
+        const inputPw = document.getElementById('app-password').value;
+        const errorMsg = document.getElementById('login-error');
+        
+        // remotePassword가 아직 로드되지 않았을 경우 (네트워크 지연 등)
+        if(!remotePassword) {
+            alert("설정 파일을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+            return;
+        }
+
+        if(inputPw === remotePassword) {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.querySelector('.container').style.display = 'block';
+            
+            // 로그인 성공 후 Firebase 리스너 등 세팅 (init의 나머지 부분 실행)
+            // 여기서 Firebase 연결 시작은 이미 init에서 호출했으나, UI만 보여주는 식임.
+            // 실제로는 보안을 위해 인증 후에 Firebase 연결을 하는 것이 좋지만, 
+            // 현재 구조상 Firebase Config 로드와 패스워드 로드가 묶여있어 UI show/hide로 처리함.
+        } else {
+            errorMsg.style.display = 'block';
+            document.getElementById('app-password').value = '';
+            document.getElementById('app-password').focus();
+        }
+    }
 
     // --- 초기화 ---
     async function init() {
         try {
+            // 1. settings.json 로드 (비밀번호)
+            try {
+                const settingsRes = await fetch('./settings.json');
+                if(settingsRes.ok) {
+                    const settings = await settingsRes.json();
+                    remotePassword = settings.appPassword;
+                } else {
+                    console.warn("settings.json을 찾을 수 없어 기본 비밀번호를 사용합니다.");
+                    remotePassword = "1234"; // Fallback
+                }
+            } catch(e) {
+                console.error("Settings load fail:", e);
+                remotePassword = "1234"; // Fallback
+            }
+
+            // 2. Firebase 설정 로드
             let firebaseConfig;
             if (typeof __firebase_config !== 'undefined') {
                 firebaseConfig = JSON.parse(__firebase_config);
@@ -650,7 +730,7 @@
                 pw: document.getElementById('sub_pw').value,
                 method: document.getElementById('sub_method').value,
                 status: document.getElementById('sub_status').value,
-                note: document.getElementById('sub_note').value // New
+                note: document.getElementById('sub_note').value
             };
         }
 
@@ -727,7 +807,7 @@
                 pw: document.getElementById(`e_pw_${id}`).value,
                 method: document.getElementById(`e_met_${id}`).value,
                 status: document.getElementById(`e_stat_${id}`).value,
-                note: document.getElementById(`e_note_${id}`).value // New
+                note: document.getElementById(`e_note_${id}`).value
             };
         }
 
@@ -1073,6 +1153,3 @@
 </script>
 </body>
 </html>
-
-
-
