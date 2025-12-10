@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 메모 비서 - Memory Cloud v14.2 (Stable)</title>
+    <title>AI 메모 비서 - Memory Cloud v15.0 (Full Sync)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { 
@@ -69,12 +69,13 @@
 
         let db = null;
         let auth = null;
-        let userId = null;
+        let currentAuthUser = null; // 실제 인증된 사용자 객체
         let isAuthReady = false;
 
         let messages = [];
         let memos = [];
-        let config = { geminiKey: '', firebaseConfig: '{}' };
+        // config에 syncId 추가
+        let config = { geminiKey: '', firebaseConfig: '{}', syncId: '' };
         let loading = false;
         let showSettings = false;
         let showSidebar = true;
@@ -98,7 +99,7 @@
 
         const appElement = document.getElementById('app');
 
-        // --- 1. 유틸리티 및 로직 함수 정의 (최상단) ---
+        // --- 1. 유틸리티 및 로직 함수 정의 ---
 
         const formatBytes = (bytes, decimals = 2) => {
             if (bytes === 0) return '0 Bytes';
@@ -110,6 +111,7 @@
         };
 
         const getUniqueCategories = () => {
+            // 메모에 있는 카테고리와 저장된 카테고리 병합
             const usedCategories = memos.map(m => m.category || '기타').filter(c => c !== 'all');
             const uniqueUsed = [...new Set(usedCategories)];
             const combined = [...new Set([...CATEGORIES.filter(c => c !== 'all'), ...uniqueUsed])];
@@ -120,19 +122,72 @@
             return ['all', ...combined.filter(c => c !== 'all').sort()].filter(c => c);
         };
 
-        const saveCategories = () => {
-            localStorage.setItem('ai_memo_categories', JSON.stringify(CATEGORIES.filter(c => c !== 'all')));
+        // --- 2. Firebase 경로 및 동기화 핵심 로직 ---
+
+        // 동기화 ID(Sync ID)가 있으면 그것을, 없으면 인증된 UID를 사용
+        const getEffectiveUserId = () => {
+            if (config.syncId && config.syncId.trim() !== '') {
+                return config.syncId.trim();
+            }
+            return currentAuthUser ? currentAuthUser.uid : null;
         };
 
-        // **핵심 수정: loadCategories 함수 명시적 정의**
-        const loadCategories = () => {
+        const getUserDocPath = () => {
+            const uid = getEffectiveUserId();
+            if (!db || !uid) throw new Error("Firebase not ready or User ID missing.");
+            return `artifacts/${__app_id}/users/${uid}`;
+        };
+
+        const getUserMemoCollectionRef = () => {
+            return collection(db, `${getUserDocPath()}/memos`);
+        };
+
+        const getChatDocRef = () => {
+            return doc(db, `${getUserDocPath()}/chat_history/conversation`);
+        };
+        
+        const getCategoriesDocRef = () => {
+            return doc(db, `${getUserDocPath()}/config/categories`);
+        };
+
+        // 카테고리 저장 (Firestore + LocalStorage)
+        const saveCategories = async () => {
+            const catsToSave = CATEGORIES.filter(c => c !== 'all');
+            localStorage.setItem('ai_memo_categories', JSON.stringify(catsToSave));
+            
+            if (db && isAuthReady) {
+                try {
+                    await setDoc(getCategoriesDocRef(), { list: catsToSave, updatedAt: new Date() });
+                } catch (e) {
+                    console.error("Cloud Category Save Error:", e);
+                }
+            }
+        };
+
+        // 카테고리 불러오기 (Firestore 우선, 실패시 LocalStorage)
+        const loadCategories = async () => {
+            // 1. 로컬에서 먼저 로드 (빠른 렌더링)
             const savedCats = localStorage.getItem('ai_memo_categories');
             if (savedCats) {
                 try {
                     const parsedCats = JSON.parse(savedCats);
                     CATEGORIES = ['all', ...parsedCats].filter(c => c);
+                } catch (e) { console.error(e); }
+            }
+
+            // 2. 클라우드에서 최신 데이터 로드
+            if (db && isAuthReady) {
+                try {
+                    const docSnap = await getDoc(getCategoriesDocRef());
+                    if (docSnap.exists() && docSnap.data().list) {
+                        const cloudCats = docSnap.data().list;
+                        CATEGORIES = ['all', ...cloudCats].filter(c => c);
+                        // 로컬도 업데이트
+                        localStorage.setItem('ai_memo_categories', JSON.stringify(cloudCats));
+                        render();
+                    }
                 } catch (e) {
-                    console.error("Category parsing error", e);
+                    console.error("Cloud Category Load Error:", e);
                 }
             }
         };
@@ -154,18 +209,6 @@
             }
         };
 
-        // --- 2. Firebase 관련 함수 ---
-
-        const getUserMemoCollectionRef = () => {
-            if (!db || !userId) throw new Error("Firebase not ready.");
-            return collection(db, `artifacts/${__app_id}/users/${userId}/memos`);
-        };
-
-        const getChatDocRef = () => {
-            if (!db || !userId) throw new Error("Firebase not ready.");
-            return doc(db, `artifacts/${__app_id}/users/${userId}/chat_history/conversation`);
-        };
-
         const initFirebase = (configStr) => {
             if (!configStr || configStr === '{}') return;
             try {
@@ -180,11 +223,13 @@
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        userId = user.uid;
+                        currentAuthUser = user;
                         isAuthReady = true;
-                        console.log(`[FIREBASE] Authenticated. User ID: ${userId}`);
+                        const uid = getEffectiveUserId();
+                        console.log(`[FIREBASE] Ready. Effective User ID: ${uid}`);
                         await fetchMemos();
                         await fetchChatHistory();
+                        await loadCategories(); // 클라우드 카테고리 로드
                     } else if (__initial_auth_token) {
                          try {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -212,8 +257,9 @@
                 querySnapshot.forEach((d) => {
                     memos.push({ id: d.id, ...d.data(), category: d.data().category || '기타' });
                 });
-                CATEGORIES = getUniqueCategories();
-                saveCategories(); 
+                // 메모 로드 후 카테고리 목록 갱신하지 않음 (사용자 지정 카테고리 유지 위해)
+                // 대신 없는 카테고리만 getUniqueCategories() 호출 시 UI에 반영됨
+                console.log(`[FIREBASE] Loaded ${memos.length} memos.`);
             } catch (e) {
                 console.error("Fetch Memo Error:", e);
             }
@@ -225,7 +271,11 @@
                 const docSnap = await getDoc(getChatDocRef());
                 if (docSnap.exists()) {
                     messages = docSnap.data().history || [];
+                    console.log(`[FIREBASE] Loaded ${messages.length} chat messages.`);
+                } else {
+                    messages = [];
                 }
+                render(); // 채팅 로드 후 렌더링
             } catch (e) { console.error("Fetch Chat Error:", e); }
         };
 
@@ -237,7 +287,7 @@
             } catch (e) { console.error("Save Chat Error:", e); }
         };
 
-        // --- 3. UI 렌더링 컴포넌트 (const 정의로 중복 선언 방지) ---
+        // --- 3. UI 렌더링 컴포넌트 ---
 
         const renderCategoryViewer = () => {
             const viewerMemos = memos
@@ -345,8 +395,19 @@
                 <div class="w-full max-w-lg bg-gray-800 rounded-xl p-6 border border-gray-700 animate-in">
                     <h2 class="text-xl font-bold mb-4">설정</h2>
                     <div class="space-y-4">
-                        <div><label class="block text-xs font-bold text-gray-400 mb-1">Gemini API Key</label><input type="password" id="gemini-key" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" value="${config.geminiKey}"></div>
-                        <div><label class="block text-xs font-bold text-gray-400 mb-1">Firebase Config (JSON)</label><textarea id="fb-config" class="w-full h-32 bg-gray-700 border border-gray-600 rounded p-2 text-xs font-mono text-gray-300">${config.firebaseConfig}</textarea></div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Gemini API Key</label>
+                            <input type="password" id="gemini-key" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" value="${config.geminiKey}" placeholder="AIza...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Firebase Config (JSON)</label>
+                            <textarea id="fb-config" class="w-full h-24 bg-gray-700 border border-gray-600 rounded p-2 text-xs font-mono text-gray-300" placeholder='{"apiKey": "...", ...}'>${config.firebaseConfig}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-blue-400 mb-1">Sync ID (동기화 ID)</label>
+                            <input type="text" id="sync-id" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white placeholder-gray-500" value="${config.syncId || ''}" placeholder="기기 연동을 위한 나만의 ID 입력 (예: my-secret-id)">
+                            <p class="text-xs text-gray-500 mt-1">이 ID가 같으면 어디서든 같은 데이터가 보입니다.</p>
+                        </div>
                     </div>
                     <div class="flex justify-end gap-2 mt-6">
                         <button id="close-settings" class="px-4 py-2 text-gray-400 hover:text-white">취소</button>
@@ -362,6 +423,7 @@
                 acc[cat] = (acc[cat] || 0) + 1;
                 return acc;
             }, {});
+            const uid = getEffectiveUserId();
 
             return `
             <div class="flex h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
@@ -369,8 +431,8 @@
                     <div class="p-5 border-b border-gray-700 flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl">Memory Cloud</h1></div>
                     <div class="p-4 flex-1 overflow-y-auto hide-scrollbar space-y-6">
                         <div class="text-center text-sm">
-                            ${!isAuthReady ? `<span class="text-yellow-500 flex items-center justify-center gap-2">${renderIcon('Loader2', 16, 'animate-spin')} 인증 중...</span>` : `<span class="text-green-500 flex items-center justify-center gap-2">${renderIcon('CheckCircle', 16)} 개인 저장소 연결됨</span>`}
-                            ${userId ? `<p class="text-xs text-gray-500 mt-1 truncate" title="${userId}">ID: ${userId}</p>` : ''}
+                            ${!isAuthReady ? `<span class="text-yellow-500 flex items-center justify-center gap-2">${renderIcon('Loader2', 16, 'animate-spin')} 인증 중...</span>` : `<span class="text-green-500 flex items-center justify-center gap-2">${renderIcon('CheckCircle', 16)} 동기화 중</span>`}
+                            ${uid ? `<p class="text-xs text-blue-300 mt-1 truncate font-mono bg-blue-900/30 p-1 rounded" title="${uid}">SyncID: ${uid}</p>` : ''}
                         </div>
                         <div>
                             <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">파일 업로드</h3>
@@ -386,7 +448,7 @@
                             <div class="space-y-1">
                                 ${getUniqueCategories().map(cat => {
                                     const count = cat === 'all' ? memos.length : (categoryCounts[cat] || 0);
-                                    return `<button class="cat-item-btn w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}" data-name="${cat}">
+                                    return `<button class="cat-item-btn w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}" data-name="${cat}" ${isAuthReady ? '' : 'disabled'}>
                                         <div class="flex items-center gap-2">${renderIcon(cat === 'all' ? 'Layers' : 'Folder', 16, selectedCategory === cat ? 'text-white' : 'text-gray-400')}<span>${cat} <span class="text-xs opacity-60 ml-1">(${count})</span></span></div>
                                         ${cat !== 'all' ? `<div class="flex items-center" onclick="event.stopPropagation()"><span class="open-viewer-btn text-xs opacity-50 hover:opacity-100 hover:text-blue-300 px-2 cursor-pointer" data-cat="${cat}">보기</span></div>` : ''}
                                     </button>`;
@@ -442,7 +504,8 @@
                     const module = await import("https://esm.run/@google/generative-ai");
                     window.GoogleGenerativeAI = module.GoogleGenerativeAI;
                 }
-                let context = `사용자 ID: ${userId}\n문맥: ${selectedCategory}\n\n[데이터]:\n`;
+                const uid = getEffectiveUserId();
+                let context = `사용자 ID: ${uid}\n문맥: ${selectedCategory}\n\n[데이터]:\n`;
                 filteredMemos.forEach(m => { context += `- ${m.filename} (${m.category}): ${m.content.slice(0, 1000)}\n`; });
                 context += `\n질문: ${userMsg}`;
 
@@ -467,7 +530,10 @@
         const startBulkUpload = async (category) => {
             if (filesToUpload.length === 0 || !category) return;
             showCategoryUploadModal = false; isUploading = true; uploadSuccessCount = 0; totalFilesToUpload = filesToUpload.length; render();
-            if (!CATEGORIES.includes(category)) { CATEGORIES.push(category); saveCategories(); }
+            if (!CATEGORIES.includes(category)) { 
+                CATEGORIES.push(category); 
+                await saveCategories(); // 카테고리 클라우드 저장
+            }
             
             const promises = [];
             for (const file of filesToUpload) {
@@ -503,7 +569,11 @@
             const newCat = prompt("새 카테고리 이름:");
             if (newCat && newCat.trim()) {
                 const clean = newCat.trim();
-                if (!CATEGORIES.includes(clean)) { CATEGORIES.push(clean); saveCategories(); render(); }
+                if (!CATEGORIES.includes(clean)) { 
+                    CATEGORIES.push(clean); 
+                    await saveCategories(); 
+                    render(); 
+                }
             }
         };
 
@@ -521,9 +591,14 @@
             document.getElementById('open-settings-btn')?.addEventListener('click', () => { showSettings = true; render(); });
             document.getElementById('close-settings')?.addEventListener('click', () => { showSettings = false; render(); });
             document.getElementById('save-settings')?.addEventListener('click', () => {
-                config = { geminiKey: document.getElementById('gemini-key').value, firebaseConfig: document.getElementById('fb-config').value };
+                config = { 
+                    geminiKey: document.getElementById('gemini-key').value, 
+                    firebaseConfig: document.getElementById('fb-config').value,
+                    syncId: document.getElementById('sync-id').value 
+                };
                 localStorage.setItem('ai_memo_config', JSON.stringify(config));
-                initFirebase(config.firebaseConfig); showSettings = false; render();
+                // 설정 저장 시 페이지 리로드로 초기화
+                location.reload(); 
             });
             document.querySelectorAll('.cat-item-btn').forEach(btn => btn.addEventListener('click', (e) => { selectedCategory = e.currentTarget.dataset.name; render(); }));
             document.querySelectorAll('.open-viewer-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); categoryView = e.currentTarget.dataset.cat; selectedMemoIds.clear(); showCategoryViewerModal = true; render(); }));
@@ -544,8 +619,8 @@
             document.getElementById('open-cat-manager')?.addEventListener('click', () => { showCategoryModal = true; render(); });
             document.getElementById('close-cat-manager-btn')?.addEventListener('click', () => { showCategoryModal = false; render(); });
             document.getElementById('add-new-cat-btn')?.addEventListener('click', handleAddCategory);
-            document.querySelectorAll('.edit-cat-btn').forEach(btn => { const n = btn.dataset.name; btn.addEventListener('click', () => { const newN = prompt("새 이름:"); if(newN && !CATEGORIES.includes(newN)) { CATEGORIES[CATEGORIES.indexOf(n)] = newN; saveCategories(); render(); } }); });
-            document.querySelectorAll('.del-cat-btn').forEach(btn => { const n = btn.dataset.name; btn.addEventListener('click', () => { if(confirm("삭제?")) { CATEGORIES = CATEGORIES.filter(c => c !== n); saveCategories(); render(); } }); });
+            document.querySelectorAll('.edit-cat-btn').forEach(btn => { const n = btn.dataset.name; btn.addEventListener('click', async () => { const newN = prompt("새 이름:"); if(newN && !CATEGORIES.includes(newN)) { CATEGORIES[CATEGORIES.indexOf(n)] = newN; await saveCategories(); render(); } }); });
+            document.querySelectorAll('.del-cat-btn').forEach(btn => { const n = btn.dataset.name; btn.addEventListener('click', async () => { if(confirm("삭제?")) { CATEGORIES = CATEGORIES.filter(c => c !== n); await saveCategories(); render(); } }); });
             
             const msgContainer = document.getElementById('messages-container');
             if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
@@ -566,10 +641,15 @@
             if (savedConfig) {
                 try {
                     config = JSON.parse(savedConfig);
+                    // Sync ID 기본값 처리 (없으면 빈 문자열)
+                    if (!config.syncId) config.syncId = '';
+                    
                     if (config.firebaseConfig && config.firebaseConfig !== '{}') initFirebase(config.firebaseConfig);
                 } catch (e) { console.error(e); }
             }
-            loadCategories();
+            // 초기 로드 시엔 로컬 카테고리만 일단 표시 (Firebase 로드 후 업데이트 됨)
+            const savedCats = localStorage.getItem('ai_memo_categories');
+            if (savedCats) CATEGORIES = JSON.parse(savedCats);
             render();
         };
     </script>
