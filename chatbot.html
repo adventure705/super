@@ -31,7 +31,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        // onSnapshot 추가 (실시간 동기화 필수)
         import { getFirestore, collection, addDoc, getDoc, setDoc, getDocs, query, orderBy, deleteDoc, doc, updateDoc, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // 전역 설정
@@ -89,7 +88,7 @@
         
         let loading = false;
         let showSettings = false;
-        let showSidebar = true;
+        let showSidebar = false; // 모바일 초기값: 닫힘
         
         // 업로드 상태
         let isUploading = false;
@@ -98,7 +97,7 @@
         let currentUploadingFileName = '';
         let currentUploadingFileSize = 0; 
 
-        // 삭제 상태 (신규 추가)
+        // 삭제 상태
         let isDeleting = false;
         let deleteSuccessCount = 0;
         let totalFilesToDelete = 0;
@@ -290,9 +289,9 @@
                         
                         ${isDeleting ? `
                             <div class="flex items-center gap-3 flex-1 justify-end ml-4 animate-in">
-                                <span class="text-xs text-red-300 animate-pulse font-medium">삭제 진행 중... (${deleteSuccessCount}/${totalFilesToDelete})</span>
+                                <span class="text-xs text-red-300 animate-pulse font-medium">삭제 중... (${deleteSuccessCount}/${totalFilesToDelete})</span>
                                 <div class="w-32 bg-gray-700 rounded-full h-2 overflow-hidden border border-gray-600">
-                                    <div class="bg-red-500 h-2 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(239,68,68,0.5)]" style="width: ${(deleteSuccessCount / totalFilesToDelete) * 100}%"></div>
+                                    <div class="bg-red-500 h-2 rounded-full transition-all duration-300" style="width: ${(deleteSuccessCount / totalFilesToDelete) * 100}%"></div>
                                 </div>
                             </div>
                         ` : selectedCount > 0 ? `
@@ -399,10 +398,20 @@
             const uid = getEffectiveUserId();
 
             return `
-            <div class="flex h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
-                <div class="w-72 bg-gray-800 border-r border-gray-700 flex flex-col ${showSidebar ? '' : 'hidden'} md:flex">
+            <div class="flex h-[100dvh] bg-gray-900 text-gray-100 font-sans overflow-hidden">
+                <!-- 사이드바 (모바일에서는 오버레이) -->
+                <!-- 백드롭 (모바일 전용) -->
+                <div class="fixed inset-0 bg-black/50 z-40 md:hidden ${showSidebar ? '' : 'hidden'}" id="mobile-backdrop"></div>
+                
+                <div class="
+                    fixed inset-y-0 left-0 z-50 w-72 bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 
+                    ${showSidebar ? 'translate-x-0' : '-translate-x-full'} 
+                    md:static md:translate-x-0
+                ">
                     <div class="p-5 border-b border-gray-700 flex items-center justify-between">
-                        <div class="flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl"> 🤖 슈퍼 챗봇 </h1></div>
+                        <div class="flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl">🤖 슈퍼 챗봇</h1></div>
+                        <!-- 모바일용 닫기 버튼 -->
+                        <button id="close-sidebar-mobile" class="md:hidden text-gray-400">${renderIcon('X', 20)}</button>
                     </div>
                     
                     <div class="p-4 flex-1 overflow-y-auto hide-scrollbar space-y-6">
@@ -435,7 +444,10 @@
                                             ${renderIcon('MessageSquare', 14)}
                                             <span class="truncate w-32">${session.title || '새로운 대화'}</span>
                                         </div>
-                                        <button class="delete-session-btn text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" data-id="${session.id}" onclick="event.stopPropagation()">${renderIcon('Trash2', 12)}</button>
+                                        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button class="edit-session-btn text-gray-500 hover:text-blue-400" data-id="${session.id}" data-title="${session.title}" onclick="event.stopPropagation()">${renderIcon('Edit3', 12)}</button>
+                                            <button class="delete-session-btn text-gray-500 hover:text-red-400" data-id="${session.id}" onclick="event.stopPropagation()">${renderIcon('Trash2', 12)}</button>
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -467,9 +479,9 @@
                         ${uid ? `<span class="text-[10px] font-mono text-gray-600" title="${uid}">SYNC ON</span>` : ''}
                     </div>
                 </div>
-                <div class="flex-1 flex flex-col relative">
+                <div class="flex-1 flex flex-col relative w-full">
                     <header class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 backdrop-blur-md">
-                        <div class="flex items-center gap-3"><button class="md:hidden text-gray-400" onclick="document.querySelector('.w-72').classList.toggle('hidden')">${renderIcon('Menu', 24)}</button>
+                        <div class="flex items-center gap-3"><button id="open-sidebar-mobile" class="md:hidden text-gray-400">${renderIcon('Menu', 24)}</button>
                         <div>
                             <h2 class="font-bold text-gray-100 flex items-center gap-2">
                                 ${currentSessionId ? (chatSessions.find(s=>s.id===currentSessionId)?.title || '대화 중...') : '새로운 대화'}
@@ -502,30 +514,39 @@
 
         // --- 4. 이벤트 및 액션 ---
 
-        // 새 채팅 시작 (화면 초기화)
         const startNewChat = () => {
             currentSessionId = null;
             messages = [];
+            if(window.innerWidth < 768) showSidebar = false; // 모바일이면 사이드바 닫기
             render();
         };
 
-        // 채팅 세션 불러오기
         const loadChatSession = (id) => {
             const session = chatSessions.find(s => s.id === id);
             if (session) {
                 currentSessionId = id;
                 messages = session.messages || [];
+                if(window.innerWidth < 768) showSidebar = false; // 모바일이면 사이드바 닫기
                 render();
             }
         };
 
-        // 채팅 세션 삭제
         const deleteChatSession = async (id) => {
             if (confirm("이 대화 기록을 삭제하시겠습니까?")) {
                 try {
                     await deleteDoc(doc(getUserChatCollectionRef(), id));
                     if (currentSessionId === id) startNewChat();
                 } catch (e) { alert("삭제 실패: " + e.message); }
+            }
+        };
+
+        // 대화 제목 수정 기능
+        const handleEditSessionTitle = async (id, oldTitle) => {
+            const newTitle = prompt("대화 제목 수정:", oldTitle);
+            if (newTitle && newTitle.trim() !== "") {
+                try {
+                    await updateDoc(doc(getUserChatCollectionRef(), id), { title: newTitle.trim() });
+                } catch (e) { alert("수정 실패: " + e.message); }
             }
         };
 
@@ -539,16 +560,14 @@
             inputElement.dataset.value = userMsg; 
             const filteredMemos = selectedCategory === 'all' ? memos : memos.filter(m => (m.category || '기타') === selectedCategory);
             
-            // 화면에 먼저 표시
             messages = [...messages, { role: 'user', text: userMsg }];
             inputElement.value = ''; 
             loading = true; 
             render();
 
-            // 참고 데이터가 없을 경우
             if (filteredMemos.length === 0) {
                 messages = [...messages, { role: 'model', text: `선택하신 '${selectedCategory}' 문서함에 참고할 메모가 없습니다.` }];
-                await saveCurrentSession(); // 기록 저장
+                await saveCurrentSession(); 
                 loading = false;
                 render(); 
                 return;
@@ -559,7 +578,6 @@
                     const module = await import("https://esm.run/@google/generative-ai");
                     window.GoogleGenerativeAI = module.GoogleGenerativeAI;
                 }
-                // Gemini에게 보낼 데이터 구성
                 let context = `[참고 데이터 (문서함: ${selectedCategory})]:\n`;
                 filteredMemos.forEach(m => { context += `- ${m.filename}: ${m.content.slice(0, 800)}\n`; });
                 context += `\n[질문]: ${userMsg}`;
@@ -571,7 +589,6 @@
                 
                 messages = [...messages, { role: 'model', text: responseText }];
                 
-                // 첫 대화라면 제목 자동 생성
                 if (!currentSessionId && messages.length === 2) {
                     await createSessionAndGenerateTitle(messages[0].text, responseText);
                 } else {
@@ -584,11 +601,9 @@
             loading = false; render();
         };
 
-        // 현재 세션 저장 (없으면 생성)
         const saveCurrentSession = async () => {
             if (!db || !isAuthReady) return;
             if (!currentSessionId) {
-                // ID 없이 저장하려 할 때 (참고 데이터 없음 등의 경우) -> 임시 제목으로 생성
                 const newDocRef = await addDoc(getUserChatCollectionRef(), {
                     title: "새로운 대화",
                     messages: messages,
@@ -596,7 +611,6 @@
                 });
                 currentSessionId = newDocRef.id;
             } else {
-                // 기존 세션 업데이트
                 await updateDoc(doc(getUserChatCollectionRef(), currentSessionId), {
                     messages: messages,
                     updatedAt: new Date()
@@ -604,10 +618,8 @@
             }
         };
 
-        // 세션 생성 및 AI 제목 생성
         const createSessionAndGenerateTitle = async (firstUserMsg, firstAiMsg) => {
             try {
-                // 1. 일단 기본 제목으로 저장
                 const newDocRef = await addDoc(getUserChatCollectionRef(), {
                     title: firstUserMsg.slice(0, 20) + "...",
                     messages: messages,
@@ -615,14 +627,12 @@
                 });
                 currentSessionId = newDocRef.id;
 
-                // 2. AI에게 제목 요청 (비동기)
                 const genAI = new window.GoogleGenerativeAI(config.geminiKey);
                 const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
                 const titlePrompt = `다음 대화 내용을 바탕으로 5단어 이내의 짧고 명확한 제목을 지어줘. 따옴표 없이 제목만 출력해.\n\nQ: ${firstUserMsg}\nA: ${firstAiMsg}`;
                 const result = await model.generateContent(titlePrompt);
                 const title = result.response.text().trim();
 
-                // 3. 제목 업데이트
                 await updateDoc(newDocRef, { title: title });
             } catch (e) { console.error("Title Gen Error:", e); }
         };
@@ -633,27 +643,17 @@
             if (filesToUpload.length > 0) { e.target.value = ''; showCategoryViewerModal = false; showCategoryUploadModal = true; render(); }
         };
 
-        // 업로드 진행률 표시 로직 개선 (순차 업로드 적용)
         const startBulkUpload = async (category) => {
             if (filesToUpload.length === 0 || !category) return;
+            showCategoryUploadModal = false; isUploading = true; uploadSuccessCount = 0; totalFilesToUpload = filesToUpload.length; render();
             
-            showCategoryUploadModal = false;
-            isUploading = true;
-            uploadSuccessCount = 0;
-            totalFilesToUpload = filesToUpload.length;
-            render();
-            
-            // 새 카테고리라면 목록에 추가 및 저장
             if (!CATEGORIES.includes(category)) { 
                 CATEGORIES.push(category); await saveCategories(); 
             }
 
-            // 순차적 처리를 위해 for loop 사용 (병렬 처리 시 UI 갱신이 너무 빨라 안 보일 수 있음)
             for (const file of filesToUpload) {
-                // 텍스트 파일만 허용
                 if (file.type !== "text/plain" && !file.name.toLowerCase().endsWith(".txt")) continue;
                 
-                // 현재 파일명 업데이트 및 렌더링
                 currentUploadingFileName = file.name;
                 currentUploadingFileSize = file.size;
                 render();
@@ -672,25 +672,22 @@
                         } catch (e) { 
                             console.error(e); 
                         }
-                        render(); // 카운트 갱신
+                        render();
                         resolve();
                     };
                     reader.readAsText(file, 'utf-8');
                 });
             }
             
-            // 완료 처리
             isUploading = false; 
             filesToUpload = []; 
             currentUploadingFileName = '';
             
             await fetchMemos(); 
             render();
-            // 완료 메시지 (약간의 지연 후)
             setTimeout(() => alert("업로드가 완료되었습니다."), 100);
         };
 
-        // --- 기타 이벤트 리스너들 (기존과 동일하되 채팅 관련 추가) ---
         const handleDeleteMemo = async (id) => {
             if (confirm("삭제하시겠습니까?")) {
                 try { await deleteDoc(doc(getUserMemoCollectionRef(), id)); await fetchMemos(); } catch (e) { alert(e.message); }
@@ -699,8 +696,6 @@
 
         const handleBulkDelete = async () => {
             if (confirm(`선택한 ${selectedMemoIds.size}개를 삭제하시겠습니까?`)) {
-                
-                // --- 삭제 진행 상태 시작 ---
                 isDeleting = true;
                 deleteSuccessCount = 0;
                 totalFilesToDelete = selectedMemoIds.size;
@@ -708,12 +703,10 @@
 
                 try {
                     const idsToDelete = Array.from(selectedMemoIds);
-                    
-                    // 병렬 처리를 하되, 각각 완료 시 카운트를 올리고 렌더링
                     const deletePromises = idsToDelete.map(async (id) => {
                         await deleteDoc(doc(getUserMemoCollectionRef(), id));
                         deleteSuccessCount++;
-                        render(); // 진행률 업데이트
+                        render(); 
                     });
 
                     await Promise.all(deletePromises);
@@ -811,18 +804,27 @@
                 chatInput.addEventListener('input', (e) => { e.target.dataset.value = e.target.value; });
             }
             
-            // 새 채팅 버튼
+            // 사이드바 토글 (모바일용)
+            document.getElementById('open-sidebar-mobile')?.addEventListener('click', () => { showSidebar = true; render(); });
+            document.getElementById('close-sidebar-mobile')?.addEventListener('click', () => { showSidebar = false; render(); });
+            document.getElementById('mobile-backdrop')?.addEventListener('click', () => { showSidebar = false; render(); });
+
             document.getElementById('new-chat-btn')?.addEventListener('click', startNewChat);
 
-            // 채팅 세션 클릭 이벤트
             document.querySelectorAll('.chat-session-item').forEach(item => {
                 item.addEventListener('click', () => loadChatSession(item.dataset.id));
             });
-            // 채팅 세션 삭제 버튼
             document.querySelectorAll('.delete-session-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteChatSession(btn.dataset.id);
+                });
+            });
+            // 제목 수정 버튼 이벤트
+            document.querySelectorAll('.edit-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleEditSessionTitle(btn.dataset.id, btn.dataset.title);
                 });
             });
 
@@ -892,4 +894,3 @@
     </script>
 </body>
 </html>
-
