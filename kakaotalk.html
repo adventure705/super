@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 💬 카카오톡 대화 내용 날짜별 분리 도구 </title>
+    <title>카카오톡 대화 날짜별 추출기</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- JSZip for creating ZIP files -->
+    <!-- JSZip for creating ZIP files (다운로드 기능은 유지하되, 개별 파일 저장에 사용) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- FileSaver.js for saving files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -45,17 +45,22 @@
             box-shadow: 0 0 0 1px #60a5fa;
         }
         /* date picker 아이콘을 위한 감싸는 요소 스타일 */
-        .date-input-wrapper {
-            position: relative;
+        /* YYYYMMDD 텍스트 입력 필드는 숨기지만 값을 유지 */
+        #dateFrom, #dateTo {
+             display: none; 
         }
-        .date-input-icon {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #9ca3af; /* Gray-400 */
-            pointer-events: none; /* 아이콘 클릭 방지, 아래 input 클릭 허용 */
+
+        /* date input (type="date") 스타일 */
+        .date-input-wrapper input[type="date"] {
+            /* 날짜 선택 아이콘이 잘 보이도록 배경색 조정 */
+            background-color: #1f2937; 
+            color: #f3f4f6;
+            border-color: #4b5563;
         }
+        .date-input-wrapper input[type="date"]:hover {
+             cursor: pointer;
+        }
+        
     </style>
 </head>
 <body class="flex items-center justify-center p-4">
@@ -81,33 +86,35 @@
 
             <!-- 날짜 기간 설정 -->
             <div class="mb-4">
-                <label class="block text-md font-medium text-gray-300 mb-2">추출 기간 (날짜 선택/YYYYMMDD 형식)</label>
+                <label class="block text-md font-medium text-gray-300 mb-2">추출 기간 (날짜 선택)</label>
                 <div class="flex space-x-4">
                     <!-- From Date Input with Date Picker -->
                     <div class="date-input-wrapper w-full">
+                         <!-- dateFromPicker는 사용자에게 보이는 달력 입력 필드 -->
                          <input type="date" id="dateFromPicker" 
                                 class="w-full p-3 border rounded-lg dark-input"
                                 onchange="updateDateInput('dateFrom', this.value)">
+                         <!-- dateFrom은 YYYYMMDD 값을 저장하고 로직에 사용됨 (display: none) -->
                         <input type="text" id="dateFrom" placeholder="시작일 (YYYYMMDD)" maxlength="8"
-                           class="w-full p-3 border rounded-lg dark-input absolute top-0 left-0 opacity-0"
+                           class="w-full p-3 border rounded-lg dark-input"
                            oninput="this.value = this.value.replace(/[^0-9]/g, '');">
-                        <i class="ph ph-calendar-blank date-input-icon"></i>
                     </div>
 
                     <span class="p-3 text-gray-400 flex items-center">~</span>
                     
                     <!-- To Date Input with Date Picker -->
                     <div class="date-input-wrapper w-full">
+                         <!-- dateToPicker는 사용자에게 보이는 달력 입력 필드 -->
                         <input type="date" id="dateToPicker" 
                                 class="w-full p-3 border rounded-lg dark-input"
                                 onchange="updateDateInput('dateTo', this.value)">
+                        <!-- dateTo는 YYYYMMDD 값을 저장하고 로직에 사용됨 (display: none) -->
                         <input type="text" id="dateTo" placeholder="종료일 (선택 사항)" maxlength="8"
-                           class="w-full p-3 border rounded-lg dark-input absolute top-0 left-0 opacity-0"
+                           class="w-full p-3 border rounded-lg dark-input"
                            oninput="this.value = this.value.replace(/[^0-9]/g, '');">
-                        <i class="ph ph-calendar-blank date-input-icon"></i>
                     </div>
                 </div>
-                <p id="dateError" class="text-sm text-red-400 mt-2 hidden">유효한 YYYYMMDD 날짜를 입력해주세요.</p>
+                <p id="dateError" class="text-sm text-red-400 mt-2 hidden">유효한 날짜를 입력해주세요.</p>
             </div>
 
             <!-- 파일 형식 선택 -->
@@ -119,12 +126,16 @@
                                class="form-radio h-5 w-5 text-blue-400 focus:ring-blue-400 bg-gray-700 border-gray-500">
                         <span class="ml-2 text-gray-300">TXT 파일 (.txt)</span>
                     </label>
-                    <label class="inline-flex items-center cursor-not-allowed opacity-60">
-                        <input type="radio" name="fileType" value="docx" disabled
-                               class="form-radio h-5 w-5 text-blue-400">
-                        <span class="ml-2 text-gray-300">DOCX 파일 (.docx) - 현재는 .txt로 추출</span>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="fileType" value="docx"
+                               class="form-radio h-5 w-5 text-blue-400 focus:ring-blue-400 bg-gray-700 border-gray-500"
+                               onchange="showDocxWarning()">
+                        <span class="ml-2 text-gray-300">DOCX 파일 (.docx)</span>
                     </label>
                 </div>
+                <p id="docxWarning" class="text-sm text-yellow-400 mt-2 hidden">
+                    *DOCX 선택 시: 브라우저에서는 DOCX 생성에 제한이 있어, 서식을 유지한 **.doc (HTML 기반) 파일**로 추출됩니다.
+                </p>
             </div>
         </div>
 
@@ -134,14 +145,14 @@
                     class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
                 <span class="flex items-center justify-center">
                     <i class="ph ph-calendar-check text-xl mr-2"></i>
-                    선택 기간 날짜별 추출 (ZIP 파일 다운로드)
+                    선택 기간 날짜별 추출 (개별 파일 다운로드)
                 </span>
             </button>
             <button id="extractAllBtn" onclick="processFile('all')"
                     class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
                 <span class="flex items-center justify-center">
                     <i class="ph ph-list-numbers text-xl mr-2"></i>
-                    전체 기간 날짜별 추출 (ZIP 파일 다운로드)
+                    전체 기간 날짜별 추출 (개별 파일 다운로드)
                 </span>
             </button>
         </div>
@@ -156,15 +167,16 @@
         const fileInput = document.getElementById('kakaoFile');
         const fileNameDisplay = document.getElementById('fileNameDisplay');
         const uploadError = document.getElementById('uploadError');
-        const dateFromInput = document.getElementById('dateFrom');
-        const dateToInput = document.getElementById('dateTo');
-        const dateFromPicker = document.getElementById('dateFromPicker');
-        const dateToPicker = document.getElementById('dateToPicker');
+        const dateFromInput = document.getElementById('dateFrom'); // YYYYMMDD 저장
+        const dateToInput = document.getElementById('dateTo');     // YYYYMMDD 저장
+        const dateFromPicker = document.getElementById('dateFromPicker'); // Date Picker
+        const dateToPicker = document.getElementById('dateToPicker');     // Date Picker
         const dateError = document.getElementById('dateError');
         const statusMessage = document.getElementById('statusMessage');
         const extractSelectedBtn = document.getElementById('extractSelectedBtn');
         const extractAllBtn = document.getElementById('extractAllBtn');
-
+        const docxWarning = document.getElementById('docxWarning');
+        
         /**
          * KST 기준 날짜를 YYYYMMDD와 ISO 형식으로 반환하는 함수
          * @param {number} offsetDays - 오늘 날짜로부터의 오프셋 (예: 어제는 -1)
@@ -198,6 +210,9 @@
             const yesterday = getKSTDate(-1); // 어제 날짜 (Offset -1)
             dateFromInput.value = yesterday.yyyymmdd;
             dateFromPicker.value = yesterday.isoDate; // Date picker도 설정
+            // dateTo는 기본적으로 비워둠
+            dateToInput.value = '';
+            dateToPicker.value = '';
         });
         
         // Date Picker와 YYYYMMDD 텍스트 필드 연동 
@@ -209,6 +224,16 @@
                 inputField.value = yyyymmdd;
             } else {
                 inputField.value = '';
+            }
+        }
+        
+        // DOCX 경고 메시지 표시/숨기기
+        function showDocxWarning() {
+            const fileType = document.querySelector('input[name="fileType"]:checked').value;
+            if (fileType === 'docx') {
+                docxWarning.classList.remove('hidden');
+            } else {
+                docxWarning.classList.add('hidden');
             }
         }
 
@@ -261,6 +286,16 @@
             const date = new Date(y, m - 1, d);
             return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
         }
+        
+        // 사용자에게 파일이 여러 개 다운로드될 것임을 확인받는 모달 역할 함수
+        function showConfirmModal(count) {
+            // 사용자 경험을 위해 확인 단계 없이 바로 다운로드를 진행합니다.
+            return new Promise((resolve) => {
+                showStatus(`⚠️ ${count}개의 개별 파일 다운로드를 시작합니다. 잠시 기다려주세요.`, 'info');
+                resolve(true); 
+            });
+        }
+
 
         // 메인 파일 처리 함수
         async function processFile(mode) {
@@ -285,17 +320,24 @@
                 // dateFromInput, dateToInput은 YYYYMMDD 텍스트 값을 유지함
                 const dateFromStr = dateFromInput.value.trim();
                 const dateToStr = dateToInput.value.trim();
+                const selectedFileType = document.querySelector('input[name="fileType"]:checked').value;
                 
                 // 1. 날짜 유효성 검사 (선택 기간 추출 모드일 때만)
                 if (mode === 'selected') {
+                    if (!dateFromStr) {
+                         dateError.textContent = '시작 날짜를 선택해주세요.';
+                         dateError.classList.remove('hidden');
+                         showStatus('시작 날짜를 선택해주세요.', 'error');
+                         return;
+                    }
                     if (dateFromStr && !isValidDate(dateFromStr)) {
-                        dateError.textContent = '시작 날짜가 유효하지 않습니다 (YYYYMMDD 형식).';
+                        dateError.textContent = '시작 날짜가 유효하지 않습니다.';
                         dateError.classList.remove('hidden');
                         showStatus('날짜 입력 오류가 발생했습니다. 확인해주세요.', 'error');
                         return;
                     }
                     if (dateToStr && dateToStr.length > 0 && !isValidDate(dateToStr)) {
-                        dateError.textContent = '종료 날짜가 유효하지 않습니다 (YYYYMMDD 형식).';
+                        dateError.textContent = '종료 날짜가 유효하지 않습니다.';
                         dateError.classList.remove('hidden');
                         showStatus('날짜 입력 오류가 발생했습니다. 확인해주세요.', 'error');
                         return;
@@ -344,25 +386,52 @@
                     showStatus(`선택하신 기간 (${filterTitle}) 내에 추출할 대화 내용이 없습니다.`, 'error');
                     return;
                 }
-
-                showStatus(`🔍 ${filterTitle}의 대화 ${filteredDates.length}일 분을 추출 중입니다...`, 'info');
-
-                // 5. ZIP 파일 생성
-                const zip = new JSZip();
                 
+                // 5. 다운로드 확인 및 실행
+                await showConfirmModal(filteredDates.length);
+                
+                let downloadedCount = 0;
+                
+                const fileExtension = selectedFileType === 'docx' ? '.doc' : '.txt';
+                const mimeType = selectedFileType === 'docx' ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8';
+
+
+                // 각 날짜별로 개별 파일 다운로드
                 filteredDates.forEach(dateKey => {
-                    const content = chatsByDate[dateKey];
-                    // 파일명: YYYYMMDD_카톡대화.txt
-                    const fileName = `${dateKey}_카톡대화.txt`; 
-                    zip.file(fileName, content);
+                    const rawContent = chatsByDate[dateKey];
+                    let finalContent;
+                    
+                    if (selectedFileType === 'docx') {
+                        // DOCX 선택 시 HTML 구조로 래핑하여 Word 호환성을 높임
+                        finalContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${dateKey} 카카오톡 대화</title>
+</head>
+<body style="font-family: Malgun Gothic, sans-serif; white-space: pre-wrap; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px;">
+<div style="border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">
+    <h1 style="font-size: 24px; color: #333;">카카오톡 대화 내용 (${dateKey})</h1>
+    <p style="font-size: 14px; color: #666;">파일 형식: HTML 기반 (.doc)</p>
+</div>
+${rawContent.replace(/\n/g, '<br>')}
+</body>
+</html>
+                        `;
+                    } else {
+                        finalContent = rawContent;
+                    }
+                    
+                    const fileName = `${dateKey}_카톡대화${fileExtension}`;
+                    const blob = new Blob([finalContent], { type: mimeType });
+                    
+                    // FileSaver.js를 사용하여 파일 저장 (개별 다운로드)
+                    saveAs(blob, fileName);
+                    downloadedCount++;
                 });
                 
-                // 6. 다운로드 실행
-                const zipFileName = `카카오톡_대화_추출_${getKSTDate().yyyymmdd}.zip`; // 오늘 날짜를 ZIP 파일명에 사용
-                zip.generateAsync({type:"blob"}).then(function(content) {
-                    saveAs(content, zipFileName);
-                    showStatus(`✅ 대화 추출이 완료되었으며, ${filteredDates.length}개의 파일이 ZIP으로 다운로드되었습니다.`, 'success');
-                });
+                showStatus(`✅ 대화 추출이 완료되었으며, ${downloadedCount}개의 파일이 개별 다운로드되었습니다.`, 'success');
 
             } catch (error) {
                 console.error("처리 중 오류 발생:", error);
@@ -423,5 +492,4 @@
         }
     </script>
 </body>
-
 </html>
