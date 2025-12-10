@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오톡 대화 날짜별 추출기</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- JSZip for creating ZIP files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js for saving files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- Phosphor Icons (for calendar/dark mode icon) -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/dist/umd/index.min.js"></script>
+    <style>
+        /* 다크 모드 기본 설정 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1f2937; /* Gray-800 */
+            min-height: 100vh;
+            color: #d1d5db; /* Text-300 */
+        }
+        .container-card {
+            background-color: #374151; /* Gray-700 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        }
+        .file-upload-box {
+            border: 2px dashed #4b5563; /* Gray-600 */
+            transition: all 0.2s;
+        }
+        .file-upload-box:hover {
+            border-color: #6b7280; /* Gray-500 */
+            background-color: #4a5568; /* Darker hover */
+        }
+        /* 입력 필드 기본 스타일 */
+        .dark-input {
+            background-color: #1f2937; /* Gray-800 */
+            border-color: #4b5563; /* Gray-600 */
+            color: #f3f4f6; /* Text-50 */
+        }
+        .dark-input:focus {
+            border-color: #60a5fa; /* Blue-400 */
+            box-shadow: 0 0 0 1px #60a5fa;
+        }
+        /* date picker 아이콘을 위한 감싸는 요소 스타일 */
+        .date-input-wrapper {
+            position: relative;
+        }
+        .date-input-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af; /* Gray-400 */
+            pointer-events: none; /* 아이콘 클릭 방지, 아래 input 클릭 허용 */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+    <div class="container-card w-full max-w-2xl p-6 md:p-10 rounded-xl">
+        <h1 class="text-4xl font-extrabold text-blue-300 mb-6 border-b border-gray-600 pb-3 drop-shadow-lg">
+            💬 카카오톡 대화 내용 날짜별 분리 도구
+        </h1>
+        
+        <!-- 1. 파일 업로드 섹션 -->
+        <div class="mb-8">
+            <label class="block text-lg font-medium text-gray-300 mb-2">1. 카카오톡 TXT 파일 업로드</label>
+            <div class="file-upload-box flex flex-col items-center justify-center p-6 rounded-lg cursor-pointer">
+                <svg class="w-10 h-10 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 014 4v2a2 2 0 01-2 2h-1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m-3-3l3 3m3-3l-3-3"></path></svg>
+                <p id="fileNameDisplay" class="text-sm text-gray-400">파일을 여기에 드래그하거나 클릭해서 선택하세요 (txt 파일)</p>
+                <input type="file" id="kakaoFile" accept=".txt" class="hidden" onchange="updateFileName(this)">
+            </div>
+            <p id="uploadError" class="text-sm text-red-400 mt-2 hidden">파일을 먼저 업로드해주세요.</p>
+        </div>
+
+        <!-- 2. 기간 설정 및 파일 형식 섹션 -->
+        <div class="mb-8 p-6 bg-gray-600 rounded-lg">
+            <h2 class="text-xl font-semibold text-gray-100 mb-4">2. 추출 옵션 설정</h2>
+
+            <!-- 날짜 기간 설정 -->
+            <div class="mb-4">
+                <label class="block text-md font-medium text-gray-300 mb-2">추출 기간 (날짜 선택/YYYYMMDD 형식)</label>
+                <div class="flex space-x-4">
+                    <!-- From Date Input with Date Picker -->
+                    <div class="date-input-wrapper w-full">
+                         <input type="date" id="dateFromPicker" 
+                                class="w-full p-3 border rounded-lg dark-input"
+                                onchange="updateDateInput('dateFrom', this.value)">
+                        <input type="text" id="dateFrom" placeholder="시작일 (YYYYMMDD)" maxlength="8"
+                           class="w-full p-3 border rounded-lg dark-input absolute top-0 left-0 opacity-0"
+                           oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                        <i class="ph ph-calendar-blank date-input-icon"></i>
+                    </div>
+
+                    <span class="p-3 text-gray-400 flex items-center">~</span>
+                    
+                    <!-- To Date Input with Date Picker -->
+                    <div class="date-input-wrapper w-full">
+                        <input type="date" id="dateToPicker" 
+                                class="w-full p-3 border rounded-lg dark-input"
+                                onchange="updateDateInput('dateTo', this.value)">
+                        <input type="text" id="dateTo" placeholder="종료일 (선택 사항)" maxlength="8"
+                           class="w-full p-3 border rounded-lg dark-input absolute top-0 left-0 opacity-0"
+                           oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                        <i class="ph ph-calendar-blank date-input-icon"></i>
+                    </div>
+                </div>
+                <p id="dateError" class="text-sm text-red-400 mt-2 hidden">유효한 YYYYMMDD 날짜를 입력해주세요.</p>
+            </div>
+
+            <!-- 파일 형식 선택 -->
+            <div>
+                <label class="block text-md font-medium text-gray-300 mb-2">추출 파일 형식</label>
+                <div class="flex space-x-6">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="fileType" value="txt" checked
+                               class="form-radio h-5 w-5 text-blue-400 focus:ring-blue-400 bg-gray-700 border-gray-500">
+                        <span class="ml-2 text-gray-300">TXT 파일 (.txt)</span>
+                    </label>
+                    <label class="inline-flex items-center cursor-not-allowed opacity-60">
+                        <input type="radio" name="fileType" value="docx" disabled
+                               class="form-radio h-5 w-5 text-blue-400">
+                        <span class="ml-2 text-gray-300">DOCX 파일 (.docx) - 현재는 .txt로 추출</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 추출 실행 버튼 -->
+        <div class="flex flex-col space-y-4">
+            <button id="extractSelectedBtn" onclick="processFile('selected')"
+                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
+                <span class="flex items-center justify-center">
+                    <i class="ph ph-calendar-check text-xl mr-2"></i>
+                    선택 기간 날짜별 추출 (ZIP 파일 다운로드)
+                </span>
+            </button>
+            <button id="extractAllBtn" onclick="processFile('all')"
+                    class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
+                <span class="flex items-center justify-center">
+                    <i class="ph ph-list-numbers text-xl mr-2"></i>
+                    전체 기간 날짜별 추출 (ZIP 파일 다운로드)
+                </span>
+            </button>
+        </div>
+
+        <!-- 4. 상태 메시지 -->
+        <div id="statusMessage" class="mt-6 p-4 rounded-lg text-center hidden"></div>
+        
+    </div>
+
+    <script>
+        // 전역 변수 설정
+        const fileInput = document.getElementById('kakaoFile');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const uploadError = document.getElementById('uploadError');
+        const dateFromInput = document.getElementById('dateFrom');
+        const dateToInput = document.getElementById('dateTo');
+        const dateFromPicker = document.getElementById('dateFromPicker');
+        const dateToPicker = document.getElementById('dateToPicker');
+        const dateError = document.getElementById('dateError');
+        const statusMessage = document.getElementById('statusMessage');
+        const extractSelectedBtn = document.getElementById('extractSelectedBtn');
+        const extractAllBtn = document.getElementById('extractAllBtn');
+
+        /**
+         * KST 기준 날짜를 YYYYMMDD와 ISO 형식으로 반환하는 함수
+         * @param {number} offsetDays - 오늘 날짜로부터의 오프셋 (예: 어제는 -1)
+         * @returns {{yyyymmdd: string, isoDate: string}} 날짜 객체
+         */
+        function getKSTDate(offsetDays = 0) {
+            const now = new Date();
+            // UTC 기준으로 KST (UTC+9)로 변환
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const kstOffset = 9 * 3600000; // 9 hours in milliseconds
+            const kstDate = new Date(utc + kstOffset);
+            
+            // 날짜 오프셋 적용
+            if (offsetDays !== 0) {
+                // setDate()를 사용하면 윤년과 월 경계를 자동으로 처리합니다.
+                kstDate.setDate(kstDate.getDate() + offsetDays); 
+            }
+
+            const year = kstDate.getFullYear();
+            const month = String(kstDate.getMonth() + 1).padStart(2, '0');
+            const day = String(kstDate.getDate()).padStart(2, '0');
+            
+            return {
+                yyyymmdd: `${year}${month}${day}`,
+                isoDate: `${year}-${month}-${day}`
+            };
+        }
+
+        // 초기화: KST 어제 날짜로 From 필드 설정
+        document.addEventListener('DOMContentLoaded', () => {
+            const yesterday = getKSTDate(-1); // 어제 날짜 (Offset -1)
+            dateFromInput.value = yesterday.yyyymmdd;
+            dateFromPicker.value = yesterday.isoDate; // Date picker도 설정
+        });
+        
+        // Date Picker와 YYYYMMDD 텍스트 필드 연동 
+        function updateDateInput(targetId, isoDate) {
+            const inputField = document.getElementById(targetId);
+            if (isoDate) {
+                // ISO 날짜 (YYYY-MM-DD)를 YYYYMMDD로 변환
+                const yyyymmdd = isoDate.replace(/-/g, '');
+                inputField.value = yyyymmdd;
+            } else {
+                inputField.value = '';
+            }
+        }
+
+        // 파일 드롭존 활성화
+        const dropZone = document.querySelector('.file-upload-box');
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-gray-500'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('bg-gray-500'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('bg-gray-500');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                updateFileName(fileInput);
+            }
+        });
+
+        // 파일명 업데이트
+        function updateFileName(input) {
+            if (input.files.length > 0) {
+                fileNameDisplay.textContent = `선택된 파일: ${input.files[0].name}`;
+                uploadError.classList.add('hidden');
+            } else {
+                fileNameDisplay.textContent = '파일을 여기에 드래그하거나 클릭해서 선택하세요 (txt 파일)';
+            }
+        }
+
+        // 상태 메시지 표시 함수
+        function showStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden', 'bg-red-800', 'bg-green-800', 'bg-blue-800', 'text-red-300', 'text-green-300', 'text-blue-300');
+            if (type === 'error') {
+                statusMessage.classList.add('bg-red-800', 'text-red-300');
+            } else if (type === 'success') {
+                statusMessage.classList.add('bg-green-800', 'text-green-300');
+            } else {
+                statusMessage.classList.add('bg-blue-800', 'text-blue-300');
+            }
+        }
+
+        // 날짜 유효성 검사 (YYYYMMDD 형식)
+        function isValidDate(dateStr) {
+            if (!dateStr || dateStr.length !== 8) return false;
+            const y = parseInt(dateStr.substring(0, 4), 10);
+            const m = parseInt(dateStr.substring(4, 6), 10);
+            const d = parseInt(dateStr.substring(6, 8), 10);
+            
+            if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+
+            const date = new Date(y, m - 1, d);
+            return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+        }
+
+        // 메인 파일 처리 함수
+        async function processFile(mode) {
+            if (!fileInput.files.length) {
+                uploadError.classList.remove('hidden');
+                showStatus('처리할 카카오톡 TXT 파일을 먼저 업로드해주세요.', 'error');
+                return;
+            }
+
+            // 버튼 비활성화 (로딩 상태)
+            const originalSelectedText = extractSelectedBtn.innerHTML;
+            const originalAllText = extractAllBtn.innerHTML;
+            extractSelectedBtn.disabled = true;
+            extractAllBtn.disabled = true;
+            extractSelectedBtn.innerHTML = '<i class="ph ph-hourglass text-xl mr-2 animate-spin"></i> 처리 중...';
+            extractAllBtn.innerHTML = '<i class="ph ph-hourglass text-xl mr-2 animate-spin"></i> 처리 중...';
+            showStatus('파일 분석 및 추출 작업을 시작합니다...', 'info');
+            dateError.classList.add('hidden');
+            uploadError.classList.add('hidden');
+            
+            try {
+                // dateFromInput, dateToInput은 YYYYMMDD 텍스트 값을 유지함
+                const dateFromStr = dateFromInput.value.trim();
+                const dateToStr = dateToInput.value.trim();
+                
+                // 1. 날짜 유효성 검사 (선택 기간 추출 모드일 때만)
+                if (mode === 'selected') {
+                    if (dateFromStr && !isValidDate(dateFromStr)) {
+                        dateError.textContent = '시작 날짜가 유효하지 않습니다 (YYYYMMDD 형식).';
+                        dateError.classList.remove('hidden');
+                        showStatus('날짜 입력 오류가 발생했습니다. 확인해주세요.', 'error');
+                        return;
+                    }
+                    if (dateToStr && dateToStr.length > 0 && !isValidDate(dateToStr)) {
+                        dateError.textContent = '종료 날짜가 유효하지 않습니다 (YYYYMMDD 형식).';
+                        dateError.classList.remove('hidden');
+                        showStatus('날짜 입력 오류가 발생했습니다. 확인해주세요.', 'error');
+                        return;
+                    }
+                    
+                    if (dateFromStr && dateToStr && dateToStr.length > 0 && dateFromStr > dateToStr) {
+                         dateError.textContent = '시작 날짜가 종료 날짜보다 늦을 수 없습니다.';
+                        dateError.classList.remove('hidden');
+                        showStatus('날짜 입력 오류가 발생했습니다. 확인해주세요.', 'error');
+                        return;
+                    }
+                }
+
+                // 2. 파일 내용 읽기
+                const file = fileInput.files[0];
+                const fileText = await file.text();
+                
+                // 3. 날짜별 대화 내용 분리 (핵심 로직)
+                const chatsByDate = parseKakaoChat(fileText);
+                
+                // 4. 필터링 로직 적용
+                let filteredDates = Object.keys(chatsByDate);
+                let filterTitle = '전체 기간';
+
+                if (mode === 'selected') {
+                    if (dateFromStr) {
+                        filteredDates = filterDates(filteredDates, dateFromStr, dateToStr);
+                        
+                        const formatDisplayDate = (dateStr) => {
+                             if (!dateStr || dateStr.length !== 8) return '';
+                             return `${dateStr.substring(0, 4)}년 ${dateStr.substring(4, 6)}월 ${dateStr.substring(6, 8)}일`;
+                        }
+
+                        if (dateToStr && dateToStr.length > 0) {
+                             filterTitle = `${formatDisplayDate(dateFromStr)} ~ ${formatDisplayDate(dateToStr)}`;
+                        } else {
+                            filterTitle = `${formatDisplayDate(dateFromStr)} 단일 날짜`;
+                        }
+                    } else {
+                        // dateFromStr이 비어있으면 전체 추출 모드로 간주
+                        mode = 'all'; 
+                    }
+                }
+                
+                if (filteredDates.length === 0) {
+                    showStatus(`선택하신 기간 (${filterTitle}) 내에 추출할 대화 내용이 없습니다.`, 'error');
+                    return;
+                }
+
+                showStatus(`🔍 ${filterTitle}의 대화 ${filteredDates.length}일 분을 추출 중입니다...`, 'info');
+
+                // 5. ZIP 파일 생성
+                const zip = new JSZip();
+                
+                filteredDates.forEach(dateKey => {
+                    const content = chatsByDate[dateKey];
+                    // 파일명: YYYYMMDD_카톡대화.txt
+                    const fileName = `${dateKey}_카톡대화.txt`; 
+                    zip.file(fileName, content);
+                });
+                
+                // 6. 다운로드 실행
+                const zipFileName = `카카오톡_대화_추출_${getKSTDate().yyyymmdd}.zip`; // 오늘 날짜를 ZIP 파일명에 사용
+                zip.generateAsync({type:"blob"}).then(function(content) {
+                    saveAs(content, zipFileName);
+                    showStatus(`✅ 대화 추출이 완료되었으며, ${filteredDates.length}개의 파일이 ZIP으로 다운로드되었습니다.`, 'success');
+                });
+
+            } catch (error) {
+                console.error("처리 중 오류 발생:", error);
+                showStatus(`❌ 파일 처리 중 예상치 못한 오류가 발생했습니다: ${error.message}`, 'error');
+            } finally {
+                // 버튼 상태 복원
+                extractSelectedBtn.disabled = false;
+                extractAllBtn.disabled = false;
+                extractSelectedBtn.innerHTML = originalSelectedText;
+                extractAllBtn.innerHTML = originalAllText;
+            }
+        }
+
+        /**
+         * 카카오톡 TXT 파일 내용을 날짜별로 분리하는 함수
+         * @param {string} fileText - TXT 파일의 전체 내용
+         * @returns {Object<string, string>} { 'YYYYMMDD': '대화 내용' } 형태의 객체
+         */
+        function parseKakaoChat(fileText) {
+            const chatsByDate = {};
+            // 요청된 형식의 날짜 구분선 Regex: ^--------------- YYYY년 MM월 DD일 요일 ---------------$
+            const dateSeparatorRegex = /^--------------- (\d{4})년 (\d{1,2})월 (\d{1,2})일 [월화수목금토일]요일 ---------------$/gm;
+            
+            // 모든 날짜 구분선을 기준으로 텍스트를 분할 (캡처 그룹 포함)
+            const parts = fileText.split(dateSeparatorRegex);
+            
+            // 0: 헤더, 1: YYYY, 2: MM, 3: DD, 4: Content, 5: YYYY, ...
+            for (let i = 1; i < parts.length; i += 4) {
+                const year = parts[i].padStart(4, '0');
+                const month = parts[i + 1].padStart(2, '0');
+                const day = parts[i + 2].padStart(2, '0');
+                const content = parts[i + 3].trim(); 
+                const dateKey = `${year}${month}${day}`;
+
+                if (content.length > 0) {
+                    // 추출 파일에 날짜 헤더 재구성하여 추가
+                    const dateHeader = `--------------- ${year}년 ${month}월 ${day}일 추출된 대화 내용 ---------------\n\n`;
+                    chatsByDate[dateKey] = dateHeader + content;
+                }
+            }
+            
+            return chatsByDate;
+        }
+
+        /**
+         * 지정된 기간에 속하는 날짜 키만 필터링하는 함수
+         * @param {string[]} allDates - 모든 날짜 키 (YYYYMMDD) 배열
+         * @param {string} dateFromStr - 시작 날짜 (YYYYMMDD)
+         * @param {string} [dateToStr=''] - 종료 날짜 (YYYYMMDD)
+         * @returns {string[]} 필터링된 날짜 키 배열
+         */
+        function filterDates(allDates, dateFromStr, dateToStr = '') {
+            dateToStr = dateToStr || dateFromStr; // 종료일이 없으면 시작일만 추출
+            
+            return allDates
+                .filter(dateKey => dateKey >= dateFromStr && dateKey <= dateToStr)
+                .sort(); // 날짜 순으로 정렬
+        }
+    </script>
+</body>
+</html>
