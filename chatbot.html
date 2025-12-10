@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🤖 슈퍼챗봇 </title>
+    <title> 🤖 슈퍼 챗봇 </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { 
@@ -80,9 +80,9 @@
         let isAuthReady = false;
 
         // 채팅 관련 상태
-        let messages = []; // 현재 화면에 보이는 메시지들
-        let currentSessionId = null; // 현재 활성화된 채팅 세션 ID (null이면 새 채팅)
-        let chatSessions = []; // 사이드바용 채팅 목록
+        let messages = []; 
+        let currentSessionId = null; 
+        let chatSessions = []; 
 
         let memos = [];
         let config = { geminiKey: '' };
@@ -90,9 +90,19 @@
         let loading = false;
         let showSettings = false;
         let showSidebar = true;
+        
+        // 업로드 상태
         let isUploading = false;
         let uploadSuccessCount = 0;
         let totalFilesToUpload = 0;
+        let currentUploadingFileName = '';
+        let currentUploadingFileSize = 0; 
+
+        // 삭제 상태 (신규 추가)
+        let isDeleting = false;
+        let deleteSuccessCount = 0;
+        let totalFilesToDelete = 0;
+
         let selectedCategory = 'all'; 
         
         let showCategoryModal = false; 
@@ -103,7 +113,6 @@
         let selectedMemoIds = new Set(); 
 
         let renderTimeoutId = null;
-        // 기본값은 있으나, Firebase 연동 시 덮어씌워짐
         let CATEGORIES = ['all', '업무', '일기', '아이디어', '학습', '기타']; 
         const MAX_FILE_SIZE_MB = 1; 
         const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -122,7 +131,6 @@
         };
 
         const getUniqueCategories = () => {
-            // 현재 메모에 있는 카테고리 + 저장된 카테고리 목록 병합
             const usedCategories = memos.map(m => m.category || '기타').filter(c => c !== 'all');
             const uniqueUsed = [...new Set(usedCategories)];
             const combined = [...new Set([...CATEGORIES.filter(c => c !== 'all'), ...uniqueUsed])];
@@ -143,17 +151,15 @@
         };
 
         const getUserMemoCollectionRef = () => collection(db, `${getUserDocPath()}/memos`);
-        const getUserChatCollectionRef = () => collection(db, `${getUserDocPath()}/chat_sessions`); // 채팅 세션 컬렉션
+        const getUserChatCollectionRef = () => collection(db, `${getUserDocPath()}/chat_sessions`); 
         const getCategoriesDocRef = () => doc(db, `${getUserDocPath()}/config/categories`);
 
         const saveCategories = async () => {
             const catsToSave = CATEGORIES.filter(c => c !== 'all');
-            // 로컬에도 저장 (오프라인/빠른 로딩용)
             localStorage.setItem('ai_memo_categories', JSON.stringify(catsToSave));
             
             if (db && isAuthReady) {
                 try {
-                    // 클라우드 저장
                     await setDoc(getCategoriesDocRef(), { list: catsToSave, updatedAt: new Date() });
                 } catch (e) { console.error("Category Save Error:", e); }
             }
@@ -205,13 +211,8 @@
                         isAuthReady = true;
                         console.log(`[FIREBASE] Ready. Sync ID: ${MASTER_SYNC_ID}`);
                         
-                        // 1. 메모 로드 (Snapshot 사용 고려 가능하나 일단 fetch)
                         await fetchMemos();
-                        
-                        // 2. 카테고리 실시간 동기화 (onSnapshot) - 중요!
                         subscribeCategories();
-
-                        // 3. 채팅 세션 목록 실시간 동기화 (onSnapshot)
                         subscribeChatSessions();
 
                     } else {
@@ -226,13 +227,11 @@
             render();
         };
 
-        // 카테고리 실시간 구독 (양방향 동기화의 핵심)
         const subscribeCategories = () => {
             if (!db || !isAuthReady) return;
             onSnapshot(getCategoriesDocRef(), (docSnap) => {
                 if (docSnap.exists() && docSnap.data().list) {
                     const cloudCats = docSnap.data().list;
-                    // 서버 데이터가 오면 로컬 상태를 덮어씀
                     CATEGORIES = ['all', ...cloudCats].filter(c => c);
                     localStorage.setItem('ai_memo_categories', JSON.stringify(cloudCats));
                     render();
@@ -240,7 +239,6 @@
             });
         };
 
-        // 채팅 세션 목록 실시간 구독
         const subscribeChatSessions = () => {
             if (!db || !isAuthReady) return;
             const q = query(getUserChatCollectionRef(), orderBy("updatedAt", "desc"));
@@ -286,30 +284,42 @@
                     </div>
                     <div class="px-4 py-3 bg-gray-700/30 border-b border-gray-700 flex items-center justify-between">
                         <label class="flex items-center gap-2 cursor-pointer select-none">
-                            <input type="checkbox" id="select-all-memos" class="custom-checkbox rounded bg-gray-600 border-gray-500" ${allSelected ? 'checked' : ''} ${viewerMemos.length === 0 ? 'disabled' : ''}>
+                            <input type="checkbox" id="select-all-memos" class="custom-checkbox rounded bg-gray-600 border-gray-500" ${allSelected ? 'checked' : ''} ${viewerMemos.length === 0 ? 'disabled' : ''} ${isDeleting ? 'disabled' : ''}>
                             <span class="text-sm text-gray-300">전체 선택</span>
                         </label>
-                        ${selectedCount > 0 ? `<button id="bulk-delete-btn" class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition-colors animate-in">${renderIcon('Trash2', 14)} 선택된 ${selectedCount}개 삭제</button>` : ''}
+                        
+                        ${isDeleting ? `
+                            <div class="flex items-center gap-3 flex-1 justify-end ml-4 animate-in">
+                                <span class="text-xs text-red-300 animate-pulse font-medium">삭제 진행 중... (${deleteSuccessCount}/${totalFilesToDelete})</span>
+                                <div class="w-32 bg-gray-700 rounded-full h-2 overflow-hidden border border-gray-600">
+                                    <div class="bg-red-500 h-2 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(239,68,68,0.5)]" style="width: ${(deleteSuccessCount / totalFilesToDelete) * 100}%"></div>
+                                </div>
+                            </div>
+                        ` : selectedCount > 0 ? `
+                            <button id="bulk-delete-btn" class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition-colors animate-in">
+                                ${renderIcon('Trash2', 14)} 선택된 ${selectedCount}개 삭제
+                            </button>
+                        ` : ''}
                     </div>
                     <div class="flex-1 overflow-y-auto p-4 space-y-2 hide-scrollbar">
                         ${viewerMemos.length === 0 ? `<div class="text-center py-10 text-gray-500">${renderIcon('FileX', 48, 'mx-auto mb-2 opacity-20')}<p>저장된 파일이 없습니다.</p></div>` : viewerMemos.map(m => `
                             <div class="flex items-center gap-3 p-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg border ${selectedMemoIds.has(m.id) ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'} transition-colors group">
-                                <input type="checkbox" class="memo-item-checkbox custom-checkbox shrink-0" data-id="${m.id}" ${selectedMemoIds.has(m.id) ? 'checked' : ''}>
+                                <input type="checkbox" class="memo-item-checkbox custom-checkbox shrink-0" data-id="${m.id}" ${selectedMemoIds.has(m.id) ? 'checked' : ''} ${isDeleting ? 'disabled' : ''}>
                                 <div class="min-w-0 flex-1 pr-2 cursor-pointer view-content-btn" data-id="${m.id}">
                                     <h4 class="text-sm font-medium text-gray-200 truncate group-hover:text-white">${m.filename}</h4>
                                     <p class="text-xs text-gray-500 mt-0.5">${new Date(m.timestamp.seconds * 1000).toLocaleString()}</p>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <button class="view-content-btn p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="보기">${renderIcon('Eye', 16)}</button>
-                                    <button class="delete-memo-btn p-1.5 text-red-400 hover:bg-red-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="삭제">${renderIcon('Trash2', 16)}</button>
+                                    <button class="view-content-btn p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="보기" ${isDeleting ? 'disabled' : ''}>${renderIcon('Eye', 16)}</button>
+                                    <button class="delete-memo-btn p-1.5 text-red-400 hover:bg-red-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="삭제" ${isDeleting ? 'disabled' : ''}>${renderIcon('Trash2', 16)}</button>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                     <div class="p-4 border-t border-gray-700 bg-gray-800/50 rounded-b-xl">
-                        <label class="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 cursor-pointer transition-colors bg-gray-700/30">
+                        <label class="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 cursor-pointer transition-colors bg-gray-700/30 ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}">
                             ${renderIcon('UploadCloud', 18)} <span class="text-sm font-medium">이 카테고리에 파일 추가하기</span>
-                            <input type="file" id="viewer-upload-input" class="hidden" multiple accept=".txt">
+                            <input type="file" id="viewer-upload-input" class="hidden" multiple accept=".txt" ${isDeleting ? 'disabled' : ''}>
                         </label>
                     </div>
                 </div>
@@ -392,7 +402,7 @@
             <div class="flex h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
                 <div class="w-72 bg-gray-800 border-r border-gray-700 flex flex-col ${showSidebar ? '' : 'hidden'} md:flex">
                     <div class="p-5 border-b border-gray-700 flex items-center justify-between">
-                        <div class="flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl"> 🤖 슈퍼챗봇 </h1></div>
+                        <div class="flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl"> 🤖 슈퍼 챗봇 </h1></div>
                     </div>
                     
                     <div class="p-4 flex-1 overflow-y-auto hide-scrollbar space-y-6">
@@ -437,6 +447,19 @@
                                 <span class="text-xs ${isAuthReady ? 'text-gray-400 group-hover:text-blue-300' : 'text-red-400'} flex items-center justify-center gap-2">${renderIcon('Upload', 14)} 파일 추가</span>
                                 <input type="file" id="main-upload-input" class="hidden" multiple accept=".txt" ${isAuthReady ? '' : 'disabled'}>
                             </label>
+                            ${isUploading ? `
+                                <div class="mt-3 space-y-2">
+                                    <div class="flex justify-between text-xs text-blue-300">
+                                        <span class="animate-pulse">업로드 진행 중...</span>
+                                        <span>${Math.round((uploadSuccessCount / totalFilesToUpload) * 100)}%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: ${(uploadSuccessCount / totalFilesToUpload) * 100}%"></div>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 text-center truncate px-1">${currentUploadingFileName ? '현재 파일: ' + currentUploadingFileName : '대기 중...'}</p>
+                                    <p class="text-[10px] text-gray-400 text-center">(${uploadSuccessCount} / ${totalFilesToUpload} 완료)</p>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="p-4 border-t border-gray-700 flex justify-between items-center">
@@ -610,27 +633,61 @@
             if (filesToUpload.length > 0) { e.target.value = ''; showCategoryViewerModal = false; showCategoryUploadModal = true; render(); }
         };
 
+        // 업로드 진행률 표시 로직 개선 (순차 업로드 적용)
         const startBulkUpload = async (category) => {
             if (filesToUpload.length === 0 || !category) return;
-            showCategoryUploadModal = false; isUploading = true; uploadSuccessCount = 0; totalFilesToUpload = filesToUpload.length; render();
+            
+            showCategoryUploadModal = false;
+            isUploading = true;
+            uploadSuccessCount = 0;
+            totalFilesToUpload = filesToUpload.length;
+            render();
             
             // 새 카테고리라면 목록에 추가 및 저장
             if (!CATEGORIES.includes(category)) { 
                 CATEGORIES.push(category); await saveCategories(); 
             }
-            const promises = [];
+
+            // 순차적 처리를 위해 for loop 사용 (병렬 처리 시 UI 갱신이 너무 빨라 안 보일 수 있음)
             for (const file of filesToUpload) {
-                promises.push(new Promise((resolve) => {
+                // 텍스트 파일만 허용
+                if (file.type !== "text/plain" && !file.name.toLowerCase().endsWith(".txt")) continue;
+                
+                // 현재 파일명 업데이트 및 렌더링
+                currentUploadingFileName = file.name;
+                currentUploadingFileSize = file.size;
+                render();
+
+                await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = async (event) => {
-                        try { await addDoc(getUserMemoCollectionRef(), { filename: file.name, content: event.target.result, timestamp: new Date(), category: category }); uploadSuccessCount++; } catch (e) { console.error(e); }
+                        try { 
+                            await addDoc(getUserMemoCollectionRef(), { 
+                                filename: file.name, 
+                                content: event.target.result, 
+                                timestamp: new Date(), 
+                                category: category 
+                            }); 
+                            uploadSuccessCount++; 
+                        } catch (e) { 
+                            console.error(e); 
+                        }
+                        render(); // 카운트 갱신
                         resolve();
                     };
                     reader.readAsText(file, 'utf-8');
-                }));
+                });
             }
-            await Promise.all(promises);
-            isUploading = false; filesToUpload = []; await fetchMemos(); alert("완료"); render();
+            
+            // 완료 처리
+            isUploading = false; 
+            filesToUpload = []; 
+            currentUploadingFileName = '';
+            
+            await fetchMemos(); 
+            render();
+            // 완료 메시지 (약간의 지연 후)
+            setTimeout(() => alert("업로드가 완료되었습니다."), 100);
         };
 
         // --- 기타 이벤트 리스너들 (기존과 동일하되 채팅 관련 추가) ---
@@ -642,10 +699,41 @@
 
         const handleBulkDelete = async () => {
             if (confirm(`선택한 ${selectedMemoIds.size}개를 삭제하시겠습니까?`)) {
+                
+                // --- 삭제 진행 상태 시작 ---
+                isDeleting = true;
+                deleteSuccessCount = 0;
+                totalFilesToDelete = selectedMemoIds.size;
+                render();
+
                 try {
-                    await Promise.all(Array.from(selectedMemoIds).map(id => deleteDoc(doc(getUserMemoCollectionRef(), id))));
-                    selectedMemoIds.clear(); await fetchMemos();
-                } catch (e) { alert(e.message); }
+                    const idsToDelete = Array.from(selectedMemoIds);
+                    
+                    // 병렬 처리를 하되, 각각 완료 시 카운트를 올리고 렌더링
+                    const deletePromises = idsToDelete.map(async (id) => {
+                        await deleteDoc(doc(getUserMemoCollectionRef(), id));
+                        deleteSuccessCount++;
+                        render(); // 진행률 업데이트
+                    });
+
+                    await Promise.all(deletePromises);
+                    
+                    selectedMemoIds.clear(); 
+                    await fetchMemos();
+                    
+                    setTimeout(() => {
+                        isDeleting = false;
+                        deleteSuccessCount = 0;
+                        totalFilesToDelete = 0;
+                        render();
+                        alert("삭제가 완료되었습니다.");
+                    }, 500);
+
+                } catch (e) { 
+                    alert("삭제 실패: " + e.message); 
+                    isDeleting = false;
+                    render();
+                }
             }
         };
 
