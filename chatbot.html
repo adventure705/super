@@ -3,14 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 메모 비서 - Memory Cloud v4</title>
+    <title>AI 메모 비서 - Memory Cloud v13.6 (Dark Mode)</title>
     <!-- Tailwind CSS CDN 로드 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        /* 다크 모드 기본 색상 설정 */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #111827; /* Dark Gray 900 */
+            color: #E5E7EB; /* Light Gray */
+        }
         /* 스크롤바 숨김 (미관상) */
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 모달 애니메이션 */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-in { animation: fadeIn 0.2s ease-out forwards; }
+        
+        /* 체크박스 커스텀 스타일 */
+        .custom-checkbox {
+            accent-color: #3b82f6;
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -34,17 +51,18 @@
         window.orderBy = orderBy;
         window.deleteDoc = deleteDoc;
         window.doc = doc;
-        window.updateDoc = updateDoc; // 카테고리 수정에 필요
+        window.updateDoc = updateDoc; 
     </script>
-    
-    <!-- Gemini SDK 로드 스크립트 수정 (모듈 로딩 문제 해결) -->
+    <!-- Gemini SDK 로드 스크립트 (모듈 로딩 안정화 - CDN 변경) -->
     <script type="module">
-        import { GoogleGenerativeAI } from "https://unpkg.com/@google/genai@0.1.0/dist/esm/browser.js";
+        // 더 안정적인 esm.run CDN으로 변경
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
         // Gemini SDK를 전역 범위로 설정
         window.GoogleGenerativeAI = GoogleGenerativeAI;
-        console.log("[GEMINI] GoogleGenerativeAI SDK loaded.");
+        console.log("[GEMINI] GoogleGenerativeAI SDK loaded via esm.run");
     </script>
-    <!-- 메인 JavaScript 코드는 그대로 유지하며, SDK 로드 완료를 기다리도록 설계되어 있습니다. -->
+    
+    <!-- 메인 JavaScript 코드 -->
     <script type="module">
         // 전역에서 함수들을 가져옴
         const { initializeApp, getFirestore, collection, addDoc, getDocs, query, orderBy, deleteDoc, doc, updateDoc } = window;
@@ -63,16 +81,32 @@
         let currentUploadingFileName = '';
         let currentUploadingFileSize = 0; // 파일 크기 (바이트)
         let selectedCategory = 'all'; // 'all' 또는 특정 카테고리 태그
-        let showCategoryModal = false; // 카테고리 관리 모달 상태
+        
+        // 모달 상태 관리
+        let showCategoryModal = false; // 카테고리 관리 모달
+        let showCategoryUploadModal = false; // (대량 업로드용) 카테고리 선택 모달
+        let showCategoryViewerModal = false; // 특정 카테고리 뷰어 모달
+        let showChatFilterSelectModal = false; // 채팅 필터 모달
+        
+        // 뷰어 및 임시 저장소
+        let categoryView = ''; // 현재 뷰어에서 보고 있는 카테고리
+        let filesToUpload = []; // 업로드 대기 중인 파일들
+        let selectedMemoIds = new Set(); // 다중 선택된 메모 ID 집합
 
-        let CATEGORIES = ['all', '업무', '일기', '아이디어', '학습']; // 기본 카테고리 목록 (로컬 저장)
+        // 렌더링 디바운싱용 타이머 ID
+        let renderTimeoutId = null;
+
+        // 카테고리 목록 (기본값)
+        let CATEGORIES = ['all', '업무', '일기', '아이디어', '학습', '기타']; 
         const MAX_FILE_SIZE_MB = 1; // 1MB 제한
         const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; // 최신 모델
+        
+        // 모델명 수정: 현재 환경에서 지원하는 모델로 변경
+        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
 
         const appElement = document.getElementById('app');
 
-        // 파일 크기를 읽기 쉬운 형태로 변환하는 유틸리티 함수
+        // 파일 크기 포맷팅 유틸리티
         function formatBytes(bytes, decimals = 2) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
@@ -82,30 +116,46 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
-        // 상태 업데이트 및 UI 리렌더링 함수
+        // --- 렌더링 함수 ---
         function render() {
             const html = renderApp();
             appElement.innerHTML = html;
-            attachEventListeners();
-            // 입력창에 마지막으로 입력했던 값 복원
-            const inputEl = document.getElementById('chat-input');
-            if (inputEl) inputEl.value = inputEl.dataset.value || '';
+            
+            // 기존 타이머가 있다면 취소하여 중복 실행 방지 (이벤트 리스너 중복 문제 해결)
+            if (renderTimeoutId) {
+                clearTimeout(renderTimeoutId);
+            }
+
+            // 이벤트 리스너 연결 (안전하게 처리)
+            renderTimeoutId = setTimeout(() => {
+                try {
+                    attachEventListeners();
+                } catch (error) {
+                    console.error("이벤트 리스너 연결 실패:", error);
+                }
+                // 입력창 값 복원
+                const inputEl = document.getElementById('chat-input');
+                if (inputEl) inputEl.value = inputEl.dataset.value || '';
+            }, 0);
         }
 
-        // --- 카테고리 관리 로직 ---
+        // --- 카테고리 로직 ---
 
         function getUniqueCategories() {
-            // 메모에 사용된 모든 카테고리를 포함하여 중복 없이 목록 생성
+            // 메모에 저장된 카테고리 + 기본 카테고리 병합
             const usedCategories = memos.map(m => m.category || '기타').filter(c => c !== 'all');
             const uniqueUsed = [...new Set(usedCategories)];
-            
-            // 기본 카테고리와 사용된 카테고리를 결합
             const combined = [...new Set([...CATEGORIES.filter(c => c !== 'all'), ...uniqueUsed])];
-            return ['all', ...combined].filter(c => c); // 'all'을 맨 앞에 두고 빈 값 제거
+            
+            if (memos.some(m => m.category === '기타') && !combined.includes('기타')) {
+                combined.push('기타');
+            }
+
+            // 'all'은 항상 맨 앞, 나머지는 정렬
+            return ['all', ...combined.filter(c => c !== 'all').sort()].filter(c => c);
         }
 
         function saveCategories() {
-            // 'all' 제외한 현재 카테고리 목록을 로컬 스토리지에 저장
             localStorage.setItem('ai_memo_categories', JSON.stringify(CATEGORIES.filter(c => c !== 'all')));
         }
 
@@ -121,10 +171,10 @@
             }
         }
         
-        // --- Firebase/Config 로직 ---
+        // --- 설정 및 Firebase 초기화 ---
 
         function loadConfig() {
-            loadCategories(); // 설정 로드 전에 카테고리 로드
+            loadCategories(); 
             const savedConfig = localStorage.getItem('ai_memo_config');
             if (savedConfig) {
                 try {
@@ -140,22 +190,19 @@
 
         function initFirebase(configStr) {
             if (!configStr || configStr === '{}') return;
-
             try {
                 const fbConfig = JSON.parse(configStr);
-                
                 if (!fbConfig.projectId) {
-                    alert("Firebase 설정에 'projectId'가 없습니다. JSON 전체를 올바르게 복사했는지 확인해주세요.");
+                    alert("Firebase 설정 오류: 'projectId'가 없습니다.");
                     return;
                 }
-
                 const firebaseApp = initializeApp(fbConfig); 
                 db = getFirestore(firebaseApp);
                 fetchMemos();
-                console.log("[FIREBASE] Firebase initialized successfully.");
+                console.log("[FIREBASE] Initialized.");
             } catch (e) {
                 console.error("Firebase Init Error:", e);
-                alert(`Firebase 연결 중 오류가 발생했습니다: ${e.message}`);
+                alert(`Firebase 연결 오류: ${e.message}`);
             }
             render();
         }
@@ -170,14 +217,12 @@
                     memos.push({ id: d.id, ...d.data(), category: d.data().category || '기타' });
                 });
                 
-                // 메모 로드 후 카테고리 목록 동기화
                 CATEGORIES = getUniqueCategories();
                 saveCategories(); 
-
                 console.log(`[FIREBASE] Loaded ${memos.length} memos.`);
             } catch (e) {
                 console.error("Fetch Error:", e);
-                alert("데이터를 불러오는데 실패했습니다. Firestore 규칙을 확인해주세요.");
+                alert("데이터 로드 실패. Firestore 규칙/인덱스를 확인하세요.");
             }
             render();
         }
@@ -185,56 +230,59 @@
         // --- 파일 업로드 로직 ---
 
         async function handleFileUpload(e) {
-            if (!db) return alert("먼저 설정에서 Firebase를 연결해주세요!");
+            if (!db) {
+                e.target.value = '';
+                return alert("Firebase 설정을 먼저 완료해주세요.");
+            }
             
-            const files = Array.from(e.target.files);
+            filesToUpload = Array.from(e.target.files);
+            const oversizedFiles = filesToUpload.filter(file => file.size > MAX_FILE_SIZE_BYTES);
+
+            if (oversizedFiles.length > 0) {
+                alert(`[파일 크기 초과] ${oversizedFiles.map(f => f.name).join(', ')} (최대 1MB)`);
+                filesToUpload = []; 
+                e.target.value = ''; 
+                return render();
+            }
+
+            if (filesToUpload.length === 0) {
+                e.target.value = '';
+                return;
+            }
+            
+            e.target.value = ''; 
+            showCategoryViewerModal = false; 
+            showCategoryUploadModal = true; 
+            render();
+        }
+
+        async function startBulkUpload(category) {
+            if (filesToUpload.length === 0 || !category) return;
+            
+            showCategoryUploadModal = false;
+            
             isUploading = true;
             uploadSuccessCount = 0;
-            totalFilesToUpload = files.length;
-            currentUploadingFileName = '';
-            currentUploadingFileSize = 0;
+            totalFilesToUpload = filesToUpload.length;
             render();
 
-            let filesToProcess = 0;
+            if (!CATEGORIES.includes(category)) {
+                CATEGORIES.push(category);
+                saveCategories();
+            }
+
             const promises = [];
             
-            for (const file of files) {
-                if (file.type !== "text/plain" && !file.name.toLowerCase().endsWith(".txt")) {
-                    console.warn(`[FILE] Skipped file: ${file.name} - Not a .txt file.`);
-                    continue;
-                }
+            for (const file of filesToUpload) {
+                if (file.type !== "text/plain" && !file.name.toLowerCase().endsWith(".txt")) continue;
 
-                if (file.size > MAX_FILE_SIZE_BYTES) {
-                    alert(`[파일 크기 초과] "${file.name}" 파일은 ${formatBytes(MAX_FILE_SIZE_BYTES)}를 초과합니다. 파일을 분할하여 업로드해주세요.`);
-                    continue;
-                }
-                
-                // --- 카테고리 입력 받기 ---
-                let category = '기타';
-                const categoryInput = prompt(`업로드할 메모 "${file.name}"의 카테고리(태그)를 입력해주세요: (기본값: 기타, 사용 가능: ${getUniqueCategories().filter(c => c !== 'all').join(', ')})`).trim();
-                
-                if (categoryInput) {
-                    category = categoryInput.toLowerCase();
-                    // 사용자가 입력한 카테고리가 기존 목록에 없다면 추가
-                    if (!CATEGORIES.includes(category)) {
-                        CATEGORIES.push(category);
-                        saveCategories();
-                    }
-                }
-                // -----------------------------
-
-                filesToProcess++;
-                console.log(`[FILE] Reading file: ${file.name}`);
-                
                 const promise = new Promise((resolve) => {
                     const reader = new FileReader();
-
                     reader.onloadstart = () => {
                         currentUploadingFileName = file.name;
                         currentUploadingFileSize = file.size;
                         render();
                     };
-
                     reader.onload = async (event) => {
                         const text = event.target.result;
                         try {
@@ -242,59 +290,178 @@
                                 filename: file.name,
                                 content: text,
                                 timestamp: new Date(),
-                                category: category // 카테고리 저장
+                                category: category 
                             });
-                            console.log(`[FIREBASE] Successfully added document: ${file.name}`);
                             uploadSuccessCount++;
                         } catch (e) {
-                            console.error(`[FIREBASE ERROR] Failed to add ${file.name}`, e);
-                            alert(`[업로드 실패] ${file.name} 저장 중 오류: Firestore 보안 규칙을 확인하세요. (Error: ${e.message})`);
+                            console.error(`Upload failed: ${file.name}`, e);
+                            alert(`업로드 실패: ${file.name} (${e.message})`);
                         }
                         resolve();
                     };
-                    reader.onerror = () => {
-                        console.error(`[FILE ERROR] Failed to read ${file.name}`);
-                        resolve(); 
-                    };
-
                     reader.readAsText(file, 'utf-8'); 
                 });
                 promises.push(promise);
             }
             
-            if (filesToProcess === 0) {
-                isUploading = false;
-                totalFilesToUpload = 0;
-                alert("업로드할 수 있는 .txt 파일이 없습니다. 파일 형식을 확인해주세요.");
-                render();
-                return;
-            }
-
             await Promise.all(promises);
             
             isUploading = false;
+            filesToUpload = [];
             currentUploadingFileName = '';
-            currentUploadingFileSize = 0;
-            await fetchMemos(); 
-            alert(`${uploadSuccessCount}개의 메모가 저장되었습니다.`);
+            
+            await fetchMemos();
+            alert(`${uploadSuccessCount}개의 메모가 [${category}]에 저장되었습니다.`);
+            
             render();
         }
 
+        // 단일 메모 삭제 (질문 1회)
         async function handleDeleteMemo(id) {
             if (!db) return;
-            if (confirm("이 메모를 정말 삭제하시겠습니까?")) {
+            if (confirm("정말로 이 메모를 삭제하시겠습니까?")) { 
                 try {
                     await deleteDoc(doc(db, "memos", id));
                     await fetchMemos();
                 } catch (e) {
                     console.error("Delete error", e);
+                    alert(`삭제 실패: ${e.message}`);
                 }
             }
+        }
+
+        // 일괄 메모 삭제 (질문 1회)
+        async function handleBulkDelete() {
+            if (!db || selectedMemoIds.size === 0) return;
+            
+            if (confirm(`선택한 ${selectedMemoIds.size}개의 파일을 영구적으로 삭제하시겠습니까?`)) {
+                try {
+                    const deletePromises = Array.from(selectedMemoIds).map(id => deleteDoc(doc(db, "memos", id)));
+                    await Promise.all(deletePromises);
+                    
+                    selectedMemoIds.clear(); // 선택 초기화
+                    await fetchMemos(); // 목록 갱신
+                } catch (e) {
+                    console.error("Bulk Delete error", e);
+                    alert(`일괄 삭제 중 오류가 발생했습니다: ${e.message}`);
+                }
+            }
+        }
+
+        // --- 카테고리 관리 (추가/수정/삭제) ---
+
+        async function handleAddCategory() {
+            const newCat = prompt("새 카테고리 이름 입력:");
+            if (!newCat || !newCat.trim()) return;
+            
+            const cleanCat = newCat.trim();
+            if (cleanCat.toLowerCase() === 'all' || cleanCat === '기타') {
+                return alert("예약된 이름입니다.");
+            }
+            if (CATEGORIES.includes(cleanCat)) {
+                return alert("이미 존재하는 카테고리입니다.");
+            }
+            
+            CATEGORIES.push(cleanCat);
+            saveCategories();
             render();
         }
 
-        // --- Gemini 채팅 로직 (카테고리 필터링 적용) ---
+        async function handleEditCategory(oldName) {
+            const newName = prompt(`[${oldName}]의 새로운 이름 입력:`);
+            if (!newName || !newName.trim()) return;
+
+            const cleanNewName = newName.trim();
+            if (CATEGORIES.includes(cleanNewName)) return alert("이미 존재하는 이름입니다.");
+            if (cleanNewName.toLowerCase() === 'all' || cleanNewName === '기타') return alert("예약된 이름입니다.");
+
+            const targetMemos = memos.filter(m => (m.category || '기타') === oldName);
+            
+            if (confirm(`[${oldName}] 카테고리를 [${cleanNewName}]으로 변경합니다.\n포함된 메모 ${targetMemos.length}개도 함께 이동됩니다.`)) {
+                try {
+                    const promises = targetMemos.map(memo => 
+                        updateDoc(doc(db, "memos", memo.id), { category: cleanNewName })
+                    );
+                    await Promise.all(promises);
+
+                    const idx = CATEGORIES.indexOf(oldName);
+                    if (idx !== -1) CATEGORIES[idx] = cleanNewName;
+                    
+                    if (selectedCategory === oldName) selectedCategory = cleanNewName;
+                    if (categoryView === oldName) categoryView = cleanNewName;
+
+                    saveCategories();
+                    await fetchMemos();
+                    alert("수정 완료되었습니다.");
+                } catch (e) {
+                    console.error(e);
+                    alert("수정 중 오류 발생 (Firestore 권한 확인 필요)");
+                }
+            }
+        }
+
+        async function handleDeleteCategory(name) {
+            if (name === '기타' || name === 'all') return alert("삭제할 수 없는 카테고리입니다.");
+            
+            if (!confirm(`[${name}] 카테고리를 삭제하시겠습니까?`)) return;
+
+            const targetMemos = memos.filter(m => (m.category || '기타') === name);
+            
+            if (targetMemos.length > 0) {
+                if (!confirm(`이 카테고리에 ${targetMemos.length}개의 메모가 있습니다.\n삭제 시 메모들은 '기타' 카테고리로 이동됩니다.\n계속하시겠습니까?`)) return;
+                
+                try {
+                    const promises = targetMemos.map(memo => 
+                        updateDoc(doc(db, "memos", memo.id), { category: '기타' })
+                    );
+                    await Promise.all(promises);
+                } catch (e) {
+                    console.error(e);
+                    return alert("메모 이동 중 오류가 발생했습니다.");
+                }
+            }
+
+            CATEGORIES = CATEGORIES.filter(c => c !== name);
+            if (selectedCategory === name) selectedCategory = 'all';
+            
+            saveCategories();
+            await fetchMemos();
+            alert("카테고리가 삭제되었습니다.");
+            render();
+        }
+
+        // --- Gemini 채팅 ---
         
+        async function waitForGeminiSDK() {
+            // 1. 이미 로드되어 있으면 즉시 반환
+            if (window.GoogleGenerativeAI) return window.GoogleGenerativeAI;
+
+            // 2. 로드되지 않았다면 동적 임포트로 재시도 (Fallback)
+            try {
+                console.log("[GEMINI] SDK not found, attempting dynamic import...");
+                const module = await import("https://esm.run/@google/generative-ai");
+                window.GoogleGenerativeAI = module.GoogleGenerativeAI;
+                return window.GoogleGenerativeAI;
+            } catch (e) {
+                console.warn("[GEMINI] Dynamic import failed, switching to polling...", e);
+            }
+
+            // 3. 폴링 방식으로 대기 (최대 15초)
+            return new Promise((resolve, reject) => {
+                let count = 0;
+                const interval = setInterval(() => {
+                    if (window.GoogleGenerativeAI) {
+                        clearInterval(interval);
+                        resolve(window.GoogleGenerativeAI);
+                    }
+                    if (count++ > 150) { // 15초 타임아웃으로 연장
+                        clearInterval(interval);
+                        reject(new Error("SDK Load Timeout - 인터넷 연결을 확인하거나 페이지를 새로고침하세요."));
+                    }
+                }, 100);
+            });
+        }
+
         async function handleSend() {
             const inputElement = document.getElementById('chat-input');
             const userMsg = inputElement.value.trim();
@@ -303,579 +470,537 @@
             
             inputElement.dataset.value = userMsg; 
 
-            // 1. 카테고리 필터링
             const filteredMemos = selectedCategory === 'all'
                 ? memos
                 : memos.filter(memo => (memo.category || '기타') === selectedCategory);
             
+            messages = [...messages, { role: 'user', text: userMsg }];
+            
             if (filteredMemos.length === 0) {
-                messages = [...messages, { role: 'user', text: userMsg }]; // 사용자의 질문은 표시
-                messages = [...messages, { role: 'model', text: `선택하신 카테고리 [${selectedCategory}]에 해당하는 메모가 없습니다. '전체'를 선택하거나 메모를 업로드해주세요.` }];
+                messages = [...messages, { role: 'model', text: `[${selectedCategory}] 카테고리에 참고할 메모가 없습니다.` }];
                 inputElement.value = '';
-                return render();
+                render();
+                return;
             }
 
-            messages = [...messages, { role: 'user', text: userMsg }];
             inputElement.value = '';
             loading = true;
             render();
 
-            let aiResponseText = "답변을 생성하지 못했습니다.";
-            const MAX_RETRIES = 3;
-            let lastError = null;
+            try {
+                await waitForGeminiSDK();
+                
+                let context = `현재 선택된 카테고리: ${selectedCategory}\n\n[참고 데이터]:\n`;
+                filteredMemos.forEach(m => {
+                    context += `- 파일명: ${m.filename} (카테고리: ${m.category})\n내용: ${m.content.slice(0, 1000)}\n\n`; // 토큰 절약을 위해 일부만
+                });
+                context += `\n사용자 질문: ${userMsg}`;
 
-            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-                try {
-                    // 2. 필터링된 데이터로 컨텍스트 구성
-                    let context = `다음은 사용자의 메모 데이터베이스입니다. 현재 사용자가 [${selectedCategory}] 카테고리를 선택했습니다. 이 데이터만 기반으로 답변하세요:\n\n`;
-                    filteredMemos.forEach(memo => {
-                        context += `--- 파일명: ${memo.filename} (카테고리: ${memo.category}) ---\n${memo.content}\n\n`;
-                    });
+                const genAI = new window.GoogleGenerativeAI(config.geminiKey);
+                const model = genAI.getGenerativeModel({ 
+                    model: GEMINI_MODEL,
+                    systemInstruction: `당신은 사용자의 메모를 기반으로 답변하는 AI 비서입니다. 제공된 [참고 데이터] 내에서만 답변하세요.`
+                });
 
-                    context += `\n위 데이터를 기반으로 다음 사용자의 질문에 답변해줘. 데이터에 없는 내용은 모른다고 하세요.\n질문: ${userMsg}`;
+                const result = await model.generateContent(context);
+                const responseText = result.response.text();
+                
+                messages = [...messages, { role: 'model', text: responseText }];
 
-                    // 3. Gemini Fetch API 호출 
-                    const GoogleGenerativeAI = window.GoogleGenerativeAI;
-                    if (!GoogleGenerativeAI) {
-                         // FIX: SDK 로딩 문제 재진단 및 오류 발생
-                         throw new Error("Gemini SDK가 로드되지 않았습니다. 브라우저 캐시를 지우거나 설정을 확인하세요.");
-                    }
-                    
-                    const apiKey = config.geminiKey;
-                    const model = GEMINI_MODEL; // 최신 모델 사용
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                    
-                    const payload = {
-                        contents: [{ parts: [{ text: context }] }],
-                        systemInstruction: { parts: [{ text: `너는 사용자의 [${selectedCategory}] 카테고리 메모 데이터를 기반으로 답변하는 전문 AI 비서야. 친절하고 정확하게 답변해. 답변은 반드시 제공된 데이터에 근거해야 하며, 창작하지 마세요.` }] }
-                    };
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.status === 401) throw new Error("401 인증 오류: API 키를 확인해주세요.");
-                    
-                    if (response.status === 429 && attempt < MAX_RETRIES - 1) {
-                        const delay = Math.pow(2, attempt) * 1000; 
-                        console.warn(`[API] 429 오류 발생. ${delay / 1000}초 후 재시도합니다. (시도 ${attempt + 1}/${MAX_RETRIES})`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue; 
-                    }
-
-                    if (!response.ok) throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
-
-                    const result = await response.json();
-                    aiResponseText = result.candidates?.[0]?.content?.parts?.[0]?.text || "답변을 생성하지 못했습니다.";
-                    
-                    break; 
-
-                } catch (error) {
-                    lastError = error;
-                    if (!error.message.includes('429')) break; 
-                }
-            }
-            
-            if (loading) { 
-                if (lastError) {
-                    let errorMessage = `오류가 발생했습니다: ${lastError.message}`;
-                    if (lastError.message.includes('401')) {
-                        errorMessage = "⚠️ 인증 오류(401): Gemini API 키가 유효하지 않거나 만료되었습니다. 설정창에서 키를 재확인하고 저장해주세요.";
-                    } else if (lastError.message.includes('429')) {
-                        errorMessage = `⚠️ 요청 과다 오류(429): API 요청 횟수 제한을 초과했습니다. 잠시 후 다시 시도하거나 키의 사용량 한도를 확인해주세요.`;
-                    } else {
-                        errorMessage = `오류가 발생했습니다: API 요청 실패 - ${lastError.message}`;
-                    }
-                    messages = [...messages, { role: 'model', text: errorMessage }];
-                } else {
-                    messages = [...messages, { role: 'model', text: aiResponseText }];
-                }
+            } catch (error) {
+                console.error(error);
+                let errMsg = "오류가 발생했습니다.";
+                if (error.message.includes('401')) errMsg = "API 키 인증 실패";
+                if (error.message.includes('429')) errMsg = "요청 한도 초과 (잠시 후 시도하세요)";
+                messages = [...messages, { role: 'model', text: `⚠️ ${errMsg} (${error.message})` }];
             }
 
             loading = false;
             render();
         }
 
-        // --- 카테고리 관리 함수 ---
-        
-        async function handleAddCategory() {
-            const newCat = prompt("새로운 카테고리 이름을 입력하세요 (띄어쓰기 없이 한 단어로):");
-            if (newCat && newCat.trim()) {
-                const cleanCat = newCat.trim().toLowerCase();
-                if (!CATEGORIES.includes(cleanCat)) {
-                    CATEGORIES.push(cleanCat);
-                    saveCategories();
-                    render();
-                } else {
-                    alert("이미 존재하는 카테고리입니다.");
-                }
+        // --- 템플릿 헬퍼 ---
+        const renderIcon = (name, size, cls = '') => {
+            if (typeof lucide === 'undefined' || !lucide.icons || !lucide.icons[name]) {
+                return ''; 
             }
-        }
-        
-        async function handleEditCategory(oldName) {
-            const newName = prompt(`카테고리 "${oldName}"의 새 이름을 입력하세요:`);
-            if (newName && newName.trim()) {
-                const cleanNewName = newName.trim().toLowerCase();
-                if (cleanNewName === 'all' || cleanNewName === '기타') {
-                    alert("'all' 또는 '기타'는 예약어이므로 사용할 수 없습니다.");
-                    return;
+            try {
+                const element = lucide.createElement(lucide.icons[name]);
+                element.setAttribute('width', size);
+                element.setAttribute('height', size);
+                
+                if (cls) {
+                    const existingClass = element.getAttribute('class') || '';
+                    element.setAttribute('class', `${existingClass} ${cls}`.trim());
                 }
-                if (CATEGORIES.includes(cleanNewName)) {
-                    alert("이미 존재하는 카테고리 이름입니다.");
-                    return;
-                }
+                
+                return element.outerHTML;
+            } catch (e) {
+                console.error(`Icon render error for ${name}:`, e);
+                return '';
+            }
+        };
 
-                // 메모 데이터의 카테고리 일괄 업데이트 (비동기 처리)
-                const memosToUpdate = memos.filter(m => (m.category || '기타') === oldName);
-                if (confirm(`카테고리 [${oldName}]에 속한 ${memosToUpdate.length}개의 메모를 [${cleanNewName}]으로 변경합니다. 계속하시겠습니까?`)) {
-                    try {
-                        const updatePromises = memosToUpdate.map(memo => {
-                            const memoRef = doc(db, "memos", memo.id);
-                            return updateDoc(memoRef, { category: cleanNewName });
-                        });
-                        await Promise.all(updatePromises);
-                        
-                        // 로컬 상태 업데이트
-                        const index = CATEGORIES.indexOf(oldName);
-                        if (index > -1) {
-                            CATEGORIES[index] = cleanNewName;
-                        }
-                        saveCategories();
-                        await fetchMemos(); // 메모 목록 및 카테고리 새로고침
-                        alert("카테고리 이름 변경 및 메모 업데이트가 완료되었습니다.");
-                    } catch(e) {
-                        console.error("Category update failed:", e);
-                        alert("카테고리 이름 변경 중 오류가 발생했습니다. (Firestore 권한 확인)");
-                    }
-                }
-            }
-        }
+        // --- 컴포넌트 렌더링 ---
 
-        async function handleDeleteCategory(name) {
-            if (name === 'all' || name === '기타') {
-                alert("'all' 또는 '기타'는 삭제할 수 없습니다.");
-                return;
-            }
+        function renderCategoryViewer() {
+            const viewerMemos = memos
+                .filter(m => (m.category || '기타') === categoryView)
+                .sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
             
-            const memosInCategory = memos.filter(m => (m.category || '기타') === name);
-            if (memosInCategory.length > 0) {
-                 if (!confirm(`카테고리 [${name}]에 ${memosInCategory.length}개의 메모가 있습니다. 이 메모들의 카테고리를 '기타'로 변경하고 카테고리를 삭제하시겠습니까?`)) {
-                    return;
-                 }
-                 
-                 // 메모 데이터의 카테고리 일괄 업데이트 (비동기 처리)
-                 try {
-                     const updatePromises = memosInCategory.map(memo => {
-                         const memoRef = doc(db, "memos", memo.id);
-                         return updateDoc(memoRef, { category: '기타' });
-                     });
-                     await Promise.all(updatePromises);
-                 } catch(e) {
-                     console.error("Memo category update failed:", e);
-                     alert("메모 카테고리 업데이트 중 오류가 발생했습니다. (Firestore 권한 확인)");
-                     return;
-                 }
-            }
-            
-            // 카테고리 목록에서 삭제
-            CATEGORIES = CATEGORIES.filter(c => c !== name);
-            saveCategories();
-            await fetchMemos(); // 메모 목록 새로고침 (카테고리 변경 반영)
-            if (selectedCategory === name) {
-                selectedCategory = 'all'; // 선택된 카테고리가 삭제되면 'all'로 리셋
-            }
-            alert(`카테고리 [${name}]이(가) 삭제되었습니다.`);
-            render();
-        }
-
-        // --- 템플릿 및 이벤트 리스너 ---
-        
-        function renderIcon(name, size, className) {
-            const IconComponent = lucide.icons[name];
-            if (typeof IconComponent !== 'function') return '';
-            return `<span class="${className}">${IconComponent({ size }).toSvg()}</span>`;
-        }
-        
-        // 챗봇 답변 옆에 복사 버튼을 렌더링하는 함수
-        function renderModelMessage(msg) {
-            const isModel = msg.role === 'model';
-            if (!isModel) return ''; // 모델 메시지가 아니면 복사 버튼 필요 없음
+            // 전체 선택 상태 확인
+            const allSelected = viewerMemos.length > 0 && viewerMemos.every(m => selectedMemoIds.has(m.id));
+            const selectedCount = selectedMemoIds.size;
 
             return `
-            <button data-text="${msg.text.replace(/"/g, '&quot;')}" class="copy-button opacity-70 hover:opacity-100 transition-opacity p-1 rounded-lg bg-gray-100 hover:bg-gray-200" title="답변 복사">
-                ${renderIcon('Copy', 14, 'text-gray-600')}
-            </button>
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl border border-gray-700 flex flex-col max-h-[80vh] animate-in">
+                    <!-- 헤더: 타이틀 및 닫기 -->
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 rounded-t-xl">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            ${renderIcon('FolderOpen', 20, 'text-blue-400')}
+                            ${categoryView} <span class="text-sm font-normal text-gray-400">(${viewerMemos.length})</span>
+                        </h2>
+                        <button id="close-viewer-btn" class="text-gray-400 hover:text-white transition-colors">
+                            ${renderIcon('X', 24)}
+                        </button>
+                    </div>
+
+                    <!-- 툴바: 전체 선택 및 일괄 삭제 -->
+                    <div class="px-4 py-3 bg-gray-700/30 border-b border-gray-700 flex items-center justify-between">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="select-all-memos" class="custom-checkbox rounded bg-gray-600 border-gray-500" ${allSelected ? 'checked' : ''} ${viewerMemos.length === 0 ? 'disabled' : ''}>
+                            <span class="text-sm text-gray-300">전체 선택</span>
+                        </label>
+                        
+                        ${selectedCount > 0 ? `
+                            <button id="bulk-delete-btn" class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition-colors animate-in">
+                                ${renderIcon('Trash2', 14)}
+                                선택된 ${selectedCount}개 삭제
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <!-- 파일 목록 -->
+                    <div class="flex-1 overflow-y-auto p-4 space-y-2 hide-scrollbar">
+                        ${viewerMemos.length === 0 ? `
+                            <div class="text-center py-10 text-gray-500">
+                                ${renderIcon('FileX', 48, 'mx-auto mb-2 opacity-20')}
+                                <p>저장된 파일이 없습니다.</p>
+                            </div>
+                        ` : viewerMemos.map(m => `
+                            <div class="flex items-center gap-3 p-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg border ${selectedMemoIds.has(m.id) ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'} transition-colors group">
+                                <input type="checkbox" class="memo-item-checkbox custom-checkbox shrink-0" data-id="${m.id}" ${selectedMemoIds.has(m.id) ? 'checked' : ''}>
+                                
+                                <div class="min-w-0 flex-1 pr-2 cursor-pointer view-content-btn" data-id="${m.id}">
+                                    <h4 class="text-sm font-medium text-gray-200 truncate group-hover:text-white">${m.filename}</h4>
+                                    <p class="text-xs text-gray-500 mt-0.5">${new Date(m.timestamp.seconds * 1000).toLocaleString()}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="view-content-btn p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity" data-id="${m.id}" title="보기">
+                                        ${renderIcon('Eye', 16)}
+                                    </button>
+                                    <button class="delete-memo-btn p-1.5 text-red-400 hover:bg-red-500/20 rounded-md opacity-0 group-hover:opacity-100 transition-opacity" data-id="${m.id}" title="삭제">
+                                        ${renderIcon('Trash2', 16)}
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- 업로드 영역 -->
+                    <div class="p-4 border-t border-gray-700 bg-gray-800/50 rounded-b-xl">
+                        <label class="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 cursor-pointer transition-colors bg-gray-700/30">
+                            ${renderIcon('UploadCloud', 18)}
+                            <span class="text-sm font-medium">이 카테고리에 파일 추가하기</span>
+                            <input type="file" id="viewer-upload-input" class="hidden" multiple accept=".txt">
+                        </label>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+        
+        function renderCategoryUploadModal() {
+            return `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-md bg-gray-800 rounded-xl p-6 border border-gray-700 animate-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-100 flex items-center gap-2">
+                            ${renderIcon('UploadCloud', 24, 'text-blue-400')}
+                            업로드 카테고리 선택
+                        </h2>
+                        <button id="cancel-upload-select" class="text-gray-400 hover:text-white">
+                            ${renderIcon('X', 24)}
+                        </button>
+                    </div>
+                    
+                    <p class="mb-4 text-sm text-gray-300">선택한 ${filesToUpload.length}개의 파일을 저장할 카테고리를 선택하세요:</p>
+
+                    <div class="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto hide-scrollbar mb-4">
+                        ${CATEGORIES.filter(c => c !== 'all').map(cat => `
+                            <button class="select-category-button p-3 rounded-lg text-sm font-medium bg-gray-700 text-blue-400 hover:bg-gray-600 transition-colors capitalize border border-blue-900/30">
+                                ${cat}
+                            </button>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="flex justify-end pt-4 border-t border-gray-700">
+                        <button id="add-cat-upload-btn" class="text-xs text-blue-400 hover:underline flex items-center gap-1">
+                            ${renderIcon('Plus', 14)} 새 카테고리 만들기
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        function renderCategoryManager() {
+            return `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-md bg-gray-800 rounded-xl shadow-2xl border border-gray-700 animate-in">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                        <h2 class="text-lg font-bold text-white">카테고리 관리</h2>
+                        <button id="close-cat-manager-btn" class="text-gray-400 hover:text-white">
+                            ${renderIcon('X', 24)}
+                        </button>
+                    </div>
+                    <div class="p-4 max-h-[60vh] overflow-y-auto space-y-2 hide-scrollbar">
+                        <button id="add-new-cat-btn" class="w-full py-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors flex items-center justify-center gap-2 mb-4">
+                            ${renderIcon('Plus', 16)} 새 카테고리 추가
+                        </button>
+                        
+                        ${CATEGORIES.filter(c => c !== 'all').map(cat => `
+                            <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                                <span class="text-gray-200 font-medium">${cat}</span>
+                                <div class="flex gap-2">
+                                    ${cat !== '기타' ? `
+                                    <button class="edit-cat-btn p-1.5 text-yellow-400 hover:bg-yellow-400/10 rounded" data-name="${cat}">
+                                        ${renderIcon('Edit', 16)}
+                                    </button>
+                                    <button class="del-cat-btn p-1.5 text-red-400 hover:bg-red-400/10 rounded" data-name="${cat}">
+                                        ${renderIcon('Trash2', 16)}
+                                    </button>
+                                    ` : `<span class="text-xs text-gray-500 px-2">기본</span>`}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
             `;
         }
 
         function renderApp() {
-            // 업로드 진행률 메시지 생성
-            let uploadMessage = `새 메모 업로드 (.txt, 최대 ${formatBytes(MAX_FILE_SIZE_BYTES)})`;
-            if (isUploading) {
-                const currentFileIndex = uploadSuccessCount + 1;
-                const currentFileDisplay = currentUploadingFileName ? `(${currentUploadingFileName})` : '';
-                const fileSizeDisplay = currentUploadingFileSize ? ` - ${formatBytes(currentUploadingFileSize)}` : '';
-                
-                uploadMessage = `업로드 중 (${currentFileIndex} / ${totalFilesToUpload}) ${currentFileDisplay}${fileSizeDisplay}`;
-            }
-            
-            // 카테고리 문서 수 계산
-            const categoryCounts = memos.reduce((acc, memo) => {
-                const cat = memo.category || '기타';
+            // 카테고리별 파일 수 계산
+            const categoryCounts = memos.reduce((acc, m) => {
+                const cat = m.category || '기타';
                 acc[cat] = (acc[cat] || 0) + 1;
                 return acc;
             }, {});
 
             return `
-            <div class="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
-                
+            <div class="flex h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
                 <!-- 사이드바 -->
-                <div id="sidebar" class="fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out 
-                    ${showSidebar ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static flex flex-col hide-scrollbar">
-                    <div class="p-5 border-b border-gray-100 flex justify-between items-center">
-                        <div class="flex items-center gap-2 font-bold text-xl text-blue-600">
-                            ${renderIcon('Database', 24, 'w-6 h-6')}
-                            <span>Memory Cloud</span>
-                        </div>
-                        <button id="toggle-sidebar-close" class="md:hidden p-1 rounded hover:bg-gray-100">
-                            ${renderIcon('X', 20, 'w-5 h-5')}
-                        </button>
-                    </div>
-
-                    <div class="p-5 flex-1 overflow-y-auto hide-scrollbar">
-                        <div class="mb-6">
-                            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">데이터 관리</h3>
-                            <label class="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-200 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
-                                <div class="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                                    ${renderIcon('Upload', 32, `w-8 h-8 mb-2 text-blue-500 ${isUploading ? 'animate-bounce' : ''}`)}
-                                    <p class="text-sm text-gray-500 font-medium break-words max-w-full px-2">
-                                        ${uploadMessage}
-                                    </p>
-                                </div>
-                                <input type="file" id="file-upload" class="hidden" accept=".txt" multiple>
-                            </label>
-                            <p class="text-xs text-gray-500 mt-2 text-center">업로드 시 카테고리 입력창이 뜹니다.</p>
-                        </div>
-
-                        <div>
-                            <div class="flex justify-between items-center mb-3">
-                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">카테고리 필터</h3>
-                                <button id="manage-categories" class="text-xs text-blue-500 hover:underline flex items-center gap-1">
-                                    ${renderIcon('ListEnd', 12)} 관리
-                                </button>
-                            </div>
-                            
-                            <!-- 카테고리 목록 -->
-                            <div class="space-y-1 mt-3">
-                                ${getUniqueCategories().map(cat => `
-                                <button data-category="${cat}" class="category-select-btn w-full flex items-center justify-between p-2 rounded-lg transition-colors
-                                    ${selectedCategory === cat ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
-                                    <span class="font-medium text-sm capitalize">${cat}</span>
-                                    <span class="text-xs font-mono px-2 py-0.5 rounded-full ${selectedCategory === cat ? 'bg-white text-blue-600' : 'bg-gray-200 text-gray-600'}">
-                                        ${cat === 'all' ? memos.length : (categoryCounts[cat] || 0)}
-                                    </span>
-                                </button>
-                                `).join('')}
-                            </div>
-                            <div class="mt-4 flex justify-end">
-                                <button id="fetch-memos" class="text-xs text-blue-500 hover:underline flex items-center gap-1">
-                                    ${renderIcon('RefreshCw', 12)} 메모 새로고침
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="p-4 border-t border-gray-100">
-                        <button id="show-settings" class="px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95 w-full text-sm">
-                            ${renderIcon('Settings', 16)}
-                            설정 및 연결
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 메인 채팅 영역 -->
-                <div class="flex-1 flex flex-col h-full relative">
-                    <!-- 모바일 헤더 -->
-                    <div class="md:hidden p-4 bg-white border-b flex justify-between items-center shadow-sm">
-                        <div class="font-bold text-lg">AI Memo Mate</div>
-                        <button id="toggle-sidebar-open" class="p-2 hover:bg-gray-100 rounded-lg">
-                            ${renderIcon('Menu', 24)}
-                        </button>
+                <div class="w-72 bg-gray-800 border-r border-gray-700 flex flex-col ${showSidebar ? '' : 'hidden'} md:flex">
+                    <div class="p-5 border-b border-gray-700 flex items-center gap-2">
+                        ${renderIcon('Database', 24, 'text-blue-400')}
+                        <h1 class="font-bold text-xl">Memory Cloud</h1>
                     </div>
                     
-                    <!-- 카테고리 표시 및 필터링 안내 -->
-                    <div class="p-3 bg-white border-b border-gray-100 text-center text-sm font-medium">
-                        현재 활성 카테고리: 
-                        <span class="font-bold text-blue-600 capitalize">${selectedCategory}</span> 
-                        (${selectedCategory === 'all' ? memos.length : (categoryCounts[selectedCategory] || 0)}개 문서 기준)
-                    </div>
-
-                    <!-- 채팅 메시지 목록 -->
-                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 bg-gray-50/50 hide-scrollbar">
-                        ${messages.map(msg => `
-                            <div class="flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                                ${msg.role === 'model' ? `
-                                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white shrink-0 mt-1 shadow-md">
-                                    ${renderIcon('Bot', 16)}
-                                </div>
-                                ` : ''}
-                                <div class="max-w-[80%] md:max-w-[70%] rounded-2xl p-4 shadow-sm relative ${
-                                    msg.role === 'user' 
-                                      ? 'bg-blue-600 text-white rounded-br-none' 
-                                      : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none group'
-                                }">
-                                    <p class="whitespace-pre-wrap leading-relaxed text-sm md:text-base">${msg.text}</p>
-                                    ${msg.role === 'model' ? `
-                                        <div class="absolute -bottom-4 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            ${renderModelMessage(msg)}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                ${msg.role === 'user' ? `
-                                <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shrink-0 mt-1">
-                                    ${renderIcon('User', 16)}
-                                </div>
-                                ` : ''}
-                            </div>
-                        `).join('')}
-
-                        ${loading ? `
-                        <div class="flex gap-4">
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white shrink-0 mt-1">
-                                ${renderIcon('Bot', 16)}
-                            </div>
-                            <div class="bg-white p-4 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
-                                <div class="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
-                                <div class="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
-                                <div class="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
-                            </div>
-                        </div>
-                        ` : ''}
-                        <div id="messages-end"></div>
-                    </div>
-
-                    <!-- 입력창 -->
-                    <div class="p-4 bg-white border-t border-gray-100">
-                        <div class="max-w-4xl mx-auto relative">
-                            <textarea
-                                id="chat-input"
-                                placeholder="${db ? "선택된 카테고리 [${selectedCategory}] 기반으로 질문하세요." : "설정에서 데이터베이스를 먼저 연결해주세요."}"
-                                data-value=""
-                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all resize-none shadow-sm"
-                                rows="1"
-                                ${!db || loading ? 'disabled' : ''}
-                            ></textarea>
-                            <button id="send-button"
-                                class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                                ${!db || loading ? 'disabled' : ''}
-                            >
-                                ${renderIcon('Send', 18)}
-                            </button>
-                        </div>
-                        <div class="text-center mt-2 text-xs text-gray-400">
-                            AI는 실수를 할 수 있습니다. 중요한 정보는 확인이 필요합니다.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- --- 설정 모달 --- -->
-                ${showSettings ? `
-                <div id="settings-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div class="w-full max-w-lg p-6 bg-white rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                ${renderIcon('Settings', 24, 'text-blue-600')}
-                                설정 및 연결
-                            </h2>
-                            <button id="hide-settings-modal" class="text-gray-400 hover:text-gray-600">
-                                ${renderIcon('X', 24)}
-                            </button>
+                    <div class="p-4 flex-1 overflow-y-auto hide-scrollbar space-y-6">
+                        <!-- 업로드 영역 -->
+                        <div>
+                            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">파일 업로드</h3>
+                            <label class="block w-full p-4 border-2 border-dashed border-gray-600 rounded-xl hover:border-blue-500 hover:bg-gray-700/50 transition-colors cursor-pointer text-center group">
+                                ${renderIcon('Upload', 24, 'mx-auto mb-2 text-gray-400 group-hover:text-blue-400')}
+                                <span class="text-sm text-gray-400 group-hover:text-blue-300">텍스트 파일 선택</span>
+                                <input type="file" id="main-upload-input" class="hidden" multiple accept=".txt">
+                            </label>
+                            ${isUploading ? `<p class="text-xs text-blue-400 text-center mt-2 animate-pulse">업로드 중... ${uploadSuccessCount}/${totalFilesToUpload}</p>` : ''}
                         </div>
 
-                        <div class="space-y-4 mb-6">
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Gemini API Key</label>
-                                <input 
-                                    type="password" 
-                                    id="gemini-key-input"
-                                    value="${config.geminiKey}"
-                                    placeholder="AI Studio에서 발급받은 키 (AIza...)"
-                                    class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                                <p class="text-xs text-gray-400 mt-1">Google AI Studio에서 무료로 발급 가능합니다.</p>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Firebase Config (JSON)</label>
-                                <textarea 
-                                    id="firebase-config-input"
-                                    placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'
-                                    class="w-full p-2 border rounded-lg h-32 font-mono text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                                >${config.firebaseConfig}</textarea>
-                                <p class="text-xs text-gray-400 mt-1">Firebase 콘솔 &gt; 프로젝트 설정 &gt; 내 앱 &gt; SDK 설정 및 구성의 JSON 전체를 붙여넣으세요. (projectId 포함)</p>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end gap-2">
-                            <button id="cancel-settings" class="px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-transparent text-gray-500 hover:bg-gray-100">취소</button>
-                            <button id="save-settings" class="px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-blue-600 text-white hover:bg-blue-700 active:scale-95">
-                                ${renderIcon('Check', 16)}
-                                저장 및 연결
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                ` : ''}
-
-                <!-- --- 카테고리 관리 모달 --- -->
-                ${showCategoryModal ? `
-                <div id="category-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div class="w-full max-w-md p-6 bg-white rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                ${renderIcon('ListEnd', 24, 'text-blue-600')}
-                                카테고리 관리
-                            </h2>
-                            <button id="hide-category-modal" class="text-gray-400 hover:text-gray-600">
-                                ${renderIcon('X', 24)}
-                            </button>
-                        </div>
-
-                        <div class="space-y-4 mb-4 max-h-96 overflow-y-auto">
-                            <div class="flex justify-end">
-                                <button id="add-category" class="text-blue-600 hover:underline flex items-center gap-1 text-sm">
-                                    ${renderIcon('Plus', 16)} 새 카테고리 추가
+                        <!-- 카테고리 목록 -->
+                        <div>
+                            <div class="flex justify-between items-center mb-2 px-1">
+                                <h3 class="text-xs font-semibold text-gray-500 uppercase">문서함</h3>
+                                <button id="open-cat-manager" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                    ${renderIcon('Settings', 12)} 관리
                                 </button>
                             </div>
-                            ${CATEGORIES.filter(c => c !== 'all').map(cat => `
-                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <span class="font-medium capitalize">${cat}</span>
-                                    <div class="flex gap-2">
-                                        ${cat !== '기타' ? `
-                                        <button data-name="${cat}" class="edit-category p-1 text-yellow-600 hover:bg-yellow-50 rounded" title="수정">
-                                            ${renderIcon('Edit', 16)}
-                                        </button>
+                            <div class="space-y-1">
+                                ${getUniqueCategories().map(cat => {
+                                    const count = cat === 'all' ? memos.length : (categoryCounts[cat] || 0);
+                                    return `
+                                    <button class="cat-item-btn w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}" data-name="${cat}">
+                                        <div class="flex items-center gap-2">
+                                            ${renderIcon(cat === 'all' ? 'Layers' : 'Folder', 16, selectedCategory === cat ? 'text-white' : 'text-gray-400')}
+                                            <span>${cat} <span class="text-xs opacity-60 ml-1">(${count})</span></span>
+                                        </div>
+                                        ${cat !== 'all' ? `
+                                        <div class="flex items-center" onclick="event.stopPropagation()">
+                                            <span class="open-viewer-btn text-xs opacity-50 hover:opacity-100 hover:text-blue-300 px-2 cursor-pointer" data-cat="${cat}">보기</span>
+                                        </div>
                                         ` : ''}
-                                        <button data-name="${cat}" class="delete-category p-1 text-red-600 hover:bg-red-50 rounded" title="삭제">
-                                            ${renderIcon('Trash2', 16)}
-                                        </button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                            
-                            ${CATEGORIES.length <= 1 ? `
-                            <div class="text-center py-4 text-gray-400 text-sm">
-                                현재 카테고리가 없습니다. '새 카테고리 추가'를 눌러 시작하세요.
-                            </div>` : ''}
+                                    </button>
+                                `;
+                                }).join('')}
+                            </div>
                         </div>
+                    </div>
 
-                        <div class="flex justify-end">
-                            <button id="close-category-modal" class="px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95">닫기</button>
+                    <div class="p-4 border-t border-gray-700">
+                        <button id="open-settings-btn" class="w-full p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-200 flex items-center justify-center gap-2 transition-colors">
+                            ${renderIcon('Key', 16)} 설정
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 메인 채팅 -->
+                <div class="flex-1 flex flex-col relative">
+                    <header class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 backdrop-blur-md">
+                        <div class="flex items-center gap-3">
+                            <button class="md:hidden text-gray-400" onclick="document.querySelector('.w-72').classList.toggle('hidden')">
+                                ${renderIcon('Menu', 24)}
+                            </button>
+                            <div>
+                                <h2 class="font-bold text-gray-100">AI Chat</h2>
+                                <p class="text-xs text-blue-400">현재 문맥: ${selectedCategory}</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-6">
+                        ${messages.length === 0 ? `
+                            <div class="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
+                                ${renderIcon('MessageSquare', 48, 'mb-4')}
+                                <p>메모에 대해 질문해보세요.</p>
+                            </div>
+                        ` : messages.map(msg => `
+                            <div class="flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}">
+                                ${msg.role === 'model' ? `<div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0">${renderIcon('Bot', 16, 'text-white')}</div>` : ''}
+                                <div class="max-w-[80%] p-3 rounded-2xl ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 border border-gray-700 rounded-tl-none'}">
+                                    <div class="whitespace-pre-wrap text-sm leading-relaxed">${msg.text}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                        ${loading ? `<div class="flex gap-2 p-4 text-gray-400 text-sm items-center">${renderIcon('Loader2', 16, 'animate-spin')} 답변 생성 중...</div>` : ''}
+                    </div>
+
+                    <div class="p-4 border-t border-gray-700 bg-gray-800">
+                        <div class="relative">
+                            <textarea id="chat-input" rows="1" class="w-full bg-gray-700 border-0 rounded-xl px-4 py-3 pr-12 text-gray-100 focus:ring-2 focus:ring-blue-500 resize-none" placeholder="메시지를 입력하세요..."></textarea>
+                            <button id="send-btn" class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors">
+                                ${renderIcon('Send', 16)}
+                            </button>
                         </div>
                     </div>
                 </div>
-                ` : ''}
+
+                <!-- 모달 렌더링 -->
+                ${showCategoryViewerModal ? renderCategoryViewer() : ''}
+                ${showCategoryModal ? renderCategoryManager() : ''}
+                ${showCategoryUploadModal ? renderCategoryUploadModal() : ''}
+                ${showSettings ? renderSettingsModal() : ''}
             </div>
             `;
         }
         
+        // 기존 코드 재활용 (설정 모달 및 업로드 모달)
+        function renderSettingsModal() {
+            return `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-lg bg-gray-800 rounded-xl p-6 border border-gray-700 animate-in">
+                    <h2 class="text-xl font-bold mb-4">설정</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Gemini API Key</label>
+                            <input type="password" id="gemini-key" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" value="${config.geminiKey}">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Firebase Config (JSON)</label>
+                            <textarea id="fb-config" class="w-full h-32 bg-gray-700 border border-gray-600 rounded p-2 text-xs font-mono text-gray-300">${config.firebaseConfig}</textarea>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-6">
+                        <button id="close-settings" class="px-4 py-2 text-gray-400 hover:text-white">취소</button>
+                        <button id="save-settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg">저장</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // --- 이벤트 리스너 연결 ---
         function attachEventListeners() {
-            // 사이드바 토글
-            document.getElementById('toggle-sidebar-open')?.addEventListener('click', () => { showSidebar = true; render(); });
-            document.getElementById('toggle-sidebar-close')?.addEventListener('click', () => { showSidebar = false; render(); });
-
-            // 설정 모달 토글 및 저장
-            document.getElementById('show-settings')?.addEventListener('click', () => { showSettings = true; render(); });
-            document.getElementById('hide-settings-modal')?.addEventListener('click', () => { showSettings = false; render(); });
-            document.getElementById('cancel-settings')?.addEventListener('click', () => { showSettings = false; render(); });
-            
-            document.getElementById('save-settings')?.addEventListener('click', () => {
-                const geminiKey = document.getElementById('gemini-key-input').value;
-                const firebaseConfig = document.getElementById('firebase-config-input').value;
-                config = { geminiKey, firebaseConfig };
-                localStorage.setItem('ai_memo_config', JSON.stringify(config));
-                initFirebase(firebaseConfig);
-                showSettings = false;
-                alert("설정이 저장되었습니다. 연결 상태를 확인해주세요.");
-                render();
-            });
-            
-            // 파일 업로드
-            document.getElementById('file-upload')?.addEventListener('change', handleFileUpload);
-            
-            // 메모 새로고침
-            document.getElementById('fetch-memos')?.addEventListener('click', fetchMemos);
-            
-            // 메모 삭제
-            document.querySelectorAll('.delete-memo').forEach(button => {
-                button.addEventListener('click', (e) => handleDeleteMemo(e.currentTarget.dataset.id));
-            });
-            
-            // 카테고리 선택 버튼
-            document.querySelectorAll('.category-select-btn').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    selectedCategory = e.currentTarget.dataset.category;
-                    render();
-                });
-            });
-
-            // --- 카테고리 관리 모달 이벤트 ---
-            document.getElementById('manage-categories')?.addEventListener('click', () => { showCategoryModal = true; render(); });
-            document.getElementById('hide-category-modal')?.addEventListener('click', () => { showCategoryModal = false; render(); });
-            document.getElementById('close-category-modal')?.addEventListener('click', () => { showCategoryModal = false; render(); });
-            document.getElementById('add-category')?.addEventListener('click', handleAddCategory);
-            
-            document.querySelectorAll('.edit-category').forEach(button => {
-                button.addEventListener('click', (e) => handleEditCategory(e.currentTarget.dataset.name));
-            });
-            document.querySelectorAll('.delete-category').forEach(button => {
-                button.addEventListener('click', (e) => handleDeleteCategory(e.currentTarget.dataset.name));
-            });
-            
-            // --- 복사 버튼 이벤트 ---
-            document.querySelectorAll('.copy-button').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    const textToCopy = e.currentTarget.dataset.text;
-                    navigator.clipboard.writeText(textToCopy).then(() => {
-                        e.currentTarget.innerHTML = renderIcon('Check', 14, 'text-green-600');
-                        setTimeout(() => {
-                            e.currentTarget.innerHTML = renderIcon('Copy', 14, 'text-gray-600');
-                        }, 1500);
-                    }).catch(err => {
-                        console.error('Failed to copy: ', err);
-                        alert('복사에 실패했습니다.');
-                    });
-                });
-            });
-
-            // 채팅 입력 및 전송
-            const inputEl = document.getElementById('chat-input');
-            document.getElementById('send-button')?.addEventListener('click', handleSend);
-            if (inputEl) {
-                // 입력 중 값 저장 (리렌더링 시 복원용)
-                inputEl.addEventListener('input', (e) => { inputEl.dataset.value = e.target.value; });
-                
-                inputEl.addEventListener('keydown', (e) => {
+            // 채팅
+            document.getElementById('send-btn')?.addEventListener('click', handleSend);
+            const chatInput = document.getElementById('chat-input');
+            if (chatInput) {
+                chatInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         handleSend();
                     }
                 });
+                chatInput.addEventListener('input', (e) => {
+                    e.target.dataset.value = e.target.value;
+                });
+            }
+
+            // 파일 업로드 (메인)
+            document.getElementById('main-upload-input')?.addEventListener('change', handleFileUpload);
+            
+            // 카테고리 업로드 모달 (타겟 선택)
+            document.querySelectorAll('.select-category-button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const cat = e.currentTarget.innerText.trim();
+                    startBulkUpload(cat);
+                });
+            });
+
+            // 업로드 모달 내 기능 추가
+            document.getElementById('cancel-upload-select')?.addEventListener('click', () => {
+                showCategoryUploadModal = false;
+                filesToUpload = [];
+                render();
+            });
+
+            document.getElementById('add-cat-upload-btn')?.addEventListener('click', async () => {
+                const newCat = prompt("새 카테고리 이름:");
+                if(newCat && newCat.trim()) {
+                    const clean = newCat.trim();
+                    if(!CATEGORIES.includes(clean)) {
+                        CATEGORIES.push(clean);
+                        saveCategories();
+                        await startBulkUpload(clean);
+                    }
+                }
+            });
+
+            // 설정 모달
+            document.getElementById('open-settings-btn')?.addEventListener('click', () => { showSettings = true; render(); });
+            document.getElementById('close-settings')?.addEventListener('click', () => { showSettings = false; render(); });
+            document.getElementById('save-settings')?.addEventListener('click', () => {
+                const key = document.getElementById('gemini-key').value;
+                const fb = document.getElementById('fb-config').value;
+                config = { geminiKey: key, firebaseConfig: fb };
+                localStorage.setItem('ai_memo_config', JSON.stringify(config));
+                initFirebase(fb);
+                showSettings = false;
+                render();
+            });
+
+            // 카테고리 필터 선택
+            document.querySelectorAll('.cat-item-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    selectedCategory = e.currentTarget.dataset.name;
+                    render();
+                });
+            });
+
+            // 1. 카테고리 뷰어 열기 (열 때 선택 초기화)
+            document.querySelectorAll('.open-viewer-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); 
+                    categoryView = e.currentTarget.dataset.cat;
+                    selectedMemoIds.clear(); // 뷰어 열 때 선택 초기화
+                    showCategoryViewerModal = true;
+                    render();
+                });
+            });
+
+            // 2. 뷰어 모달 닫기
+            document.getElementById('close-viewer-btn')?.addEventListener('click', () => {
+                showCategoryViewerModal = false;
+                render();
+            });
+
+            // 3. 뷰어 내 파일 삭제
+            document.querySelectorAll('.delete-memo-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    handleDeleteMemo(e.currentTarget.dataset.id);
+                });
+            });
+
+            // 4. 뷰어 내 내용 보기
+            document.querySelectorAll('.view-content-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const memo = memos.find(m => m.id === id);
+                    if (memo) {
+                        const win = window.open("", "_blank", "width=600,height=600");
+                        win.document.write(`<pre style="white-space:pre-wrap; padding:20px; font-family:sans-serif;">${memo.content}</pre>`);
+                    }
+                });
+            });
+
+            // 5. 뷰어 내 파일 추가
+            const viewerUploadInput = document.getElementById('viewer-upload-input');
+            if (viewerUploadInput) {
+                viewerUploadInput.addEventListener('change', async (e) => {
+                    if (!db) return alert("Firebase 연결 필요");
+                    filesToUpload = Array.from(e.target.files);
+                    if (filesToUpload.length > 0) {
+                        await startBulkUpload(categoryView);
+                    }
+                });
             }
             
-            // 스크롤 맨 아래로 이동
-            const messagesContainer = document.getElementById('messages-container');
-            if (messagesContainer) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
+            // 6. 뷰어 체크박스 이벤트 (개별 선택)
+            document.querySelectorAll('.memo-item-checkbox').forEach(chk => {
+                chk.addEventListener('change', (e) => {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) {
+                        selectedMemoIds.add(id);
+                    } else {
+                        selectedMemoIds.delete(id);
+                    }
+                    render(); // UI 갱신 (삭제 버튼 활성화 등)
+                });
+            });
+
+            // 7. 뷰어 전체 선택
+            document.getElementById('select-all-memos')?.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                const visibleMemos = memos.filter(m => (m.category || '기타') === categoryView);
+                
+                if (isChecked) {
+                    visibleMemos.forEach(m => selectedMemoIds.add(m.id));
+                } else {
+                    visibleMemos.forEach(m => selectedMemoIds.delete(m.id));
+                }
+                render();
+            });
+
+            // 8. 일괄 삭제 버튼
+            document.getElementById('bulk-delete-btn')?.addEventListener('click', handleBulkDelete);
+
+
+            // --- 카테고리 관리자 ---
+            document.getElementById('open-cat-manager')?.addEventListener('click', () => { showCategoryModal = true; render(); });
+            document.getElementById('close-cat-manager-btn')?.addEventListener('click', () => { showCategoryModal = false; render(); });
+            document.getElementById('add-new-cat-btn')?.addEventListener('click', handleAddCategory);
+
+            // 카테고리 수정 (루프 변수 명확화로 오류 방지)
+            document.querySelectorAll('.edit-cat-btn').forEach(btn => {
+                const targetName = btn.dataset.name; 
+                btn.addEventListener('click', () => handleEditCategory(targetName));
+            });
+
+            // 카테고리 삭제 (루프 변수 명확화로 오류 방지)
+            document.querySelectorAll('.del-cat-btn').forEach(btn => {
+                const targetName = btn.dataset.name; 
+                btn.addEventListener('click', () => handleDeleteCategory(targetName));
+            });
+
+            // 스크롤 하단 고정
+            const msgContainer = document.getElementById('messages-container');
+            if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
         }
 
-        // 초기 로드
         window.onload = () => {
             loadConfig();
-            render(); 
+            render();
         };
     </script>
 </body>
