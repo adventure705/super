@@ -66,7 +66,7 @@
 <body class="flex items-center justify-center p-4">
     <div class="container-card w-full max-w-2xl p-6 md:p-10 rounded-xl">
         <h1 class="text-4xl font-extrabold text-blue-300 mb-6 border-b border-gray-600 pb-3 drop-shadow-lg">
-            💬 카카오톡 대화 내용 날짜별 분리
+            💬 카카오톡 대화 내용 날짜별 분리 도구
         </h1>
         
         <!-- 1. 파일 업로드 섹션 -->
@@ -109,7 +109,7 @@
                                 class="w-full p-3 border rounded-lg dark-input"
                                 onchange="updateDateInput('dateTo', this.value)">
                         <!-- dateTo는 YYYYMMDD 값을 저장하고 로직에 사용됨 (display: none) -->
-                        <input type="text" id="dateTo" placeholder="종료일 (선택 사항)" maxlength="8"
+                        <input type="text" id="dateTo" placeholder="종료일 (선9택 사항)" maxlength="8"
                            class="w-full p-3 border rounded-lg dark-input"
                            oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     </div>
@@ -152,7 +152,7 @@
                     class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
                 <span class="flex items-center justify-center">
                     <i class="ph ph-list-numbers text-xl mr-2"></i>
-                    전체 기간 날짜별 추출 (개별 파일 다운로드)
+                    전체 기간 날짜별 추출 (ZIP 파일 다운로드)
                 </span>
             </button>
         </div>
@@ -288,12 +288,38 @@
         }
         
         // 사용자에게 파일이 여러 개 다운로드될 것임을 확인받는 모달 역할 함수
-        function showConfirmModal(count) {
-            // 사용자 경험을 위해 확인 단계 없이 바로 다운로드를 진행합니다.
+        function showConfirmModal(count, isZip) {
+            // ZIP 파일은 한 번만 다운로드되므로 확인 불필요
+            if (isZip) {
+                showStatus(`📦 ${count}일 분의 대화를 ZIP 파일로 압축 중입니다. 잠시 기다려주세요.`, 'info');
+                return Promise.resolve(true); 
+            }
+            // 개별 파일은 확인 단계 없이 바로 다운로드 진행
             return new Promise((resolve) => {
                 showStatus(`⚠️ ${count}개의 개별 파일 다운로드를 시작합니다. 잠시 기다려주세요.`, 'info');
                 resolve(true); 
             });
+        }
+        
+        // DOC 파일 (HTML 기반) 내용 생성 헬퍼 함수
+        function generateDocContent(dateKey, rawContent) {
+            // DOCX 선택 시 HTML 구조로 래핑하여 Word 호환성을 높임
+            return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${dateKey} 카카오톡 대화</title>
+</head>
+<body style="font-family: Malgun Gothic, sans-serif; white-space: pre-wrap; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px;">
+<div style="border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">
+    <h1 style="font-size: 24px; color: #333;">카카오톡 대화 내용 (${dateKey})</h1>
+    <p style="font-size: 14px; color: #666;">파일 형식: HTML 기반 (.doc)</p>
+</div>
+${rawContent.replace(/\n/g, '<br>')}
+</body>
+</html>
+            `;
         }
 
 
@@ -388,50 +414,62 @@
                 }
                 
                 // 5. 다운로드 확인 및 실행
-                await showConfirmModal(filteredDates.length);
+                // mode가 'all'일 때만 isZip: true 전달
+                await showConfirmModal(filteredDates.length, mode === 'all');
                 
                 let downloadedCount = 0;
                 
                 const fileExtension = selectedFileType === 'docx' ? '.doc' : '.txt';
                 const mimeType = selectedFileType === 'docx' ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8';
 
-
-                // 각 날짜별로 개별 파일 다운로드
-                filteredDates.forEach(dateKey => {
-                    const rawContent = chatsByDate[dateKey];
-                    let finalContent;
+                // --- 다운로드 로직 분기 ---
+                if (mode === 'all') {
+                    // 6a. 전체 기간 추출: ZIP 파일로 압축 및 다운로드
+                    const zip = new JSZip();
                     
-                    if (selectedFileType === 'docx') {
-                        // DOCX 선택 시 HTML 구조로 래핑하여 Word 호환성을 높임
-                        finalContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>${dateKey} 카카오톡 대화</title>
-</head>
-<body style="font-family: Malgun Gothic, sans-serif; white-space: pre-wrap; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px;">
-<div style="border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px;">
-    <h1 style="font-size: 24px; color: #333;">카카오톡 대화 내용 (${dateKey})</h1>
-    <p style="font-size: 14px; color: #666;">파일 형식: HTML 기반 (.doc)</p>
-</div>
-${rawContent.replace(/\n/g, '<br>')}
-</body>
-</html>
-                        `;
-                    } else {
-                        finalContent = rawContent;
-                    }
+                    filteredDates.forEach(dateKey => {
+                        const rawContent = chatsByDate[dateKey];
+                        let finalContent;
+                        
+                        if (selectedFileType === 'docx') {
+                            finalContent = generateDocContent(dateKey, rawContent);
+                        } else {
+                            finalContent = rawContent;
+                        }
+                        
+                        const fileName = `${dateKey}_카톡대화${fileExtension}`;
+                        zip.file(fileName, finalContent);
+                    });
                     
-                    const fileName = `${dateKey}_카톡대화${fileExtension}`;
-                    const blob = new Blob([finalContent], { type: mimeType });
+                    const zipFileName = `카카오톡_대화_전체_추출_${getKSTDate().yyyymmdd}.zip`;
+                    zip.generateAsync({type:"blob"}).then(function(content) {
+                        saveAs(content, zipFileName);
+                        showStatus(`✅ 대화 추출이 완료되었으며, ${filteredDates.length}일 분이 ZIP 파일로 다운로드되었습니다.`, 'success');
+                    });
                     
-                    // FileSaver.js를 사용하여 파일 저장 (개별 다운로드)
-                    saveAs(blob, fileName);
-                    downloadedCount++;
-                });
-                
-                showStatus(`✅ 대화 추출이 완료되었으며, ${downloadedCount}개의 파일이 개별 다운로드되었습니다.`, 'success');
+                } else {
+                    // 6b. 선택 기간 추출: 개별 파일 다운로드
+                    
+                    filteredDates.forEach(dateKey => {
+                        const rawContent = chatsByDate[dateKey];
+                        let finalContent;
+                        
+                        if (selectedFileType === 'docx') {
+                            finalContent = generateDocContent(dateKey, rawContent);
+                        } else {
+                            finalContent = rawContent;
+                        }
+                        
+                        const fileName = `${dateKey}_카톡대화${fileExtension}`;
+                        const blob = new Blob([finalContent], { type: mimeType });
+                        
+                        // FileSaver.js를 사용하여 파일 저장 (개별 다운로드)
+                        saveAs(blob, fileName);
+                        downloadedCount++;
+                    });
+                    
+                    showStatus(`✅ 대화 추출이 완료되었으며, ${downloadedCount}개의 파일이 개별 다운로드되었습니다.`, 'success');
+                }
 
             } catch (error) {
                 console.error("처리 중 오류 발생:", error);
@@ -493,4 +531,3 @@ ${rawContent.replace(/\n/g, '<br>')}
     </script>
 </body>
 </html>
-
