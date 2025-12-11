@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔍YouTube 채널 심층 분석기 </title>
+    <title> 🔎 YouTube 채널 심층 분석기 </title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -461,8 +461,6 @@
 
     <script type="module">
         // Firebase Imports
-        // Note: These imports might fail outside a bundler environment like Canvas/Vercel/Netlify.
-        // The loadFirebaseConfig function handles the config loading based on environment.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -504,6 +502,9 @@
         let firebaseConfig = {}; 
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
+        // FIXED USER ID for GitHub/Local Sync (요청 사항 반영)
+        const FIXED_GITHUB_USER_ID = 'SINGLE_USER_MASTER_SYNC_ID_FOR_GITHUB';
+
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
         const LOCAL_STORAGE_KEY = 'yt_analyzer_api_keys'; // Local Storage Key
 
@@ -530,7 +531,7 @@
 
         async function loadFirebaseConfig() {
             // 1. Canvas 환경: 전역 변수 사용
-            if (typeof __firebase_config !== 'undefined') {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config.length > 2) { // 길이가 2 이상이면 JSON 객체가 유효하다고 간주
                 try {
                     return JSON.parse(__firebase_config);
                 } catch (e) {
@@ -542,7 +543,6 @@
             // 2. GitHub/로컬 환경: firebase-config.json 파일 로드 시도
             try {
                 console.log("Attempting to load firebase-config.json...");
-                // Note: The path './firebase-config.json' assumes the file is in the same directory as the HTML file.
                 const response = await fetch('./firebase-config.json');
                 
                 if (response.ok) {
@@ -560,7 +560,7 @@
         }
 
         // ----------------------------------------------------
-        // FIREBASE AUTH & INIT (WITH FALLBACK)
+        // FIREBASE AUTH & INIT (WITH FIXED ID/FALLBACK)
         // ----------------------------------------------------
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -577,27 +577,47 @@
                     db = getFirestore(app);
                     auth = getAuth(app);
                     
-                    onAuthStateChanged(auth, async (user) => {
-                        if (user) {
-                            masterUserId = user.uid;
-                            isFirebaseReady = true; // Firebase/Auth 초기화 완료
-                            console.log("Firebase Initialized & User signed in:", masterUserId);
-                            await fetchApiKeys(); 
-                        } else {
-                            try {
-                                // GitHub 환경에서 firebase-config.json이 로드되었으나 익명 인증이 필요한 경우
-                                if (initialAuthToken) {
-                                    await signInWithCustomToken(auth, initialAuthToken);
-                                } else {
-                                    await signInAnonymously(auth);
-                                }
-                            } catch (e) {
-                                console.error("Firebase Sign-in failed, checking Local Storage:", e);
-                                isFirebaseReady = false;
+                    if (typeof __firebase_config !== 'undefined' || initialAuthToken) {
+                        // --- Canvas Environment (Use provided Auth/Token) ---
+                        onAuthStateChanged(auth, async (user) => {
+                            if (user) {
+                                masterUserId = user.uid;
+                                isFirebaseReady = true; 
+                                console.log("Firebase Initialized & Canvas User signed in:", masterUserId);
                                 await fetchApiKeys(); 
+                            } else {
+                                try {
+                                    if (initialAuthToken) {
+                                        const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                                        masterUserId = userCredential.user.uid;
+                                        isFirebaseReady = true;
+                                        console.log("Canvas: Signed in with Custom Token.");
+                                    } else {
+                                        // 익명 로그인 시도 (Canvas 환경에서 토큰이 없거나 만료된 경우)
+                                        const userCredential = await signInAnonymously(auth);
+                                        masterUserId = userCredential.user.uid;
+                                        isFirebaseReady = true;
+                                        console.log("Canvas: Signed in Anonymously.");
+                                    }
+                                    await fetchApiKeys(); 
+                                } catch (e) {
+                                    console.error("Canvas Sign-in failed:", e);
+                                    isFirebaseReady = false;
+                                    await fetchApiKeys(); // 로컬 폴백으로 전환
+                                }
                             }
-                        }
-                    });
+                        });
+                    } else {
+                        // --- GitHub/Local Environment (Fixed ID) ---
+                        // **익명 인증을 건너뛰고 고정된 ID를 사용합니다.**
+                        // 이 ID는 모든 GitHub 접속에서 동일하여 동기화 효과를 냅니다.
+                        // 이 경우, Firestore 규칙에서 인증 요구사항을 제거해야 데이터 쓰기가 가능합니다.
+                        masterUserId = FIXED_GITHUB_USER_ID;
+                        isFirebaseReady = true;
+                        console.log("GitHub Config loaded. Using FIXED Master ID:", masterUserId);
+                        await fetchApiKeys();
+                    }
+
                 } catch (e) {
                     console.error("Firebase initialization failed, falling back to Local Storage:", e);
                     isFirebaseReady = false;
@@ -684,6 +704,7 @@
             try {
                 if (isFirebaseReady && db && masterUserId) {
                     // 1. Firebase 저장
+                    // Firestore 경로: /artifacts/{appId}/users/{masterUserId}/apiKeys/{keyName}
                     const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
                     await setDoc(keyRef, {
                         name: keyName,
@@ -862,7 +883,7 @@
                 const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
                 
                 // Canvas 환경: onSnapshot 리스너 설정
-                if (isFirebaseReady) {
+                if (typeof __firebase_config !== 'undefined' || initialAuthToken) {
                     onSnapshot(keysCollectionRef, (snapshot) => {
                         const firebaseKeys = [];
                         let foundActiveKey = null;
@@ -889,12 +910,25 @@
                         setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
                     });
                     return; // onSnapshot이 비동기적으로 실행되도록 함수 종료
+                } else {
+                    // GitHub/Local (Fixed ID Path): getDocs를 사용하여 초기 데이터 가져오기
+                    try {
+                        const snapshot = await getDocs(keysCollectionRef);
+                        keysData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        activeKey = keysData.find(k => k.active);
+                    } catch (e) {
+                         console.error("Error fetching fixed ID Firebase keys (Check Security Rules):", e);
+                         // Firebase 실패 시 로컬로 넘어가도록 함 (아래 로직 수행)
+                         isFirebaseReady = false; 
+                    }
                 }
             }
             
-            // 2. Local Storage 로드 (Fallback for GitHub/Local)
-            keysData = getLocalKeys();
-            activeKey = keysData.find(k => k.active);
+            // 2. Local Storage 로드 (Firebase 실패 시 또는 비활성화 시)
+            if (!isFirebaseReady) {
+                keysData = getLocalKeys();
+                activeKey = keysData.find(k => k.active);
+            }
 
             renderApiKeyList(keysData);
             
