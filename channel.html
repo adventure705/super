@@ -438,14 +438,38 @@
 
         // Firebase 초기화 및 인증
         const setupFirebase = async () => {
-            if (!firebaseConfig) {
+            let config = firebaseConfig; // Tries to use injected config first
+
+            // Canvas 환경 외부에서 실행될 경우 config가 null/undefined일 수 있습니다.
+            if (!config) {
+                try {
+                    document.getElementById('initial-loading').textContent = "GitHub 환경 감지: firebase-config.json 파일을 로드 중...";
+                    const response = await fetch('firebase-config.json');
+                    
+                    if (response.ok) {
+                        config = await response.json();
+                    } else {
+                        // If fetching the local file fails, throw an error
+                         throw new Error(`Failed to load firebase-config.json. Status: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error("Firebase config 로드 오류:", error);
+                    document.getElementById('initial-loading').textContent = "오류: Firebase 설정 파일(firebase-config.json)을 로드할 수 없습니다. 파일을 확인하거나 Canvas 환경에서 실행하세요.";
+                    return;
+                }
+            }
+
+
+            // 최종적으로 config가 없으면 종료
+            if (!config) {
                 console.error("Firebase config is not available.");
                 document.getElementById('initial-loading').textContent = "Firebase 설정이 필요합니다.";
                 return;
             }
+
             try {
                 // setLogLevel('debug'); // 디버그 로그 활성화
-                app = initializeApp(firebaseConfig);
+                app = initializeApp(config);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
