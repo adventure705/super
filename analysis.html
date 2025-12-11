@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔍 YouTube 채널 심층 분석기</title>
+    <title>YouTube 채널 심층 분석기 (다크 모드)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -80,6 +80,28 @@
             z-index: 50;
             min-width: 250px;
         }
+        /* API 설정 모달 스타일 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #1a1a2e;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
     </style>
     <script>
         // Tailwind Config for custom colors
@@ -101,6 +123,36 @@
 </head>
 <body class="bg-bg-dark text-text-light min-h-screen transition-colors duration-500">
 
+    <!-- API 설정 모달 (Modal) -->
+    <div id="apiSettingsModal" class="modal hidden">
+        <div class="modal-content w-full md:w-2/3 lg:w-1/2">
+            <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정 및 관리</h2>
+            
+            <!-- 키 추가 입력 폼 -->
+            <div class="bg-card-bg p-4 rounded-lg mb-4">
+                <h3 class="text-lg font-semibold mb-3">새 키 추가</h3>
+                <div class="flex flex-col gap-3">
+                    <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
+                    <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
+                    <button onclick="saveApiKey()" class="py-2 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">키 저장</button>
+                </div>
+            </div>
+
+            <!-- 저장된 키 목록 -->
+            <div class="bg-card-bg p-4 rounded-lg">
+                <h3 class="text-lg font-semibold mb-3 border-b border-text-light/10 pb-1">저장된 키 목록 (<span id="apiKeyCount">0</span>개)</h3>
+                <div id="apiKeyList" class="space-y-2">
+                    <!-- Keys rendered here by JS -->
+                </div>
+                <p id="noKeysMessage" class="text-text-light/50 text-sm mt-2 hidden">저장된 키가 없습니다.</p>
+            </div>
+
+            <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden');" class="mt-4 py-2 px-4 bg-primary-accent text-white rounded-lg hover:bg-primary-accent/80">닫기</button>
+            <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다.</p>
+        </div>
+    </div>
+    <!-- END Modal -->
+
     <!-- 헤더 섹션 -->
     <header id="top" class="p-4 sm:p-6 bg-card-bg shadow-lg sticky top-0 z-10 rounded-b-xl">
         <h1 class="text-2xl sm:text-3xl font-extrabold text-primary-accent text-center">
@@ -115,18 +167,16 @@
         <section class="bg-card-bg p-6 rounded-xl shadow-2xl mb-8">
             <h2 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2">분석 설정</h2>
             
-            <!-- API 키 입력 및 제어 버튼 그룹 -->
+            <!-- API 키 설정 버튼 -->
             <div class="mb-4">
-                <label for="apiKey" class="block text-sm font-medium mb-1">YouTube Data API Key</label>
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input type="password" id="apiKey" placeholder="여기에 API 키를 입력하세요" 
-                           class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent focus:ring-1 focus:ring-primary-accent text-text-light transition duration-200">
+                <label for="activeApiKeyDisplay" class="block text-sm font-medium mb-1">활성화된 API Key</label>
+                <div class="flex flex-col sm:flex-row gap-2 items-center">
+                    <input type="text" id="activeApiKeyDisplay" readonly value="키를 선택해주세요." 
+                           class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-success-status text-success-status transition duration-200 cursor-default" placeholder="활성화된 키가 없습니다.">
                     
-                    <!-- API 키 초기화 버튼 -->
-                    <button id="clearApiKeyButton" 
-                            class="w-full sm:w-auto px-4 py-3 bg-card-bg border border-primary-accent text-primary-accent font-medium rounded-lg hover:bg-primary-accent/10 transition duration-300 whitespace-nowrap"
-                            onclick="clearApiKey()">
-                        🔑 키 초기화
+                    <button id="apiSettingsBtn" onclick="openApiSettings(event)"
+                            class="w-full sm:w-auto px-4 py-3 bg-primary-accent text-white font-medium rounded-lg hover:bg-primary-accent/80 transition duration-300 whitespace-nowrap">
+                        🔑 API 설정
                     </button>
                 </div>
             </div>
@@ -390,53 +440,227 @@
         </svg>
     </button>
 
-    <script>
-        // DOM 요소 가져오기
-        const apiKeyInput = document.getElementById('apiKey');
-        const channelIdInput = document.getElementById('channelId');
-        const analyzeButton = document.getElementById('analyzeButton');
-        const buttonText = document.getElementById('buttonText');
-        const statusMessage = document.getElementById('statusMessage');
-        const resultsSection = document.getElementById('resultsSection');
-        const channelInfoDiv = document.getElementById('channelInfo');
-        const statSubscribers = document.getElementById('statSubscribers');
-        const statViews = document.getElementById('statViews');
-        const statVideos = document.getElementById('statVideos');
-        const avgViews90Days = document.getElementById('avgViews90Days');
-        const avgLikes90Days = document.getElementById('avgLikes90Days');
-        const avgComments90Days = document.getElementById('avgComments90Days');
-        const totalVideosCount = document.getElementById('totalVideosCount');
-        const videoListTableBody = document.getElementById('videoListTableBody');
-        const noVideosMessage = document.getElementById('noVideosMessage');
-        const backToTopBtn = document.getElementById('backToTopBtn');
-        const downloadCsvBtn = document.getElementById('downloadCsvBtn');
-        const calendarBodyElement = document.getElementById('calendarBody'); // 캘린더 바디 요소
-        const calendarNavHeader = document.getElementById('calendarNavHeader'); // 캘린더 탐색 헤더
-        const resetFilterBtn = document.getElementById('resetFilterBtn'); // 필터 초기화 버튼
-        const shortsContainer = document.getElementById('shortsContainer'); // Shorts 컨테이너
-        // shortsContentElement 변수 삭제, 함수 내에서 document.getElementById로 직접 조회하도록 변경
-        const shortsSortBy = document.getElementById('shortsSortBy');
-        const filterMenu = document.getElementById('filterMenu');
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 정렬 및 캘린더 관련 전역 상태 변수
-        let allVideosData = []; 
-        let channelMetadata = null; 
-        let sortKey = 'publishedAt'; 
-        let sortDirection = 'desc'; 
-        let monthlyCalendarData = {}; 
-        let availableMonths = [];     
-        let currentCalendarDate = null; 
-        let currentFilterDate = null; 
+        // Firebase Initialization and State
+        let db;
+        let auth;
+        let masterUserId; // Master User ID for persistent storage
+        let currentApiKey = '';
 
-        // [NEW] 필터 상태 저장 객체
-        let currentFilters = {
-            duration: ['short', 'mid', 'long'],
-            likeRating: [1, 2, 3, 4, 5],
-            commentRating: [1, 2, 3, 4, 5]
-        };
+        // Canvas provided globals
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // YouTube Data API 기본 URL
-        const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
+        // Document Ready Check & Firebase Setup
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (Object.keys(firebaseConfig).length > 0) {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    console.log("Firebase Initialized.");
+
+                    // Sign-in logic
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            masterUserId = user.uid;
+                            console.log("User signed in:", masterUserId);
+                            await fetchApiKeys(); // Load keys upon sign-in
+                        } else {
+                            // Attempt sign-in using initial token or anonymously
+                            try {
+                                if (initialAuthToken) {
+                                    await signInWithCustomToken(auth, initialAuthToken);
+                                } else {
+                                    await signInAnonymously(auth);
+                                }
+                            } catch (e) {
+                                console.error("Anonymous sign-in failed:", e);
+                                // Fallback to a random ID if anonymous sign-in truly fails
+                                masterUserId = 'anonymous-' + Math.random().toString(36).substring(2, 9);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Firebase initialization failed:", e);
+                    setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
+                }
+            } else {
+                console.warn("Firebase config not found.");
+                setStatus('경고: Firebase 설정이 누락되어 API 키 저장이 불가능합니다.', true);
+            }
+        });
+        
+        // ----------------------------------------------------
+        // FIREBASE DATA FUNCTIONS (API Key Management)
+        // ----------------------------------------------------
+
+        async function saveApiKey() {
+            if (!db || !masterUserId) {
+                setStatus('키 저장 실패: 인증 상태를 확인하세요.', true);
+                return;
+            }
+            const keyName = document.getElementById('newKeyName').value.trim();
+            const keyValue = document.getElementById('newKeyValue').value.trim();
+
+            if (!keyName || !keyValue) {
+                setStatus('키 이름과 값을 모두 입력해주세요.', true);
+                return;
+            }
+            if (!keyValue.startsWith('AIza')) {
+                 setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
+                 return;
+            }
+
+            try {
+                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                await setDoc(keyRef, {
+                    name: keyName,
+                    value: keyValue,
+                    createdAt: new Date().toISOString(),
+                    active: false
+                });
+                document.getElementById('newKeyName').value = '';
+                document.getElementById('newKeyValue').value = '';
+                setStatus(`✔️ API 키 "${keyName}"이 저장되었습니다.`, false);
+                // fetchApiKeys will be called by onSnapshot listener
+            } catch (e) {
+                console.error("Error saving API key:", e);
+                setStatus('키 저장 중 오류 발생.', true);
+            }
+        }
+        window.saveApiKey = saveApiKey;
+
+        async function deleteApiKey(keyName) {
+            if (!db || !masterUserId) return;
+            if (!confirm(`정말로 키 "${keyName}"을 삭제하시겠습니까?`)) return;
+
+            try {
+                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                await deleteDoc(keyRef);
+                setStatus(`✔️ API 키 "${keyName}"이 삭제되었습니다.`, false);
+            } catch (e) {
+                console.error("Error deleting API key:", e);
+                setStatus('키 삭제 중 오류 발생.', true);
+            }
+        }
+        window.deleteApiKey = deleteApiKey;
+
+        async function setActiveKey(keyName, keyValue) {
+            if (!db || !masterUserId) return;
+            
+            // 1. Deactivate all existing keys (for simplicity, only one active key)
+            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+            const snapshot = await getDocs(keysCollectionRef);
+            
+            snapshot.docs.forEach(async (d) => {
+                if (d.id !== keyName) {
+                    await setDoc(d.ref, { active: false }, { merge: true });
+                }
+            });
+
+            // 2. Activate the selected key
+            const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+            await setDoc(keyRef, { active: true }, { merge: true });
+            
+            // 3. Update active state
+            currentApiKey = keyValue;
+            document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
+            setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
+            document.getElementById('apiSettingsModal').classList.add('hidden');
+        }
+        window.setActiveKey = setActiveKey;
+
+        // Fetch keys and set up real-time listener
+        function fetchApiKeys() {
+            if (!db || !masterUserId) return;
+            
+            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+
+            // Real-time listener using onSnapshot
+            onSnapshot(keysCollectionRef, (snapshot) => {
+                const keysData = [];
+                let activeKey = null;
+
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    keysData.push({ id: doc.id, ...data });
+                    if (data.active) {
+                        activeKey = { name: doc.id, value: data.value };
+                    }
+                });
+
+                renderApiKeyList(keysData);
+                
+                // Set active key state if found
+                if (activeKey) {
+                    currentApiKey = activeKey.value;
+                    document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
+                } else if (currentApiKey) {
+                     // If previously active but now missing active=true flag
+                     currentApiKey = '';
+                     document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                }
+            }, (error) => {
+                console.error("Error listening to API keys:", error);
+                setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
+            });
+        }
+        
+        function renderApiKeyList(keys) {
+            const listElement = document.getElementById('apiKeyList');
+            const countElement = document.getElementById('apiKeyCount');
+            const noKeysMessage = document.getElementById('noKeysMessage');
+
+            listElement.innerHTML = '';
+            countElement.textContent = keys.length;
+
+            if (keys.length === 0) {
+                noKeysMessage.classList.remove('hidden');
+                return;
+            }
+            noKeysMessage.classList.add('hidden');
+
+            keys.forEach(key => {
+                const isActive = key.active;
+                const buttonClass = isActive 
+                    ? 'bg-success-status/20 text-success-status font-extrabold border-success-status'
+                    : 'bg-bg-dark text-text-light/80 border-card-bg hover:bg-card-bg/50';
+                
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center p-3 border rounded-lg';
+                item.innerHTML = `
+                    <div class="truncate flex-grow mr-4">
+                        <span class="text-sm font-semibold">${key.name}</span>
+                        ${isActive ? '<span class="text-xs text-success-status ml-2">[활성]</span>' : ''}
+                    </div>
+                    <div class="flex space-x-2 flex-shrink-0">
+                        <button onclick="setActiveKey('${key.id}', '${key.value}')" class="py-1 px-3 text-sm rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
+                            ${isActive ? '활성화됨' : '활성화'}
+                        </button>
+                        <button onclick="deleteApiKey('${key.id}')" class="py-1 px-3 text-sm bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
+                            삭제
+                        </button>
+                    </div>
+                `;
+                listElement.appendChild(item);
+            });
+        }
+
+        function openApiSettings(event) {
+            // FIX: 모달 버튼 클릭 시 이벤트 버블링 방지
+            if (event) {
+                event.stopPropagation();
+            }
+            document.getElementById('apiSettingsModal').classList.remove('hidden');
+        }
+        window.openApiSettings = openApiSettings;
 
         // ----------------------------------------------------
         // API 호출 및 오류 처리 함수
@@ -471,12 +695,9 @@
 
 
         // ----------------------------------------------------
-        // 유틸리티 함수 (전역 호출 가능하도록 상단에 배치)
+        // 유틸리티 함수
         // ----------------------------------------------------
         
-        /**
-         * 설명 행의 표시 상태를 토글합니다.
-         */
         function toggleDescription(videoId) {
             const descRow = document.getElementById(`desc-row-${videoId}`);
             const icon = document.getElementById(`toggle-icon-${videoId}`);
@@ -511,12 +732,26 @@
         }
         window.updateFilters = updateFilters;
 
-        // 외부 클릭 시 필터 메뉴 닫기
-        window.onclick = function(event) {
-            if (!event.target.closest('#filterToggleBtn') && !event.target.closest('#filterMenu')) {
-                filterMenu.classList.add('hidden');
+        // 외부 클릭 시 필터 메뉴 닫기 (Firebase 블록 외부에서 정의)
+        document.addEventListener('click', function(event) {
+            // API Settings Modal Check
+            const modal = document.getElementById('apiSettingsModal');
+            if (modal && !modal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
+                // 모달 콘텐츠 내부가 아닌 곳을 클릭했을 때 모달 닫기
+                modal.classList.add('hidden');
             }
-        }
+
+            // Filter Menu Check
+            const filterToggleBtn = document.getElementById('filterToggleBtn');
+            const filterMenu = document.getElementById('filterMenu');
+            
+            if (filterMenu && !filterMenu.classList.contains('hidden')) {
+                if (!event.target.closest('#filterToggleBtn') && !event.target.closest('#filterMenu')) {
+                    filterMenu.classList.add('hidden');
+                }
+            }
+        });
+
 
         // [NEW] 영상 ID 추출 함수
         function extractVideoId(input) {
@@ -530,9 +765,7 @@
             // FIX: URL 뒤의 쿼리 파라미터를 먼저 제거하고 핸들/ID 추출을 시도
             const cleanedInput = input.split('?')[0].split('&')[0].trim();
 
-            // 1. Handle/Channel/User/Custom URL extraction
-            // Looks for pattern after channel/, user/, c/, or @
-            // Stops at /, ?, or &
+            // 1. Handle/Channel/User/Custom URL extraction (@handle, /channel/, /user/, /c/)
             const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
             if (urlMatch && urlMatch[1]) {
                 return urlMatch[1];
@@ -686,12 +919,6 @@
             statusMessage.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
         }
         
-        function clearApiKey() {
-            apiKeyInput.value = '';
-            setStatus('API 키 입력 필드가 초기화되었습니다. 새 키를 입력해 주세요.', false);
-        }
-        window.clearApiKey = clearApiKey; // 전역 등록
-
         function formatNumber(num) {
             if (num === '0' || num === undefined || num === null || num === 'N/A') return 'N/A';
             try {
@@ -971,11 +1198,11 @@
             const sortIcon = document.getElementById('sortIcon');
             
             if (sortDirection === 'desc') {
-                sortDirectionText.textContent = '내림차순';
-                sortIcon.classList.add('rotate-180');
+                if(sortDirectionText) sortDirectionText.textContent = '내림차순';
+                if(sortIcon) sortIcon.classList.add('rotate-180');
             } else {
-                sortDirectionText.textContent = '오름차순';
-                sortIcon.classList.remove('rotate-180');
+                if(sortDirectionText) sortDirectionText.textContent = '오름차순';
+                if(sortIcon) sortIcon.classList.remove('rotate-180');
             }
             renderVideoList();
         }
@@ -1234,54 +1461,19 @@
         }
 
 
-        function extractChannelId(input) {
-            // FIX: URL 뒤의 쿼리 파라미터를 먼저 제거하고 핸들/ID 추출을 시도
-            const cleanedInput = input.split('?')[0].split('&')[0].trim();
-
-            // 1. Handle/Channel/User/Custom URL extraction
-            // Looks for pattern after channel/, user/, c/, or @
-            // Stops at /, ?, or &
-            const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
-            if (urlMatch && urlMatch[1]) {
-                return urlMatch[1];
-            }
-            
-            // 2. Fallback: If it's a direct ID/Handle
-            return cleanedInput;
-        }
-
-        function calculate90DayAverages(videos) {
-            const ninetyDaysAgo = new Date();
-            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-            
-            const recentVideos = videos.filter(video => new Date(video.publishedAt) >= ninetyDaysAgo);
-            
-            if (recentVideos.length === 0) {
-                return { avgViews: 0, avgLikes: 0, avgComments: 0 };
-            }
-
-            const totalViews = recentVideos.reduce((sum, v) => sum + parseInt(v.viewCount || 0), 0);
-            const totalLikes = recentVideos.reduce((sum, v) => sum + parseInt(v.likeCount || 0), 0);
-            const totalComments = recentVideos.reduce((sum, v) => sum + parseInt(v.commentCount || 0), 0);
-            
-            const count = recentVideos.length;
-            
-            return {
-                avgViews: Math.round(totalViews / count),
-                avgLikes: Math.round(totalLikes / count),
-                avgComments: Math.round(totalComments / count)
-            };
-        }
-
-
         async function startAnalysis() {
-            const apiKey = apiKeyInput.value.trim();
+            // Use active API key from Firestore state
+            const apiKey = currentApiKey;
             const rawInput = channelIdInput.value.trim();
             let channelId = extractChannelId(rawInput);
             let uploadsPlaylistId = '';
 
-            if (!apiKey || !channelId) {
-                setStatus('API 키와 채널 ID 또는 링크를 모두 입력해 주세요.', true);
+            if (!apiKey) {
+                setStatus('오류: 활성화된 API 키가 없습니다. "API 설정"을 통해 키를 선택해주세요.', true);
+                return;
+            }
+            if (!channelId) {
+                setStatus('채널 ID 또는 링크를 입력해 주세요.', true);
                 return;
             }
 
@@ -1305,12 +1497,12 @@
             try {
                 let channelItem;
                 
-                // [NEW] Check for Video ID first
+                // 1. Video ID Check (extractChannelId is already called, but we re-check for video link handling)
                 const videoId = extractVideoId(rawInput);
                 let fetchChannelByVideo = false;
 
-                if (videoId) {
-                    setStatus('영상 ID 감지됨. 채널 정보를 찾는 중...', false);
+                if (videoId && rawInput.toLowerCase().includes('youtu')) {
+                    setStatus('영상 링크 감지됨. 채널 ID를 추출하는 중...', false);
                     const videoUrl = `${API_BASE_URL}videos?part=snippet&id=${videoId}&key=${apiKey}`;
                     const videoResponse = await fetchWithRetry(videoUrl);
                     const videoData = await checkResponse(videoResponse);
@@ -1319,37 +1511,28 @@
                         channelId = videoData.items[0].snippet.channelId;
                         fetchChannelByVideo = true;
                     } else {
-                        throw new Error('해당 영상 정보를 찾을 수 없습니다.');
+                        // If video ID is found but lookup fails, proceed with original extracted ID (which might be a handle)
                     }
                 }
 
                 const partList = 'snippet,statistics,contentDetails';
                 
-                // If channelId is already found via video, skip handle check
-                if (fetchChannelByVideo) {
-                     setStatus('채널 ID로 기본 정보를 가져오는 중입니다...', false);
-                     const channelUrl = `${API_BASE_URL}channels?part=${partList}&id=${channelId}&key=${apiKey}`;
-                     const channelResponse = await fetchWithRetry(channelUrl);
-                     const channelData = await checkResponse(channelResponse);
-
-                     if (!channelData.items || channelData.items.length === 0) {
-                        throw new Error('채널을 찾을 수 없거나 잘못된 ID입니다.');
-                    }
-                    channelItem = channelData.items[0];
-
-                } else if (!channelId.startsWith('UC')) {
-                     setStatus('사용자 이름(@username)으로 채널 ID를 검색 중입니다...', false);
-                     const searchHandle = channelId.startsWith('@') ? channelId : `@${channelId}`; // @ 추가
+                // 2. Channel/Handle Lookup
+                if (!channelId.startsWith('UC')) {
+                     setStatus('사용자 핸들 또는 이름을 통해 채널 ID를 검색 중입니다...', false);
+                     // Fix: ensure handle search starts with @ if it doesn't look like an old channel name
+                     const searchHandle = channelId.startsWith('@') ? channelId : `@${channelId}`;
                      const searchUrl = `${API_BASE_URL}channels?part=${partList}&forHandle=${searchHandle}&key=${apiKey}`;
                      const searchResponse = await fetchWithRetry(searchUrl);
                      const searchData = await checkResponse(searchResponse);
                      
                      if (!searchData.items || searchData.items.length === 0) {
-                         throw new Error('해당 사용자 이름(@)을 가진 채널을 찾을 수 없습니다.');
+                         throw new Error(`핸들/ID ${channelId}를 가진 채널을 찾을 수 없습니다.`);
                      }
                      channelId = searchData.items[0].id; 
                      channelItem = searchData.items[0]; 
-                } else {
+                } else if (!channelItem) {
+                    // 3. Direct Channel ID Lookup (only if not already fetched by video or handle)
                     setStatus('채널 ID로 기본 정보를 가져오는 중입니다...', false);
                     const channelUrl = `${API_BASE_URL}channels?part=${partList}&id=${channelId}&key=${apiKey}`;
                     const channelResponse = await fetchWithRetry(channelUrl);
@@ -1466,7 +1649,7 @@
                 
                 let userFriendlyError = error.message;
                 if (error.message.includes('API key not valid')) {
-                    userFriendlyError = 'API 키가 유효하지 않거나 잘못되었습니다. 다시 확인해 주세요.';
+                    userFriendlyError = 'API 키가 유효하지 않거나 잘못되었습니다. "API 설정"을 통해 확인해 주세요.';
                 } else if (error.message.includes('channelId')) {
                     userFriendlyError = '채널 ID가 잘못되었거나 해당 채널이 존재하지 않습니다.';
                 } else if (error.message.includes('Quota exceeded')) {
@@ -1504,4 +1687,3 @@
     </script>
 </body>
 </html>
-
