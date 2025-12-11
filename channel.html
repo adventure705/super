@@ -3,1639 +3,2053 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 채널 관리 대시보드</title>
+    <title>YouTube 채널 심층 분석기 (다크 모드)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Inter Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* 커스텀 스타일 및 다크 모드 */
-        :root {
-            font-family: 'Inter', sans-serif;
-            --color-bg-primary: #111827; /* Dark Gray 900 */
-            --color-text-primary: #f3f4f6; /* Light Gray 100 */
-            --color-accent-primary: #4f46e5; /* Indigo 600 */
-            --color-accent-secondary: #a5b4fc; /* Indigo 300 for hover text/links */
-            --color-border: #374151; /* Gray 700 */
+        /* 커스텀 스크롤바 (다크모드에 맞춤) */
+        ::-webkit-scrollbar {
+            width: 8px;
         }
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e; /* 배경색 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #383b6e; /* 스크롤바 색상 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #e94560; /* 호버 시 강조색 */
+        }
+
+        /* 폰트 설정 (Inter 폰트 사용) */
         body {
-            background-color: var(--color-bg-primary);
-            color: var(--color-text-primary);
+            font-family: 'Inter', sans-serif;
         }
-        .container {
-            max-width: 1400px;
+        /* 테이블 셀 내부에 태그가 많을 경우 줄바꿈을 허용 */
+        #videoListTableBody td:nth-child(11) { 
+            white-space: normal;
         }
-        .header-cell {
-            cursor: pointer;
-            padding: 0.75rem 0.5rem;
-            text-align: left;
-            user-select: none;
-            transition: color 0.2s;
+        /* 캘린더 셀 스타일 */
+        .calendar-cell {
+            width: 100%; 
+            padding: 4px;
+            text-align: center;
+            font-size: 0.75rem;
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #383b6e;
+            border-radius: 4px;
+            cursor: pointer; /* 클릭 가능하도록 변경 */
+            transition: background-color 0.2s;
+        }
+        /* Shorts 스크롤 컨테이너 */
+        .shorts-scroll-container {
+            position: relative; /* 화살표 배치를 위해 */
+        }
+        .shorts-scroll-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .shorts-content {
+            overflow-x: auto;
+            scroll-behavior: smooth;
             white-space: nowrap;
         }
-        .header-cell:hover {
-            color: var(--color-accent-secondary);
+        .scroll-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            background: rgba(40, 42, 77, 0.8); /* card-bg semi-transparent */
+            border-radius: 9999px;
+            padding: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: background 0.3s;
+            display: none; /* Mobile hidden */
         }
-        .scrollable-table {
-            overflow-x: auto;
-            max-width: 100%;
-            -webkit-overflow-scrolling: touch;
+        @media (min-width: 768px) {
+            .scroll-button {
+                display: block; /* PC show */
+            }
         }
-        /* Tailwind configuration for custom colors/styles */
-        .tailwind-config {
-            @apply bg-gray-900 text-gray-100;
+        /* 필터 메뉴 스타일 */
+        .filter-dropdown {
+            z-index: 50;
+            min-width: 250px;
         }
-        /* API 설정 버튼 위치 고정 */
-        #api-settings-button {
-             z-index: 40; /* 모달 아래, 다른 UI 위에 위치 */
+        /* API 설정 모달 스타일 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #1a1a2e;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
         }
     </style>
+    <script>
+        // Tailwind Config for custom colors
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-dark': '#1a1a2e',      // 1. Deep Blue/Purple Dark Background
+                        'primary-accent': '#e94560', // 2. Vivid Red/Pink Accent
+                        'text-light': '#f8f8f8',    // 3. Off-White/Light Gray Text
+                        'card-bg': '#282a4d',       // 4. Slightly Lighter Dark Blue Card Background
+                        'success-status': '#6aff7b', // 5. Light Green Success/Status
+                        'warning-star': '#fbbf24', // Yellow for stars
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-bg-dark text-text-light min-h-screen transition-colors duration-500">
 
-    <!-- Firebase SDKs -->
+    <!-- API 설정 모달 (Modal) -->
+    <div id="apiSettingsModal" class="modal hidden">
+        <div class="modal-content w-full md:w-2/3 lg:w-1/2">
+            <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정 및 관리</h2>
+            
+            <!-- 키 추가 입력 폼 -->
+            <div class="bg-card-bg p-4 rounded-lg mb-4">
+                <h3 class="text-lg font-semibold mb-3">새 키 추가</h3>
+                <div class="flex flex-col gap-3">
+                    <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
+                    <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
+                    <button onclick="saveApiKey(event)" class="py-2 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">키 저장</button>
+                </div>
+            </div>
+
+            <!-- 저장된 키 목록 -->
+            <div class="bg-card-bg p-4 rounded-lg">
+                <h3 class="text-lg font-semibold mb-3 border-b border-text-light/10 pb-1">저장된 키 목록 (<span id="apiKeyCount">0</span>개)</h3>
+                <div id="apiKeyList" class="space-y-2">
+                    <!-- Keys rendered here by JS -->
+                </div>
+                <p id="noKeysMessage" class="text-text-light/50 text-sm mt-2 hidden">저장된 키가 없습니다.</p>
+            </div>
+            
+            <!-- 닫기 버튼을 오른쪽으로 배치 -->
+            <div class="flex justify-end">
+                <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden');" class="mt-4 py-2 px-4 bg-primary-accent text-white rounded-lg hover:bg-primary-accent/80">닫기</button>
+            </div>
+            <!-- FIX: Local Storage 사용 시 문구 명확히 변경 -->
+            <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다. (Firebase 미설정 시 **현재 브라우저에만** 임시 저장됩니다.)</p>
+        </div>
+    </div>
+    <!-- END API Settings Modal -->
+
+    <!-- 키 삭제 확인 모달 -->
+    <div id="deleteConfirmModal" class="modal hidden">
+        <div class="modal-content w-80">
+            <h3 class="text-xl font-bold text-primary-accent mb-4">키 삭제 확인</h3>
+            <p class="text-sm text-text-light/80 mb-4">
+                정말로 '<span id="keyNameToDelete" class="font-bold text-success-status"></span>' 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="document.getElementById('deleteConfirmModal').classList.add('hidden')" class="py-2 px-4 bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/50">취소</button>
+                <button id="confirmDeleteBtn" class="py-2 px-4 bg-primary-accent text-white font-bold rounded-lg hover:bg-primary-accent/80">삭제 확인</button>
+            </div>
+        </div>
+    </div>
+    <!-- END Delete Confirm Modal -->
+
+    <!-- 헤더 섹션 -->
+    <header id="top" class="p-4 sm:p-6 bg-card-bg shadow-lg sticky top-0 z-10 rounded-b-xl">
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-primary-accent text-center">
+            YouTube 채널 심층 분석기
+        </h1>
+    </header>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="container mx-auto p-4 sm:p-6 lg:p-10">
+
+        <!-- 입력 및 제어 패널 -->
+        <section class="bg-card-bg p-6 rounded-xl shadow-2xl mb-8">
+            <h2 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2">분석 설정</h2>
+            
+            <!-- API 키 설정 버튼 -->
+            <div class="mb-4">
+                <label for="activeApiKeyDisplay" class="block text-sm font-medium mb-1">활성화된 API Key</label>
+                <div class="flex flex-col sm:flex-row gap-2 items-center">
+                    <input type="text" id="activeApiKeyDisplay" readonly value="키를 선택해주세요." 
+                            class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-success-status text-success-status transition duration-200 cursor-default" placeholder="활성화된 키가 없습니다.">
+                    
+                    <button id="apiSettingsBtn" onclick="openApiSettings(event)"
+                            class="w-full sm:w-auto px-4 py-3 bg-primary-accent text-white font-medium rounded-lg hover:bg-primary-accent/80 transition duration-300 whitespace-nowrap">
+                        🔑 API 설정
+                    </button>
+                </div>
+            </div>
+
+            <!-- 채널 링크/ID 입력 -->
+            <div class="mb-6">
+                <label for="channelId" class="block text-sm font-medium mb-1">채널 ID 또는 영상 링크 (예: @username, youtu.be/...) </label>
+                <input type="text" id="channelId" placeholder="채널 ID, 핸들, 또는 영상 링크를 입력하세요" 
+                        class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent focus:ring-1 focus:ring-primary-accent text-text-light transition duration-200">
+            </div>
+
+            <!-- 분석 버튼 -->
+            <button id="analyzeButton" 
+                    class="w-full py-3 px-4 bg-primary-accent hover:bg-primary-accent/80 text-white font-bold rounded-xl transition duration-300 shadow-lg shadow-primary-accent/30 disabled:opacity-50"
+                    onclick="startAnalysis()">
+                <span id="buttonText">채널 분석 시작</span>
+            </button>
+
+            <!-- 상태 메시지 -->
+            <p id="statusMessage" class="mt-4 text-center text-sm font-medium"></p>
+        </section>
+
+        <!-- 분석 결과 표시 영역 -->
+        <section id="resultsSection" class="hidden">
+            <h2 class="text-2xl font-bold mb-6 text-primary-accent">분석 결과 요약 (정량적 지표)</h2>
+            
+            <!-- 채널 기본 정보 카드 -->
+            <div id="channelInfo" class="grid md:grid-cols-2 gap-6 mb-8">
+                <!-- 정보는 JS를 통해 채워집니다 -->
+            </div>
+
+            <!-- 통계 카드 (전체) -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center mb-4">
+                <div class="bg-card-bg p-5 rounded-xl shadow-xl">
+                    <p class="text-3xl font-bold text-success-status" id="statSubscribers">0</p>
+                    <p class="text-sm mt-1 text-text-light/80">구독자 수</p>
+                </div>
+                <div class="bg-card-bg p-5 rounded-xl shadow-xl">
+                    <p class="text-3xl font-bold text-success-status" id="statViews">0</p>
+                    <p class="text-sm mt-1 text-text-light/80">총 조회수</p>
+                </div>
+                <div class="bg-card-bg p-5 rounded-xl shadow-xl">
+                    <p class="text-3xl font-bold text-success-status" id="statVideos">0</p>
+                    <p class="text-sm mt-1 text-text-light/80">총 영상 수</p>
+                </div>
+            </div>
+
+            <!-- 통계 카드 (90일 평균) - NEW -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center mb-8">
+                <div class="bg-card-bg p-4 rounded-xl shadow-xl border border-primary-accent/30">
+                    <p class="text-xl font-bold text-primary-accent" id="avgViews90Days">0</p>
+                    <p class="text-xs mt-1 text-text-light/70">90일 평균 조회수</p>
+                </div>
+                <div class="bg-card-bg p-4 rounded-xl shadow-xl border border-primary-accent/30">
+                    <p class="text-xl font-bold text-primary-accent" id="avgLikes90Days">0</p>
+                    <p class="text-xs mt-1 text-text-light/70">90일 평균 좋아요 수</p>
+                </div>
+                <div class="bg-card-bg p-4 rounded-xl shadow-xl border border-primary-accent/30">
+                    <p class="text-xl font-bold text-primary-accent" id="avgComments90Days">0</p>
+                    <p class="text-xs mt-1 text-text-light/70">90일 평균 댓글 수</p>
+                </div>
+            </div>
+
+
+            <!-- 벤치마킹 심층 분석 가이드 (정성적 분석 영역) -->
+            <h2 class="text-2xl font-bold mb-6 text-primary-accent mt-10">🛠️ 심층 벤치마킹 가이드 (직접 분석 필요)</h2>
+            <p class="text-sm text-text-light/80 mb-6">아래 항목들은 API로 제공되지 않는 <b>성공 전략 핵심 영역</b>입니다. 상단의 정량적 데이터와 함께 채널을 직접 관찰하며 분석해 보세요.</p>
+
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <!-- 콘텐츠 및 기획력 분석 (2단계) -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-xl">
+                    <h3 class="text-lg font-bold text-success-status mb-3">💡 2단계: 콘텐츠 기획력 분석</h3>
+                    <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
+                        <li><b>킬러 콘텐츠:</b> 영상들을 주제별로 분류하여 채널의 주력 콘텐츠(가장 성과 좋은)를 식별합니다.</li>
+                        <li><b>포맷 및 길이:</b> 성공적인 영상의 평균 길이와 포맷 유형(Vlog, 튜토리얼 등)을 기록합니다.</li>
+                        <li><b>영상 구조:</b> 기승전결 등 영상 내부의 일관된 구조를 분석합니다.</li>
+                        <li><b>전달 방식:</b> 감정 유발, 정보 전달 등 핵심 전달 요소를 정의합니다.</li>
+                        <li><b>차별화:</b> 이 채널만이 가진 고유한 관점이나 정보 전달 방식을 정의합니다.</li>
+                    </ul>
+                </div>
+
+                <!-- 시각/편집 스타일 분석 (3단계) -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-xl">
+                    <h3 class="text-lg font-bold text-success-status mb-3">🎬 3단계: 시각/편집 스타일 분석</h3>
+                    <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
+                        <li><b>썸네일 전략:</b> 주된 색상, 폰트, 궁금증을 유발하는 문구 스타일을 파악합니다.</li>
+                        <li><b>편집 속도:</b> 컷 전환 속도, 화면 분할, 지루함을 줄이는 편집 기법을 분석합니다.</li>
+                        <li>🗣️ <b>사운드/호스트:</b> BGM 선택 기준, 효과음 사용의 적절성, 호스트의 톤앤매너를 분석합니다.</li>
+                    </ul>
+                </div>
+
+                <!-- 참여 및 SEO 분석 (4, 5단계) -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-xl md:col-span-2">
+                    <h3 class="text-lg font-bold text-success-status mb-3">🔎 4 & 5단계: 참여, 커뮤니티 및 SEO 분석</h3>
+                    <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
+                        <li><b>참여율 추정:</b> 아래 데이터(조회수, 좋아요, 댓글)를 기반으로 참여율을 추정합니다.</li>
+                        <li><b>댓글 반응:</b> 시청자들이 주로 남기는 핵심 내용(질문, 칭찬)을 파악하여 니즈를 정의합니다.</li>
+                        <li><b>SEO 핵심:</b> 제목과 설명란의 키워드 배치 전략 및 플레이리스트 구성을 분석합니다.</li>
+                        <li><b>커뮤니티 활용:</b> 커뮤니티 탭 활용 방식(투표, Q&A)을 직접 확인하고 벤치마킹합니다.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 업로드 캘린더 영역 (추가됨) -->
+            <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 mt-10">
+                일별 업로드 빈도 (월별 탐색)
+                <button id="resetFilterBtn" class="py-1 px-3 bg-success-status/20 text-success-status text-xs rounded-lg ml-2 hidden" onclick="resetVideoFilter()">
+                    ❌ 날짜 필터 해제
+                </button>
+            </h3>
+            <div id="calendarContainer" class="bg-card-bg p-4 rounded-xl shadow-xl mb-8">
+                <!-- Navigation Header -->
+                <div id="calendarNavHeader" class="flex justify-between items-center mb-4 px-2">
+                    <!-- Buttons and Month/Year will be inserted here by JS -->
+                </div>
+                
+                <div class="grid grid-cols-7 gap-1 border-b border-383b6e pb-1">
+                    <!-- 요일 헤더 (Permanent) -->
+                    <div class="text-center font-bold text-xs text-primary-accent">일</div>
+                    <div class="text-center font-bold text-xs text-text-light/70">월</div>
+                    <div class="text-center font-bold text-xs text-text-light/70">화</div>
+                    <div class="text-center font-bold text-xs text-text-light/70">수</div>
+                    <div class="text-center font-bold text-xs text-text-light/70">목</div>
+                    <div class="text-center font-bold text-xs text-text-light/70">금</div>
+                    <div class="text-center font-bold text-xs text-primary-accent">토</div>
+                </div>
+                
+                <!-- Calendar Body (Dynamic Cells) -->
+                <div id="calendarBody" class="grid grid-cols-7 gap-1 mt-2">
+                    <!-- 캘린더 셀은 JS로 채워짐 -->
+                </div>
+            </div>
+
+            <!-- Shorts 스크롤 섹션 (추가됨) -->
+            <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 mt-10 flex justify-between items-start md:items-center">
+                <span>🔥 최신 Shorts (1분 이하 영상) 미리보기</span>
+                <select id="shortsSortBy" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light text-sm" onchange="renderShortsPreview()">
+                    <option value="publishedAt" selected>최신순</option>
+                    <option value="viewCount">인기순 (조회수)</option>
+                    <option value="likeCount">좋아요순</option>
+                    <option value="commentCount">댓글순</option>
+                </select>
+            </h3>
+            <div id="shortsContainer" class="shorts-scroll-container py-4 -mx-4 px-4 bg-bg-dark/50 rounded-xl shadow-inner hidden">
+                <!-- Shorts Scroll Buttons (PC Only) -->
+                <!-- Added IDs here for JS selection -->
+                <button id="shortsLeftBtn" class="scroll-button left-4 text-text-light hover:text-success-status" onclick="scrollShorts(-300)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <div id="shortsContent" class="shorts-content whitespace-nowrap">
+                    <!-- Shorts cards will be inserted here by JS -->
+                </div>
+                <button id="shortsRightBtn" class="scroll-button right-4 text-text-light hover:text-success-status" onclick="scrollShorts(300)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                </button>
+            </div>
+
+
+            <!-- 전체 비디오 분석 테이블 -->
+            <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <span>채널 전체 비디오 상세 분석 데이터 (<span id="totalVideosCount">0</span>개)</span>
+                
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full md:w-auto">
+                    <!-- CSV 다운로드 버튼 -->
+                    <button id="downloadCsvBtn" 
+                            class="w-full sm:w-auto py-2 px-3 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80 transition duration-200"
+                            onclick="exportToCSV()" disabled>
+                        ⬇️ CSV 다운로드
+                    </button>
+
+                    <!-- 필터 버튼 및 메뉴 -->
+                    <div class="relative inline-block text-left w-full sm:w-auto z-50">
+                        <button id="filterToggleBtn" onclick="toggleFilterMenu()" class="w-full sm:w-auto flex justify-between items-center py-2 px-3 bg-card-bg border border-text-light/20 rounded-lg text-text-light hover:bg-card-bg/80 transition duration-200">
+                            <span>🔍 필터 설정</span>
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <!-- 필터 드롭다운 메뉴 -->
+                        <div id="filterMenu" class="hidden absolute right-0 mt-2 w-full sm:w-64 bg-card-bg border border-text-light/20 rounded-lg shadow-2xl p-4 filter-dropdown origin-top-right">
+                            <div class="mb-4">
+                                <h4 class="font-bold text-primary-accent mb-2 text-sm border-b border-text-light/10 pb-1">영상 분류</h4>
+                                <label class="flex items-center space-x-2 mb-1 cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-type" value="short" checked> <span class="text-sm">숏폼 (1분 이하)</span></label>
+                                <label class="flex items-center space-x-2 mb-1 cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-type" value="mid" checked> <span class="text-sm">미드폼 (1~3분)</span></label>
+                                <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-type" value="long" checked> <span class="text-sm">롱폼 (3분 이상)</span></label>
+                            </div>
+                            <div class="mb-4">
+                                <h4 class="font-bold text-primary-accent mb-2 text-sm border-b border-text-light/10 pb-1">L/V 비율 등급 (좋아요)</h4>
+                                <div class="grid grid-cols-5 gap-1 text-center">
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-like" value="1" checked><br><span class="text-xs">1★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-like" value="2" checked><br><span class="text-xs">2★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-like" value="3" checked><br><span class="text-xs">3★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-like" value="4" checked><br><span class="text-xs">4★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-like" value="5" checked><br><span class="text-xs">5★</span></label>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <h4 class="font-bold text-primary-accent mb-2 text-sm border-b border-text-light/10 pb-1">C/V 비율 등급 (댓글)</h4>
+                                <div class="grid grid-cols-5 gap-1 text-center">
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-comment" value="1" checked><br><span class="text-xs">1★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-comment" value="2" checked><br><span class="text-xs">2★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-comment" value="3" checked><br><span class="text-xs">3★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-comment" value="4" checked><br><span class="text-xs">4★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" onchange="updateFilters()" class="filter-comment" value="5" checked><br><span class="text-xs">5★</span></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 정렬 컨트롤 -->
+                    <div id="sortControls" class="flex items-center space-x-2 w-full sm:w-auto">
+                        <select id="sortBy" class="flex-grow sm:flex-grow-0 p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light" onchange="renderVideoList()">
+                            <option value="publishedAt">게시일</option>
+                            <option value="viewCount">조회수</option>
+                            <option value="likeCount">좋아요</option>
+                            <option value="commentCount">댓글 수</option>
+                            <option value="durationSeconds">영상 길이</option>
+                            <option value="likeRatio">좋아요 비율</option>
+                            <option value="commentRatio">댓글 비율</option>
+                        </select>
+                        <button id="sortDirectionBtn" class="p-2 bg-primary-accent hover:bg-primary-accent/80 rounded-lg text-white" onclick="toggleSortDirection()">
+                            <svg id="sortIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block transform rotate-180" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414l-2.293 2.293a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zM10 17a1 1 0 01-.707-.293l-3-3a1 1 0 011.414-1.414L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3A1 1 0 0110 17z" clip-rule="evenodd" /></svg>
+                            <!-- FIX: span 태그 복구 -->
+                            <span id="sortDirectionText" class="hidden sm:inline-block">내림차순</span>
+                        </button>
+                    </div>
+                </div>
+            </h3>
+            <div class="overflow-x-auto bg-card-bg rounded-xl shadow-2xl">
+                <table class="min-w-full divide-y divide-bg-dark">
+                    <thead class="bg-bg-dark">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase tracking-wider hidden md:table-cell">번호</th>
+                            <!-- 썸네일 컬럼 제거됨 -->
+                            <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase tracking-wider w-1/3">제목</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider">게시일</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider">조회수</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden sm:table-cell">길이</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden md:table-cell">분류</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden sm:table-cell">L/V 비율 (5)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden md:table-cell">C/V 비율 (5)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden lg:table-cell">좋아요</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase tracking-wider hidden xl:table-cell">댓글 수</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase tracking-wider hidden 2xl:table-cell">태그</th> <!-- 태그 숨김 기준 변경 -->
+                        </tr>
+                    </thead>
+                    <tbody id="videoListTableBody" class="divide-y divide-card-bg/50">
+                        <!-- 비디오 데이터는 JS로 채워짐 -->
+                    </tbody>
+                </table>
+                <p id="noVideosMessage" class="hidden text-center text-text-light/50 py-10">비디오가 없습니다.</p>
+            </div>
+        </section>
+
+    </main>
+    
+    <!-- Back to Top Button (추가됨) -->
+    <button id="backToTopBtn" onclick="scrollToTop()"
+            class="fixed bottom-6 right-6 p-3 bg-primary-accent text-white rounded-full shadow-lg hover:bg-primary-accent/80 transition-all duration-300 opacity-0 translate-y-4 z-20">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+    </button>
+    <!-- END Back to Top Button -->
+
     <script type="module">
+        // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, deleteDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase 및 전역 변수 설정
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        // DOM 요소와 전역 상태 변수들 (모듈 스코프)
+        const channelIdInput = document.getElementById('channelId');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const buttonText = document.getElementById('buttonText');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const channelInfoDiv = document.getElementById('channelInfo');
+        const statSubscribers = document.getElementById('statSubscribers');
+        const statViews = document.getElementById('statViews');
+        const statVideos = document.getElementById('statVideos');
+        const avgViews90Days = document.getElementById('avgViews90Days');
+        const avgLikes90Days = document.getElementById('avgLikes90Days');
+        const avgComments90Days = document.getElementById('avgComments90Days');
+        const totalVideosCount = document.getElementById('totalVideosCount');
+        const videoListTableBody = document.getElementById('videoListTableBody');
+        const noVideosMessage = document.getElementById('noVideosMessage');
+        const backToTopBtn = document.getElementById('backToTopBtn');
+        const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+        const calendarBodyElement = document.getElementById('calendarBody');
+        const calendarNavHeader = document.getElementById('calendarNavHeader');
+        const resetFilterBtn = document.getElementById('resetFilterBtn');
+        const shortsContainer = document.getElementById('shortsContainer');
+        const shortsSortBy = document.getElementById('shortsSortBy');
+        const filterMenu = document.getElementById('filterMenu');
+
+        // Firestore 및 인증 관련 상태
+        let db;
+        let auth;
+        let masterUserId; 
+        let currentApiKey = '';
+        let isFirebaseReady = false; // NEW: Firebase 초기화 완료 상태
+        
+        // Configuration Variables
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let firebaseConfig = {}; 
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // 데이터 경로는 artifacts/{appId}/public/data/{collectionName} 입니다.
+        // FIXED USER ID for GitHub/Local Sync (요청 사항 반영)
+        const FIXED_GITHUB_USER_ID = 'SINGLE_USER_MASTER_SYNC_ID_FOR_GITHUB';
 
-        let app, db, auth;
-        let isAuthReady = false;
-        
-        // --- API Key LocalStorage 초기화 및 상태 관리 헬퍼 (Firestore로 대체됨) ---
-        // 이전 localStorage 값은 제거
-        localStorage.removeItem('youtubeApiKeys');
-        localStorage.removeItem('activeApiKeyName');
-        
-        const getActiveApiKey = (keys, activeName) => keys.find(k => k.name === activeName)?.key || '';
+        const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
+        const LOCAL_STORAGE_KEY = 'yt_analyzer_api_keys'; // Local Storage Key
 
-        // 상태 관리
-        window.state = {
-            channels: [],
-            categories: ['미분류'], // 사용자 정의 카테고리
-            categoryColors: {}, // { '카테고리명': 'bg-red-700', ... }
-            
-            // API Key 상태 (Firestore에서 로드)
-            apiKeys: [],
-            activeApiKeyName: '',
-            youtubeApiKey: '', // Derived active key
+        // UI/Data State
+        let allVideosData = []; 
+        let channelMetadata = null; 
+        let sortKey = 'publishedAt'; 
+        let sortDirection = 'desc'; 
+        let monthlyCalendarData = {}; 
+        let availableMonths = [];     
+        let currentCalendarDate = null; 
+        let currentFilterDate = null; 
 
-            currentSort: { key: 'subscribers', direction: 'desc' },
-            searchTerm: '',
-            categoryFilter: '전체',
-            // ytCategoryFilter 제거됨
-            isCategoryModalOpen: false,
-            isApiModalOpen: false, // API 모달 상태 추가
-            
-            // API 키 편집 상태
-            editingApiKey: { name: null, key: null, originalName: null },
-            
-            editingCategoryName: null,
-            editingCategoryNewName: '',
-            editingChannelMemoId: null,
-            editingChannelMemoValue: '',
-            
-            // -- New states for channel category selection --
-            editingChannelCategory: { id: null, current: null },
-            isChannelCategoryModalOpen: false,
+        // Filter State
+        let currentFilters = {
+            duration: ['short', 'mid', 'long'],
+            likeRating: [1, 2, 3, 4, 5],
+            commentRating: [1, 2, 3, 4, 5]
         };
         
-        // Firestore 업데이트 후 상태를 로컬에서 직접 업데이트하는 대신,
-        // Firestore 리스너를 통해 상태가 자동으로 업데이트되도록 합니다.
-        const updateApiStorage = async (newKeys, newActiveName) => {
-            const apiSettingsDocRef = doc(db, `artifacts/${appId}/public/data/api_settings`, 'keys');
-            try {
-                await setDoc(apiSettingsDocRef, {
-                    apiKeys: newKeys,
-                    activeApiKeyName: newActiveName
-                });
-            } catch (error) {
-                console.error("API 설정 Firestore 저장 오류:", error);
-                alertModal("오류", "API 설정 정보를 저장하는 데 실패했습니다.");
+        // ----------------------------------------------------
+        // FIREBASE CONFIG LOADER 
+        // ----------------------------------------------------
+
+        async function loadFirebaseConfig() {
+            // 1. Canvas 환경: 전역 변수 사용
+            if (typeof __firebase_config !== 'undefined' && __firebase_config.length > 2) { // 길이가 2 이상이면 JSON 객체가 유효하다고 간주
+                try {
+                    return JSON.parse(__firebase_config);
+                } catch (e) {
+                    console.error("Error parsing __firebase_config:", e);
+                    return {};
+                }
             }
-        };
 
-        // 카테고리 색상 매핑 보장 함수
-        const ensureCategoryColors = () => {
-            // 다양한 색상 팔레트를 준비합니다.
-            const palette = ['red', 'green', 'blue', 'yellow', 'purple', 'indigo', 'pink', 'teal'];
-            const colorClasses = palette.map(p => `bg-${p}-700`);
-            
-            const newColors = { ...window.state.categoryColors, '미분류': 'bg-gray-700' };
-            const usedColors = new Set(['bg-gray-700']);
-            let colorIndex = 0;
-
-            for (const cat of window.state.categories) {
-                if (cat === '미분류') continue;
-
-                if (!newColors[cat] || !usedColors.has(newColors[cat])) {
-                    // 새 카테고리이거나, 이전에 할당되었더라도 현재 팔레트에 없고 겹치지 않게 새로 할당
-                    let newColorClass = colorClasses[colorIndex % colorClasses.length];
-                    
-                    // 이미 할당된 색상이 있다면 인덱스를 증가시켜 다음 색상을 찾습니다.
-                    while (usedColors.has(newColorClass) && colorIndex < colorClasses.length * 2) { 
-                         colorIndex++;
-                         newColorClass = colorClasses[colorIndex % colorClasses.length];
-                    }
-                    
-                    newColors[cat] = newColorClass;
-                    usedColors.add(newColorClass);
-                    colorIndex++; // 다음 카테고리를 위해 인덱스 증가
+            // 2. GitHub/로컬 환경: firebase-config.json 파일 로드 시도
+            try {
+                console.log("Attempting to load firebase-config.json...");
+                const response = await fetch('./firebase-config.json');
+                
+                if (response.ok) {
+                    const config = await response.json();
+                    console.log("Successfully loaded local firebase config.");
+                    return config;
                 } else {
-                    // 기존 색상 유지
-                    usedColors.add(newColors[cat]);
+                    console.warn(`firebase-config.json not found (Status: ${response.status}). Falling back to Local Storage.`);
+                    return {};
+                }
+            } catch (e) {
+                console.error("Error fetching firebase-config.json:", e);
+                return {};
+            }
+        }
+
+        // ----------------------------------------------------
+        // FIREBASE AUTH & INIT (WITH FIXED ID/FALLBACK)
+        // ----------------------------------------------------
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (typeof window.setStatus === 'function') {
+                setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
+            }
+            
+            // 1. Firebase 설정 로드 (Canvas 또는 파일)
+            firebaseConfig = await loadFirebaseConfig();
+
+            if (Object.keys(firebaseConfig).length > 0 && typeof initializeApp === 'function') {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    if (typeof __firebase_config !== 'undefined' || initialAuthToken) {
+                        // --- Canvas Environment: Setup Realtime Listener ---
+                        onAuthStateChanged(auth, async (user) => {
+                            if (user) {
+                                masterUserId = user.uid;
+                                isFirebaseReady = true; 
+                                console.log("Firebase Initialized & Canvas User signed in:", masterUserId);
+                                
+                                // Set up REALTIME listener for Canvas environment
+                                const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+                                onSnapshot(keysCollectionRef, (snapshot) => {
+                                    const firebaseKeys = [];
+                                    let foundActiveKey = null;
+                                    snapshot.docs.forEach(doc => {
+                                        const data = doc.data();
+                                        firebaseKeys.push({ id: doc.id, ...data });
+                                        if (data.active) {
+                                            foundActiveKey = { name: doc.id, value: data.value };
+                                        }
+                                    });
+
+                                    renderApiKeyList(firebaseKeys);
+                                    
+                                    if (foundActiveKey) {
+                                        currentApiKey = foundActiveKey.value;
+                                        document.getElementById('activeApiKeyDisplay').value = `활성화: ${foundActiveKey.name}`;
+                                    } else if (currentApiKey) {
+                                        currentApiKey = '';
+                                        document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                                    }
+                                    console.log("Realtime keys updated via onSnapshot.");
+                                }, (error) => {
+                                    console.error("Realtime listener failed:", error);
+                                    setStatus("오류: Firestore 실시간 연결 실패.", true);
+                                });
+                                // Initial fetch handled by the listener's first execution.
+                            } else {
+                                try {
+                                    if (initialAuthToken) {
+                                        const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                                        masterUserId = userCredential.user.uid;
+                                        isFirebaseReady = true;
+                                        console.log("Canvas: Signed in with Custom Token.");
+                                    } else {
+                                        // 익명 로그인 시도 (Canvas 환경에서 토큰이 없거나 만료된 경우)
+                                        const userCredential = await signInAnonymously(auth);
+                                        masterUserId = userCredential.user.uid;
+                                        isFirebaseReady = true;
+                                        console.log("Canvas: Signed in Anonymously.");
+                                    }
+                                } catch (e) {
+                                    console.error("Canvas Sign-in failed:", e);
+                                    isFirebaseReady = false;
+                                    await fetchApiKeys(); // 로컬 폴백으로 전환
+                                }
+                            }
+                        });
+                    } else {
+                        // --- GitHub/Local Environment (Fixed ID): No Realtime Listener ---
+                        masterUserId = FIXED_GITHUB_USER_ID;
+                        isFirebaseReady = true;
+                        console.log("GitHub Config loaded. Using FIXED Master ID:", masterUserId);
+                        await fetchApiKeys(); // Perform initial fetch once (using getDocs inside fetchApiKeys)
+                    }
+
+                } catch (e) {
+                    console.error("Firebase initialization failed, falling back to Local Storage:", e);
+                    isFirebaseReady = false;
+                    await fetchApiKeys(); 
+                }
+            } else {
+                console.warn("Firebase config missing. Using Local Storage for keys.");
+                isFirebaseReady = false;
+                await fetchApiKeys(); 
+            }
+        });
+        
+        // ----------------------------------------------------
+        // API CALL HANDLERS
+        // ----------------------------------------------------
+
+        async function checkResponse(response) {
+            if (!response.ok) {
+                const errorBody = await response.json();
+                const errorMessage = errorBody.error ? errorBody.error.message : response.statusText;
+                throw new Error(`API 오류: ${response.status} - ${errorMessage}`);
+            }
+            return response.json();
+        }
+
+        async function fetchWithRetry(url, options = {}, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status !== 429) { 
+                        return response;
+                    }
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+            throw new Error("API 호출에 실패했습니다. 요청이 너무 많거나 네트워크 연결을 확인하세요.");
+        }
+
+
+        // ----------------------------------------------------
+        // FIREBASE & LOCAL STORAGE DATA FUNCTIONS
+        // ----------------------------------------------------
+
+        // Local Storage Helper Functions (Fallback for GitHub/Local)
+        function getLocalKeys() {
+            try {
+                const keysJson = localStorage.getItem(LOCAL_STORAGE_KEY);
+                return keysJson ? JSON.parse(keysJson) : [];
+            } catch (e) {
+                console.error("Error loading keys from local storage:", e);
+                return [];
+            }
+        }
+
+        function saveLocalKeys(keys) {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(keys));
+            } catch (e) {
+                console.error("Error saving keys to local storage:", e);
+                setStatus("경고: 로컬 저장소에 키를 저장할 수 없습니다.", true);
+            }
+        }
+        
+        async function saveApiKey(event) { 
+            if (event) event.stopPropagation(); 
+            
+            const keyName = document.getElementById('newKeyName').value.trim();
+            const keyValue = document.getElementById('newKeyValue').value.trim();
+
+            if (!keyName || !keyValue) {
+                setStatus('키 이름과 값을 모두 입력해주세요.', true);
+                return;
+            }
+            if (!keyValue.startsWith('AIza')) {
+                setStatus('유효하지 않은 YouTube API 키 형식입니다. (AIza로 시작해야 합니다)', true);
+                return;
+            }
+
+            try {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 저장
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await setDoc(keyRef, {
+                        name: keyName,
+                        value: keyValue,
+                        createdAt: new Date().toISOString(),
+                        active: false
+                    });
+                } else {
+                    // 2. Local Storage 저장 (Fallback)
+                    let keys = getLocalKeys();
+                    
+                    // 중복 키 이름 제거
+                    keys = keys.filter(k => k.id !== keyName);
+                    
+                    keys.push({
+                        id: keyName,
+                        name: keyName,
+                        value: keyValue,
+                        active: false
+                    });
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys); // Local storage는 수동 갱신
+                }
+
+                document.getElementById('newKeyName').value = '';
+                document.getElementById('newKeyValue').value = '';
+                setStatus(`✔️ API 키 "${keyName}"이 저장되었습니다.`, false);
+                await fetchApiKeys(); // FIX: 저장 후 목록을 다시 가져와서 강제 갱신
+            } catch (e) {
+                console.error("Error saving API key:", e);
+                setStatus('키 저장 중 오류 발생.', true);
+            }
+        }
+        window.saveApiKey = saveApiKey;
+
+        async function updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive) {
+             if (!newKeyName || !newKeyValue) {
+                setStatus('키 이름과 값을 모두 입력해주세요.', true);
+                return;
+            }
+
+            try {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 업데이트
+                    const oldKeyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', oldKeyName);
+                    
+                    if (oldKeyName !== newKeyName) {
+                        // 키 이름이 변경된 경우: 기존 문서 삭제 후 새 문서 생성
+                        await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', newKeyName), {
+                            name: newKeyName,
+                            value: newKeyValue,
+                            createdAt: new Date().toISOString(),
+                            active: isActive
+                        });
+                        await deleteDoc(oldKeyRef);
+                    } else {
+                        // 키 값만 변경된 경우: 기존 문서 업데이트
+                         await setDoc(oldKeyRef, {
+                            value: newKeyValue,
+                            active: isActive
+                        }, { merge: true });
+                    }
+                } else {
+                    // 2. Local Storage 업데이트 (Fallback)
+                    let keys = getLocalKeys();
+                    
+                    // 기존 키 제거
+                    keys = keys.filter(k => k.id !== oldKeyName);
+                    
+                    // 새 키 추가
+                    keys.push({
+                        id: newKeyName,
+                        name: newKeyName,
+                        value: newKeyValue,
+                        active: isActive
+                    });
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys);
+                }
+
+                setStatus(`✔️ API 키 "${newKeyName}"이 성공적으로 수정되었습니다.`, false);
+            } catch (e) {
+                console.error("Error updating API key:", e);
+                setStatus('키 수정 중 오류 발생.', true);
+            }
+        }
+        window.updateApiKey = updateApiKey;
+
+        function promptDeleteApiKey(keyName, event) { 
+            if (event) event.stopPropagation(); 
+
+            const modal = document.getElementById('deleteConfirmModal');
+            const keyNameSpan = document.getElementById('keyNameToDelete');
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+            keyNameSpan.textContent = keyName;
+            
+            confirmBtn.onclick = async () => {
+                await deleteApiKey(keyName);
+                modal.classList.add('hidden');
+            };
+
+            modal.classList.remove('hidden');
+        }
+        window.promptDeleteApiKey = promptDeleteApiKey;
+
+        async function deleteApiKey(keyName) {
+            try {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 삭제
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await deleteDoc(keyRef);
+                } else {
+                    // 2. Local Storage 삭제 (Fallback)
+                    let keys = getLocalKeys();
+                    keys = keys.filter(k => k.id !== keyName);
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys);
+                }
+
+                setStatus(`✔️ API 키 "${keyName}"이 삭제되었습니다.`, false);
+                await fetchApiKeys(); // FIX: 삭제 후 목록을 다시 가져와서 강제 갱신
+            } catch (e) {
+                console.error("Error deleting API key:", e);
+                setStatus('키 삭제 중 오류 발생.', true);
+            }
+        }
+        window.deleteApiKey = deleteApiKey;
+
+        async function setActiveKey(keyName, keyValue, event) { 
+            if (event) event.stopPropagation(); 
+            
+            try {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 활성화
+                    const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+                    const snapshot = await getDocs(keysCollectionRef);
+                    
+                    // Deactivate all existing keys (only necessary when updating via Firestore)
+                    snapshot.docs.forEach(async (d) => {
+                        if (d.id !== keyName) {
+                            await setDoc(d.ref, { active: false }, { merge: true });
+                        }
+                    });
+
+                    // Activate the selected key
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await setDoc(keyRef, { active: true }, { merge: true });
+                    
+                } else {
+                    // 2. Local Storage 활성화 (Fallback)
+                    let keys = getLocalKeys();
+                    keys = keys.map(k => ({ ...k, active: k.id === keyName }));
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys); // UI 갱신
+                }
+
+                // 3. Update active state
+                currentApiKey = keyValue;
+                document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
+                setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
+                document.getElementById('apiSettingsModal').classList.add('hidden');
+                await fetchApiKeys(); // FIX: 활성화 후 목록을 다시 가져와서 강제 갱신 (Firebase 동기화에 도움)
+            } catch (e) {
+                console.error("Error setting active key:", e);
+                setStatus('키 활성화 중 오류 발생.', true);
+            }
+        }
+        window.setActiveKey = setActiveKey;
+
+        async function fetchApiKeys() {
+            let keysData = [];
+            let activeKey = null;
+
+            if (isFirebaseReady && db && masterUserId) {
+                // Firebase: Use getDocs for one-time fetch (used for GitHub fixed ID and manual refresh)
+                const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+                try {
+                    const snapshot = await getDocs(keysCollectionRef);
+                    keysData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    activeKey = keysData.find(k => k.active);
+                } catch (e) {
+                    console.error("Firebase getDocs failed:", e);
+                    isFirebaseReady = false; 
                 }
             }
             
-            window.state.categoryColors = newColors;
-        };
+            // Local Storage 로드 (Firebase 실패 시 또는 비활성화 시)
+            if (!isFirebaseReady || keysData.length === 0) {
+                keysData = getLocalKeys();
+                activeKey = keysData.find(k => k.active);
+            }
 
-
-        // UI 업데이트 함수 (렌더링)
-        const render = () => {
-            if (!isAuthReady) return;
-
-            ensureCategoryColors(); // 카테고리가 변경될 때마다 색상 맵을 갱신
+            renderApiKeyList(keysData);
             
-            const { channels, categories, currentSort, searchTerm, categoryFilter } = window.state;
+            if (activeKey) {
+                currentApiKey = activeKey.value;
+                document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
+            } else {
+                currentApiKey = '';
+                document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+            }
+        }
+        window.fetchApiKeys = fetchApiKeys; // FIX: 전역 등록
 
-            // 1. 필터링
-            let filtered = channels.filter(channel => {
-                const searchMatch = searchTerm.toLowerCase();
+        function renderApiKeyList(keys) {
+            const listElement = document.getElementById('apiKeyList');
+            const countElement = document.getElementById('apiKeyCount');
+            const noKeysMessage = document.getElementById('noKeysMessage');
+
+            if(!listElement || !countElement || !noKeysMessage) return; // Safety check
+
+            listElement.innerHTML = '';
+            countElement.textContent = keys.length;
+
+            if (keys.length === 0) {
+                noKeysMessage.classList.remove('hidden');
+                return;
+            }
+            noKeysMessage.classList.add('hidden');
+
+            keys.forEach(key => {
+                const isActive = key.active;
+                const itemId = `key-item-${key.id}`;
                 
-                // 검색어 필터 (리스트에 보이는 모든 필드 포함)
-                // Date 객체를 문자열로 변환하여 검색 범위에 포함
-                const textContent = [
-                    channel.channelName,
-                    channel.note,
-                    channel.country,
-                    channel.customCategory,
-                    // channel.ytCategory 제거됨
-                    channel.subscribers ? channel.subscribers.toString() : '',
-                    channel.totalViews ? channel.totalViews.toString() : '',
-                    channel.totalVideos ? channel.totalVideos.toString() : '',
-                    channel.channelCreationDate ? new Date(channel.channelCreationDate).toLocaleDateString('ko-KR') : '',
-                    channel.oldestVideoPostDate ? new Date(channel.oldestVideoPostDate).toLocaleDateString('ko-KR') : '',
-                    channel.avgUploadFreqDays ? channel.avgUploadFreqDays.toString() : '',
-                    channel.avgViews90d ? channel.avgViews90d.toString() : '',
-                    channel.avgLikes90d ? channel.avgLikes90d.toString() : '',
-                    channel.avgComments90d ? channel.avgComments90d.toString() : '',
-                ].join(' ').toLowerCase();
+                const item = document.createElement('div');
+                item.id = itemId;
+                item.className = 'flex flex-col p-3 border rounded-lg bg-card-bg/50';
+                
+                // Read/View Mode
+                item.innerHTML = `
+                    <div class="flex justify-between items-center space-x-3">
+                        <div class="truncate flex-grow mr-4">
+                            <span class="text-sm font-semibold text-text-light">${key.name}</span>
+                            ${isActive ? '<span class="text-xs text-success-status ml-2">[활성]</span>' : ''}
+                        </div>
+                        <div class="flex space-x-2 flex-shrink-0">
+                            <button onclick="setActiveKey('${key.id}', '${key.value}', event)" class="py-1 px-3 text-xs rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
+                                ${isActive ? '활성화됨' : '활성화'}
+                            </button>
+                            <button onclick="enableEditMode('${key.id}', '${key.name}', '${key.value}', ${isActive}, event)" class="py-1 px-3 text-xs bg-text-light/10 text-text-light/80 rounded-lg hover:bg-text-light/20">
+                                편집
+                            </button>
+                            <button onclick="promptDeleteApiKey('${key.id}', event)" class="py-1 px-3 text-xs bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
+                                삭제
+                            </button>
+                        </div>
+                    </div>
+                `;
+                listElement.appendChild(item);
+            });
+        }
 
-                if (searchTerm && !textContent.includes(searchMatch)) return false;
+        function enableEditMode(oldKeyName, currentName, currentValue, isActive, event) { 
+            if (event) event.stopPropagation(); 
 
-                // 사용자 정의 카테고리 필터
-                if (categoryFilter !== '전체' && channel.customCategory !== categoryFilter) return false;
+            const itemElement = document.getElementById(`key-item-${oldKeyName}`);
+            if (!itemElement) return;
 
-                // 기존 YouTube 카테고리 필터 로직 제거
-                // if (ytCategoryFilter !== '전체' && channel.ytCategory !== ytCategoryFilter) return false;
+            itemElement.innerHTML = `
+                <div class="flex flex-col gap-2 p-2">
+                    <input type="text" id="edit-name-${oldKeyName}" value="${currentName}" placeholder="새 키 이름" class="p-2 rounded-lg bg-bg-dark border border-text-light/20 text-text-light font-semibold">
+                    <input type="password" id="edit-value-${oldKeyName}" value="${currentValue}" placeholder="새 API Key 값" class="p-2 rounded-lg bg-bg-dark border border-text-light/20 text-text-light">
+                </div>
+                <div class="flex justify-end space-x-2 mt-3">
+                    <button onclick="event.stopPropagation(); fetchApiKeys();" class="py-1 px-3 text-sm bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/80">
+                        취소
+                    </button>
+                    <button onclick="updateApiKeyAndRefresh('${oldKeyName}', document.getElementById('edit-name-${oldKeyName}').value, document.getElementById('edit-value-${oldKeyName}').value, ${isActive}, event)" 
+                            class="py-1 px-3 text-sm bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">
+                        저장
+                    </button>
+                </div>
+            `;
+        }
+        window.enableEditMode = enableEditMode;
+
+        async function updateApiKeyAndRefresh(oldKeyName, newKeyName, newKeyValue, isActive, event) { 
+            if (event) event.stopPropagation(); 
+            
+            await updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive);
+            // FIX: 수정 후 편집 모드 종료 및 UI 강제 갱신
+            await fetchApiKeys();
+            document.getElementById('apiSettingsModal').classList.add('hidden');
+        }
+        window.updateApiKeyAndRefresh = updateApiKeyAndRefresh;
+
+
+        // ----------------------------------------------------
+        // UTILITY FUNCTIONS (Non-Firebase)
+        // ----------------------------------------------------
+        
+        function toggleDescription(videoId) {
+            const descRow = document.getElementById(`desc-row-${videoId}`);
+            const icon = document.getElementById(`toggle-icon-${videoId}`);
+            
+            if (descRow.classList.contains('hidden')) {
+                descRow.classList.remove('hidden');
+                icon.classList.remove('rotate-0');
+                icon.classList.add('rotate-90');
+            } else {
+                descRow.classList.add('hidden');
+                icon.classList.remove('rotate-90');
+                icon.classList.add('rotate-0');
+            }
+        }
+        window.toggleDescription = toggleDescription; 
+
+        function openApiSettings(event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            document.getElementById('apiSettingsModal').classList.remove('hidden');
+        }
+        window.openApiSettings = openApiSettings;
+
+        function toggleFilterMenu() {
+            filterMenu.classList.toggle('hidden');
+        }
+        window.toggleFilterMenu = toggleFilterMenu;
+
+        function updateFilters() {
+            currentFilters.duration = Array.from(document.querySelectorAll('.filter-type:checked')).map(el => el.value);
+            currentFilters.likeRating = Array.from(document.querySelectorAll('.filter-like:checked')).map(el => parseInt(el.value));
+            currentFilters.commentRating = Array.from(document.querySelectorAll('.filter-comment:checked')).map(el => parseInt(el.value));
+            
+            renderVideoList();
+        }
+        window.updateFilters = updateFilters;
+
+        // 외부 클릭 시 필터 메뉴 닫기 (Firebase 블록 외부에서 정의)
+        document.addEventListener('click', function(event) {
+            // API Settings Modal Check
+            const modal = document.getElementById('apiSettingsModal');
+            if (modal && !modal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
+                // 모달 내부의 버튼들이 이미 stopPropagation을 호출하고 있으므로, 
+                // 모달 컨텐츠 외부를 클릭했을 때만 닫히도록 유지.
+                modal.classList.add('hidden');
+            }
+
+            // Delete Confirm Modal Check
+            const deleteModal = document.getElementById('deleteConfirmModal');
+            if (deleteModal && !deleteModal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
+                deleteModal.classList.add('hidden');
+            }
+
+            // Filter Menu Check
+            const filterToggleBtn = document.getElementById('filterToggleBtn');
+            const filterMenu = document.getElementById('filterMenu');
+            
+            if (filterMenu && !filterMenu.classList.contains('hidden')) {
+                if (!event.target.closest('#filterToggleBtn') && !event.target.closest('#filterMenu')) {
+                    filterMenu.classList.add('hidden');
+                }
+            }
+        });
+
+
+        function extractVideoId(input) {
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/;
+            const match = input.match(regex);
+            return match ? match[1] : null;
+        }
+
+        function extractChannelId(input) {
+            // FIX: /channel/UC... 뒤의 쿼리 매개변수를 안전하게 제거하도록 수정
+            const cleanedInput = input.split('?')[0].split('&')[0].trim();
+
+            const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
+            if (urlMatch && urlMatch[1]) {
+                return urlMatch[1];
+            }
+            
+            return cleanedInput;
+        }
+
+        function parseDurationToSeconds(isoDuration) {
+            if (!isoDuration) return 0;
+            const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+            const matches = isoDuration.match(regex);
+            if (!matches) return 0;
+
+            const parts = matches.slice(1).map(x => parseInt(x) || 0);
+            
+            const seconds = 
+                parts[4] * 3600 + // Hours
+                parts[5] * 60 +    // Minutes
+                parts[6];          // Seconds
+            
+            return seconds;
+        }
+
+        function formatTime(totalSeconds) {
+            if (totalSeconds === 0) return '0:00';
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+
+            let result = '';
+            if (h > 0) {
+                result += h + ':';
+                result += (m < 10 ? '0' : '') + m + ':';
+            } else {
+                result += m + ':';
+            }
+            result += (s < 10 ? '0' : '') + s;
+            
+            return result;
+        }
+
+        function classifyDuration(seconds) {
+            if (seconds <= 60) {
+                return '<span class="text-primary-accent">숏폼 (Short)</span>'; 
+            } else if (seconds < 180) {
+                return '<span class="text-text-light/80">미드폼 (Mid)</span>';
+            } else {
+                return '<span class="text-success-status">롱폼 (Long)</span>';
+            }
+        }
+        
+        function copyToClipboard(text, event) {
+            event.stopPropagation(); 
+            
+            const tempInput = document.createElement('input');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    setStatus('✔️ 링크가 클립보드에 복사되었습니다!', false);
+                } else {
+                    throw new Error('복사 실패');
+                }
+            } catch (err) {
+                setStatus('복사 실패: 브라우저 권한을 확인하세요.', true);
+            }
+            
+            document.body.removeChild(tempInput);
+        }
+        window.copyToClipboard = copyToClipboard; // FIX: 전역 등록
+
+        function calculateEngagementRatings(videos) {
+            if (videos.length === 0) return;
+
+            const likeRatios = [];
+            const commentRatios = [];
+
+            videos.forEach(video => {
+                const views = parseInt(video.viewCount || 0);
+                const likes = parseInt(video.likeCount || 0);
+                const comments = parseInt(video.commentCount || 0);
+
+                const likeRatio = views > 0 ? (likes / views) * 100 : 0;
+                const commentRatio = views > 0 ? (comments / views) * 100 : 0;
+
+                if (views > 0) { 
+                    likeRatios.push(likeRatio);
+                    commentRatios.push(commentRatio);
+                }
+                
+                video.likeRatio = likeRatio;
+                video.commentRatio = commentRatio;
+                video.likeRating = 1; 
+                video.commentRating = 1; 
+            });
+
+            if (likeRatios.length > 0) {
+                likeRatios.sort((a, b) => a - b);
+                const lLength = likeRatios.length;
+                const thresholds = [
+                    likeRatios[Math.floor(lLength * 0.2)] || 0,
+                    likeRatios[Math.floor(lLength * 0.4)] || 0,
+                    likeRatios[Math.floor(lLength * 0.6)] || 0,
+                    likeRatios[Math.floor(lLength * 0.8)] || 0
+                ];
+                
+                videos.forEach(video => {
+                    if (video.likeRatio >= thresholds[3]) video.likeRating = 5;
+                    else if (video.likeRatio >= thresholds[2]) video.likeRating = 4;
+                    else if (video.likeRatio >= thresholds[1]) video.likeRating = 3;
+                    else if (video.likeRatio >= thresholds[0]) video.likeRating = 2;
+                });
+            }
+
+            if (commentRatios.length > 0) {
+                commentRatios.sort((a, b) => a - b);
+                const cLength = commentRatios.length;
+                const thresholds = [
+                    commentRatios[Math.floor(cLength * 0.2)] || 0,
+                    commentRatios[Math.floor(cLength * 0.4)] || 0,
+                    commentRatios[Math.floor(cLength * 0.6)] || 0,
+                    commentRatios[Math.floor(cLength * 0.8)] || 0
+                ];
+                
+                videos.forEach(video => {
+                    if (video.commentRatio >= thresholds[3]) video.commentRating = 5;
+                    else if (video.commentRatio >= thresholds[2]) video.commentRating = 4;
+                    else if (video.commentRatio >= thresholds[1]) video.commentRating = 3;
+                    else if (video.commentRatio >= thresholds[0]) video.commentRating = 2;
+                });
+            }
+        }
+
+        function renderRatingStars(rating) {
+            let stars = '';
+            const fullStar = '★';
+            const emptyStar = '☆';
+            for (let i = 0; i < 5; i++) {
+                stars += `<span class="${i < rating ? 'text-warning-star' : 'text-gray-600'}">${fullStar}</span>`;
+            }
+            return stars;
+        }
+
+
+        function setStatus(message, isError = false) {
+            const statusElement = document.getElementById('statusMessage');
+            if(statusElement) {
+                statusElement.textContent = message;
+                statusElement.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            }
+        }
+        window.setStatus = setStatus; // FIX: setStatus를 window에 등록
+
+        function formatNumber(num) {
+            if (num === '0' || num === undefined || num === null || num === 'N/A') return 'N/A';
+            try {
+                return new Intl.NumberFormat('ko-KR').format(parseFloat(num));
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+        
+        function exportToCSV() {
+            if (allVideosData.length === 0 || !channelMetadata) {
+                setStatus('다운로드할 비디오 데이터가 없거나 채널 메타데이터를 찾을 수 없습니다.', true);
+                return;
+            }
+
+            const channelRows = [
+                ['--- 채널 메타데이터 ---'],
+                ['채널 이름', channelMetadata.title],
+                ['채널 ID', channelMetadata.id],
+                ['구독자 수', channelMetadata.subscribers],
+                ['총 조회수', channelMetadata.totalViews],
+                ['총 영상 수', channelMetadata.totalVideos],
+                ['소개', `"${(channelMetadata.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`],
+                ['채널 생성일', new Date(channelMetadata.publishedAt).toISOString()],
+                ['채널 국가', channelMetadata.country],
+                ['--- 비디오 데이터 ---']
+            ].map(row => row.join(','));
+
+
+            const videoHeader = ['제목', '비디오ID', '유튜브 링크', '게시일', '조회수', '좋아요', '댓글수', '좋아요 비율 (%)', '댓글 비율 (%)', '영상 길이 (초)', '폼 분류', '태그', '설명'];
+            
+            const csvRows = allVideosData.map(video => {
+                const tagsString = video.tags ? video.tags.join('|') : '';
+                const videoLink = `https://youtu.be/${video.videoId}`; 
+                
+                const rawCategory = video.durationCategory ? video.durationCategory.replace(/<[^>]*>?/gm, '').trim() : 'N/A';
+                
+                const escapedDescription = `"${(video.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`; 
+                
+                const values = [
+                    `"${video.title.replace(/"/g, '""')}"`, 
+                    video.videoId,
+                    videoLink,
+                    new Date(video.publishedAt).toISOString(),
+                    video.viewCount,
+                    video.likeCount,
+                    video.commentCount,
+                    video.likeRatio.toFixed(3),
+                    video.commentRatio.toFixed(3),
+                    video.durationSeconds,
+                    rawCategory,
+                    `"${tagsString.replace(/"/g, '""')}"`,
+                    escapedDescription 
+                ];
+                return values.join(',');
+            });
+
+            const csvContent = [
+                ...channelRows,
+                videoHeader.join(','),
+                ...csvRows
+            ].join('\n');
+
+            const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            const channelTitle = channelMetadata.title || 'YouTube_Analysis';
+            a.setAttribute('download', `${channelTitle}_비디오_분석_${new Date().toISOString().slice(0, 10)}.csv`);
+            a.click();
+            URL.revokeObjectURL(url);
+
+            setStatus('CSV 파일 다운로드가 시작되었습니다.', false);
+        }
+        window.exportToCSV = exportToCSV; // FIX: 전역 등록
+        
+        function generateUploadCalendarData(videos) {
+            const uploadCounts = {};
+            
+            videos.forEach(video => {
+                const publishedDate = new Date(video.publishedAt);
+                const dateKey = publishedDate.toISOString().slice(0, 10);
+                
+                if (!uploadCounts[dateKey]) {
+                    uploadCounts[dateKey] = 0;
+                }
+                uploadCounts[dateKey]++;
+            });
+
+            const monthlyData = {};
+            const availableMonthsSet = new Set();
+            
+            Object.keys(uploadCounts).forEach(dateKey => {
+                const monthKey = dateKey.slice(0, 7); // YYYY-MM
+                availableMonthsSet.add(monthKey);
+                
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = new Map();
+                }
+                monthlyData[monthKey].set(dateKey, uploadCounts[dateKey]);
+            });
+
+            availableMonths = Array.from(availableMonthsSet).sort((a, b) => b.localeCompare(a));
+            
+            return monthlyData;
+        }
+
+        function navigateCalendar(direction) {
+            if (!currentCalendarDate || availableMonths.length === 0) return;
+
+            const currentIndex = availableMonths.indexOf(currentCalendarDate);
+            let newIndex = currentIndex + direction; 
+            
+            if (newIndex >= 0 && newIndex < availableMonths.length) {
+                currentCalendarDate = availableMonths[newIndex];
+                renderCalendar(monthlyCalendarData);
+            }
+        }
+        window.navigateCalendar = navigateCalendar; // 전역 등록
+
+        function filterVideosByDate(dateKey, count, event) {
+            event.stopPropagation();
+            if (count === 0) {
+                setStatus(`선택하신 ${dateKey}에는 업로드된 영상이 없습니다.`, false);
+                return;
+            }
+            
+            currentFilterDate = dateKey;
+            
+            document.querySelectorAll('.calendar-cell').forEach(cell => {
+                cell.classList.remove('ring-2', 'ring-success-status');
+            });
+            event.currentTarget.classList.add('ring-2', 'ring-success-status');
+            
+            renderVideoList();
+            
+            resetFilterBtn.classList.remove('hidden');
+            setStatus(`${dateKey}에 업로드된 영상만 필터링합니다.`, false);
+        }
+        window.filterVideosByDate = filterVideosByDate; // 전역 등록
+
+        function resetVideoFilter() {
+            currentFilterDate = null;
+            resetFilterBtn.classList.add('hidden');
+            document.querySelectorAll('.calendar-cell').forEach(cell => {
+                cell.classList.remove('ring-2', 'ring-success-status');
+            });
+            renderVideoList();
+            setStatus('전체 영상 목록을 다시 표시합니다.', false);
+        }
+        window.resetVideoFilter = resetVideoFilter; // 전역 등록
+
+        function renderCalendar(fullMonthlyData) {
+            const container = calendarBodyElement;
+            const navHeader = calendarNavHeader;
+            container.innerHTML = '';
+            
+            if (Object.keys(fullMonthlyData).length === 0) {
+                navHeader.innerHTML = '';
+                container.innerHTML = `<div class="col-span-7 text-center py-4 text-text-light/50">데이터가 없습니다.</div>`;
+                return;
+            }
+            
+            if (!currentCalendarDate || !fullMonthlyData[currentCalendarDate]) {
+                currentCalendarDate = availableMonths[0]; 
+            }
+            
+            const dayData = fullMonthlyData[currentCalendarDate] || new Map();
+            const [year, month] = currentCalendarDate.split('-').map(Number);
+            const monthStr = String(month).padStart(2, '0');
+            
+            const currentIndex = availableMonths.indexOf(currentCalendarDate);
+            const hasPrev = currentIndex < availableMonths.length - 1; 
+            const hasNext = currentIndex > 0; 
+            
+            navHeader.innerHTML = `
+                <button onclick="navigateCalendar(1)" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1 bg-card-bg/50 border border-card-bg rounded-lg text-primary-accent hover:bg-primary-accent/10 disabled:text-text-light/30 disabled:hover:bg-card-bg/50 transition">
+                    &larr; 이전
+                </button>
+                <span class="text-lg font-bold text-text-light">${year}년 ${month}월</span>
+                <button onclick="navigateCalendar(-1)" ${!hasNext ? 'disabled' : ''} class="px-3 py-1 bg-card-bg/50 border border-card-bg rounded-lg text-primary-accent hover:bg-primary-accent/10 disabled:text-text-light/30 disabled:hover:bg-card-bg/50 transition">
+                    다음 &rarr;
+                </button>
+            `;
+
+            const firstDayOfMonth = new Date(year, month - 1, 1);
+            const firstDayOfWeek = firstDayOfMonth.getDay(); 
+            const lastDayOfMonth = new Date(year, month, 0).getDate(); 
+            
+            for (let i = 0; i < firstDayOfWeek; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-cell bg-card-bg/20 border-card-bg text-text-light/30';
+                emptyCell.textContent = '';
+                container.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= lastDayOfMonth; day++) {
+                const dateKey = `${year}-${monthStr}-${String(day).padStart(2, '0')}`;
+                const count = dayData.get(dateKey) || 0;
+
+                let bgColor = 'bg-card-bg/50';
+                let textColor = 'text-text-light/70';
+                let countColor = 'text-primary-accent';
+                let tooltip = `${dateKey} 업로드: ${count}개`;
+
+                if (count >= 3) {
+                    bgColor = 'bg-primary-accent'; 
+                    textColor = 'text-white';
+                    countColor = 'text-white';
+                } else if (count > 0) {
+                    const intensity = Math.min(count, 5);
+                    const opacity = 0.5 + intensity * 0.1; 
+                    bgColor = `bg-primary-accent/${Math.round(opacity * 100)}`;
+                    textColor = 'text-text-light';
+                    countColor = 'text-text-light';
+                }
+                
+                const cell = document.createElement('div');
+                const fontWeight = count >= 3 ? 'font-extrabold' : '';
+                cell.className = `calendar-cell ${bgColor} ${textColor} ${fontWeight} hover:shadow-lg hover:ring-2 ring-success-status/50 transition-all`;
+                cell.title = tooltip;
+                cell.onclick = (e) => filterVideosByDate(dateKey, count, e); 
+
+                const daySpan = document.createElement('span');
+                daySpan.className = 'font-bold leading-none';
+                daySpan.textContent = day;
+                cell.appendChild(daySpan);
+
+                if (count > 0) {
+                    const countSpan = document.createElement('span');
+                    countSpan.className = `text-xs leading-none mt-1 ${countColor}`;
+                    countSpan.textContent = `${count}개`;
+                    cell.appendChild(countSpan);
+                } else {
+                    const countSpan = document.createElement('span');
+                    countSpan.className = 'text-xs leading-none mt-1 text-text-light/30';
+                    countSpan.textContent = '-';
+                    cell.appendChild(countSpan);
+                }
+                
+                if (currentFilterDate === dateKey) {
+                    cell.classList.add('ring-2', 'ring-success-status');
+                    resetFilterBtn.classList.remove('hidden');
+                }
+
+                container.appendChild(cell);
+            }
+        }
+
+        function sortVideos(videosToSort) {
+            const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+            const currentSortKey = document.getElementById('sortBy').value; 
+
+            videosToSort.sort((a, b) => {
+                let valA, valB;
+
+                if (currentSortKey === 'publishedAt') {
+                    valA = new Date(a[currentSortKey] || 0); 
+                    valB = new Date(b[currentSortKey] || 0);
+                } else if (currentSortKey === 'durationSeconds' || currentSortKey === 'likeRatio' || currentSortKey === 'commentRatio') {
+                    valA = a[currentSortKey] || 0;
+                    valB = b[currentSortKey] || 0;
+                } else {
+                    valA = parseInt(a[currentSortKey] || 0, 10);
+                    valB = parseInt(b[currentSortKey] || 0, 10);
+                }
+
+                if (valA < valB) return -1 * directionMultiplier;
+                if (valA > valB) return 1 * directionMultiplier;
+                return 0;
+            });
+        }
+
+        // 정렬 방향 토글
+        function toggleSortDirection() {
+            sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
+            const sortDirectionText = document.getElementById('sortDirectionText');
+            const sortIcon = document.getElementById('sortIcon');
+            
+            if (sortDirection === 'desc') {
+                if(sortDirectionText) sortDirectionText.textContent = '내림차순';
+                if(sortIcon) sortIcon.classList.add('rotate-180');
+            } else {
+                if(sortDirectionText) sortDirectionText.textContent = '오름차순';
+                if(sortIcon) sortIcon.classList.remove('rotate-180');
+            }
+            renderVideoList();
+        }
+        window.toggleSortDirection = toggleSortDirection; // 전역 등록
+
+        function renderVideoList() {
+            videoListTableBody.innerHTML = '';
+            
+            // 1. 전체 데이터에서 필터링
+            let displayList = allVideosData.filter(video => {
+                // (1) 날짜 필터 (캘린더)
+                if (currentFilterDate && !video.publishedAt.startsWith(currentFilterDate)) {
+                    return false;
+                }
+
+                // (2) 속성 필터 (체크박스)
+                // - 분류 필터
+                let type = '';
+                if (video.durationSeconds <= 60) type = 'short';
+                else if (video.durationSeconds < 180) type = 'mid';
+                else type = 'long';
+                
+                if (!currentFilters.duration.includes(type)) return false;
+
+                // - L/V 등급 필터
+                if (!currentFilters.likeRating.includes(video.likeRating)) return false;
+
+                // - C/V 등급 필터
+                if (!currentFilters.commentRating.includes(video.commentRating)) return false;
 
                 return true;
             });
 
-            // 2. 정렬
-            filtered.sort((a, b) => {
-                const aVal = a[currentSort.key];
-                const bVal = b[currentSort.key];
+            // 2. 필터된 목록 정렬 (오름차순/내림차순 반영)
+            sortVideos(displayList);
 
-                let comparison = 0;
-                if (aVal > bVal) comparison = 1;
-                else if (aVal < bVal) comparison = -1;
+            totalVideosCount.textContent = formatNumber(displayList.length);
 
-                return currentSort.direction === 'asc' ? comparison : comparison * -1;
-            });
-
-            // 3. UI 렌더링
-            renderTable(filtered);
-            renderFilters(channels, categories);
-            renderCategoryModal();
-            renderApiSettingsModal(); // API 모달 렌더링 추가
-            renderChannelCategorySelectionModal(); // 새 채널 카테고리 선택 모달 렌더링 추가
-        };
-
-        // 경과 시간 계산 헬퍼 함수
-        const calculateElapsedTime = (dateString) => {
-            if (!dateString) return 'N/A';
-            const now = new Date();
-            const start = new Date(dateString);
-            const diffTime = Math.abs(now - start);
-            const diffYears = now.getFullYear() - start.getFullYear();
-            const diffMonths = now.getMonth() - start.getMonth();
-            
-            let totalMonths = diffYears * 12 + diffMonths;
-            if (now.getDate() < start.getDate()) {
-                totalMonths--;
+            if (displayList.length === 0) {
+                noVideosMessage.classList.remove('hidden');
+                downloadCsvBtn.disabled = true;
+                return;
             }
+            noVideosMessage.classList.add('hidden');
+            downloadCsvBtn.disabled = false;
 
-            const years = Math.floor(totalMonths / 12);
-            const months = totalMonths % 12;
+            // window.copyToClipboard, window.toggleDescription 등은 이미 전역 등록되어 있음
 
-            return `${years}년 ${months}개월`;
-        };
-        
-        // 업로드 주기 표시 헬퍼 함수
-        const formatUploadFrequency = (avgDays, totalVideos) => {
-            if (!avgDays || totalVideos <= 0 || isNaN(parseFloat(avgDays))) return 'N/A';
-            
-            const numAvgDays = parseFloat(avgDays);
-            
-            // 평균 업로드 주기(일)이 1일 미만인 경우 (예: 0.5일) 처리
-            if (numAvgDays < 1) {
-                const freq = (1 / numAvgDays).toFixed(1);
-                return `1일당 ${freq}개`;
-            }
-
-            const days = Math.round(numAvgDays);
-            return `${days}일당 1개`;
-        };
-
-
-        const renderTable = (channels) => {
-            const tbody = document.getElementById('channel-list');
-            if (!tbody) return;
-            tbody.innerHTML = channels.map(channel => {
-                // 구독자수, 조회수 등 숫자는 포맷팅
-                const formatNumber = (num) => num ? num.toLocaleString('ko-KR') : 'N/A';
-
-                // D-day 계산 (가장 오래된 영상 게시일로부터)
-                const oldestVideoDate = channel.oldestVideoPostDate ? new Date(channel.oldestVideoPostDate) : null;
-                const dDay = oldestVideoDate ? Math.floor((new Date() - oldestVideoDate) / (1000 * 60 * 60 * 24)) : 'N/A';
+            displayList.forEach((video, index) => {
+                const videoId = video.videoId;
+                const videoUrl = `https://youtu.be/${videoId}`;
                 
-                // 카테고리 색상
-                const categoryColorClass = window.state.categoryColors[channel.customCategory] || 'bg-gray-700';
+                const mainRow = document.createElement('tr');
+                mainRow.className = 'hover:bg-card-bg/70 transition duration-150 cursor-pointer md:align-middle'; 
+                mainRow.setAttribute('onclick', `toggleDescription('${videoId}')`); 
 
-                // 채널 경과 시간 계산
-                const elapsedTime = calculateElapsedTime(channel.channelCreationDate);
+                const tagsDisplay = video.tags && video.tags.length > 0
+                    ? video.tags.map(tag => `<span class="inline-block bg-primary-accent/30 text-primary-accent text-xs font-medium mr-1 mb-1 px-1.5 py-0.5 rounded-full">${tag}</span>`).join('')
+                    : '<span class="text-text-light/50">-</span>';
                 
-                // 평균 업로드 주기 포맷팅
-                const uploadFreqText = formatUploadFrequency(channel.avgUploadFreqDays, channel.totalVideos);
+                const formattedDuration = formatTime(video.durationSeconds);
+                const durationCategory = video.durationCategory;
 
 
-                // 테이블 로우 HTML 생성
-                return `
-                    <tr class="border-b border-gray-700 hover:bg-gray-800 transition duration-150">
-                        <!-- 채널 프로필 아이콘 (분리된 열) -->
-                        <td class="p-2 whitespace-nowrap">
-                            <img src="${channel.profileIconUrl}" alt="Profile" onerror="this.onerror=null;this.src='https://placehold.co/40x40/374151/f3f4f6?text=C'" class="w-8 h-8 rounded-full object-cover">
-                        </td>
-                        <!-- 채널명 -->
-                        <td class="p-2 font-medium">
-                            <a href="${channel.channelUrl}" target="_blank" class="text-indigo-400 hover:text-indigo-300 transition">${channel.channelName}</a>
-                        </td>
-                        <!-- 채널링크 복사 버튼 (초록색) -->
-                        <td class="p-2">
-                            <button onclick="window.copyToClipboard('${channel.channelUrl}')" class="bg-green-700 hover:bg-green-600 text-white font-bold py-1 px-2 rounded-lg transition duration-200 shadow-md flex items-center" title="링크 복사">
-                                <i data-lucide="copy" class="w-4 h-4"></i>
-                            </button>
-                        </td>
-                        <!-- 카테고리 (사용자 정의) - 버튼 클릭 시 모달 열기 -->
-                        <td class="p-2 whitespace-nowrap">
-                            <div class="flex items-center space-x-2">
-                                <span onclick="window.startCategorySelection('${channel.id}', '${channel.customCategory}')"
-                                    class="px-2 py-1 rounded-full text-xs font-semibold text-white ${categoryColorClass} cursor-pointer hover:opacity-80 transition duration-150">
-                                    ${channel.customCategory}
-                                </span>
-                            </div>
-                        </td>
-                        <!-- 국가 -->
-                        <td class="p-2 whitespace-nowrap">${channel.country || 'N/A'}</td>
-                        <!-- 비고(메모) -->
-                        <td class="p-2 min-w-40">
-                            <span id="memo-display-${channel.id}" 
-                                onclick="window.startMemoEdit('${channel.id}', '${(channel.note || '').replace(/'/g, "\\'")}')" 
-                                class="cursor-pointer hover:bg-gray-700 rounded-md p-1 block">
-                                ${channel.note || '메모 추가...'}
-                            </span>
-                        </td>
-                        <!-- 구독자 수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.subscribers)}</td>
-                        <!-- 총 조회수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.totalViews)}</td>
-                        <!-- 총 영상수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.totalVideos)}</td>
-                        <!-- 채널 생성일 -->
-                        <td class="p-2 whitespace-nowrap">${channel.channelCreationDate ? new Date(channel.channelCreationDate).toLocaleDateString('ko-KR') : 'N/A'}</td>
-                        <!-- 채널 경과 시간 (새로 추가) -->
-                        <td class="p-2 whitespace-nowrap text-gray-400">${elapsedTime}</td>
-                        <!-- 평균 업로드 주기 -->
-                        <td class="p-2 whitespace-nowrap">${uploadFreqText}</td>
-                        <!-- 90일 평균 조회수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.avgViews90d)}</td>
-                        <!-- 90일 평균 좋아요 수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.avgLikes90d)}</td>
-                        <!-- 16. 90일 평균 댓글 수 -->
-                        <td class="p-2 whitespace-nowrap">${formatNumber(channel.avgComments90d)}</td>
-                        <!-- 삭제 버튼 -->
-                        <td class="p-2">
-                             <button onclick="window.deleteChannel('${channel.id}')" class="text-red-400 hover:text-red-500 transition" title="채널 삭제">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                            </button>
-                        </td>
-                    </tr>
+                mainRow.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/70 hidden md:table-cell text-center align-middle">${index + 1}</td>
+                    
+                    <!-- 썸네일 컬럼 제거됨 -->
+
+                    <td class="px-3 py-3 text-sm font-medium text-text-light truncate max-w-xs sm:max-w-md flex items-center space-x-2">
+                        <a href="${videoUrl}" target="_blank" onclick="event.stopPropagation()" class="hover:text-primary-accent transition block flex-grow truncate">${video.title}</a>
+                        <button class="text-success-status hover:text-primary-accent transition duration-150 flex-shrink-0 mr-2" title="링크 복사" 
+                                onclick="copyToClipboard('${videoUrl}', event)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
+                                <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2h2V5a2 2 0 012-2h6a2 2 0 00-2-2H5z" />
+                            </svg>
+                        </button>
+                        <button class="text-primary-accent hover:text-success-status transition duration-150 flex-shrink-0" title="설명 보기/숨기기" onclick="event.stopPropagation(); toggleDescription('${videoId}')">
+                            <svg id="toggle-icon-${videoId}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-0 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/70 text-right md:text-center align-middle">${new Date(video.publishedAt).toLocaleDateString('ko-KR')}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-success-status font-bold text-right md:text-center align-middle">${formatNumber(video.viewCount)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden sm:table-cell align-middle">${formattedDuration}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden md:table-cell align-middle">${durationCategory}</td>
+                    
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden sm:table-cell align-middle" title="조회수 대비 좋아요 비율: ${video.likeRatio.toFixed(3)}%">
+                        ${renderRatingStars(video.likeRating)}
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden md:table-cell align-middle" title="조회수 대비 댓글 비율: ${video.commentRatio.toFixed(3)}%">
+                        ${renderRatingStars(video.commentRating)}
+                    </td>
+                    
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden lg:table-cell align-middle">${formatNumber(video.likeCount)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-text-light/80 text-right md:text-center hidden xl:table-cell align-middle">${formatNumber(video.commentCount)}</td>
+                    <td class="px-3 py-3 text-sm text-text-light/70 hidden 2xl:table-cell align-middle">${tagsDisplay}</td>
                 `;
-            }).join('') || '<tr><td colspan="15" class="p-4 text-center text-gray-400">등록된 채널이 없습니다.</td></tr>'; // colspan 조정
-            
-            // Lucide 아이콘 다시 렌더링
-            lucide.createIcons();
-        };
-
-        const renderFilters = (channels, categories) => {
-            const filterContainer = document.getElementById('filter-container');
-            if (!filterContainer) return;
-
-            // 중복 없는 YouTube 카테고리 목록 생성 (사용되지 않음: ytCategories)
-            // const ytCategories = [...new Set(channels.map(c => c.ytCategory).filter(c => c))].sort();
-
-            const customCategorySelect = document.getElementById('category-filter-select');
-            const ytCategorySelect = document.getElementById('yt-category-filter-select'); // 이 요소를 제거하는 대신 숨김
-
-            // 사용자 정의 카테고리 필터 업데이트
-            customCategorySelect.innerHTML = `<option value="전체">전체 카테고리</option>` + categories.map(cat => 
-                `<option value="${cat}" ${window.state.categoryFilter === cat ? 'selected' : ''}>${cat}</option>`
-            ).join('');
-
-            // YouTube 카테고리 필터 업데이트 (제거됨, UI에서 숨김)
-            if (ytCategorySelect) {
-                // 이전에 렌더링되던 YouTube 카테고리 필터 관련 로직 제거
-                // ytCategorySelect.innerHTML = `<option value="전체">전체 유튜브 카테고리</option>` + ytCategories.map(cat => 
-                //     `<option value="${cat}" ${window.state.ytCategoryFilter === cat ? 'selected' : ''}>${cat}</option>`
-                // ).join('');
-            }
-        };
-
-        const renderCategoryModal = () => {
-            const modal = document.getElementById('category-modal');
-            if (!modal) return;
-            modal.classList.toggle('hidden', !window.state.isCategoryModalOpen);
-
-            if (window.state.isCategoryModalOpen) {
-                const list = document.getElementById('category-list-body');
-                list.innerHTML = window.state.categories.map(cat => {
-                    const colorClass = window.state.categoryColors[cat] || 'bg-gray-700';
-                    return `
-                        <li class="flex justify-between items-center p-2 border-b border-gray-700 last:border-b-0 hover:bg-gray-800 rounded-md">
-                            <span id="cat-name-${cat}" class="font-medium flex items-center space-x-2">
-                                <span class="px-2 py-1 rounded-full text-xs font-semibold text-white ${colorClass}">${cat}</span>
-                            </span>
-                            <div class="flex space-x-2">
-                                <button onclick="window.startCategoryEdit('${cat}')" class="text-indigo-400 hover:text-indigo-300 transition" title="이름 편집">
-                                    <i data-lucide="pencil" class="w-4 h-4"></i>
-                                </button>
-                                <button onclick="window.deleteCategory('${cat}')" class="text-red-400 hover:text-red-500 transition" title="삭제">
-                                    <i data-lucide="x" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        </li>
-                        ${window.state.editingCategoryName === cat ? `
-                            <li class="p-2 flex space-x-2 bg-gray-700 rounded-b-md mb-2">
-                                <input type="text" id="edit-cat-input" value="${window.state.editingCategoryNewName}" 
-                                    class="flex-grow bg-gray-800 text-gray-100 border border-indigo-500 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
-                                <button onclick="window.saveCategoryEdit()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg text-sm transition">저장</button>
-                                <button onclick="window.cancelCategoryEdit()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition">취소</button>
-                            </li>
-                        ` : ''}
-                    `;
-                }).join('');
-                lucide.createIcons();
-            }
-        };
-
-        const renderApiSettingsModal = () => {
-            const modal = document.getElementById('api-settings-modal');
-            if (!modal) return;
-            modal.classList.toggle('hidden', !window.state.isApiModalOpen);
-            
-            if (window.state.isApiModalOpen) {
-                 const { apiKeys, activeApiKeyName, editingApiKey } = window.state;
-                 const list = document.getElementById('api-key-list-body');
-
-                 list.innerHTML = apiKeys.map(item => {
-                    const isEditing = editingApiKey.originalName === item.name;
-                    const isActive = activeApiKeyName === item.name;
-
-                    if (isEditing) {
-                        return `
-                            <li class="p-3 border-b border-gray-700 bg-gray-700 rounded-lg mb-2">
-                                <div class="space-y-3">
-                                    <h5 class="text-sm font-semibold text-indigo-300">키 편집: ${item.name}</h5>
-                                    <input type="text" id="edit-api-name" value="${editingApiKey.name}" placeholder="새 키 이름"
-                                           class="w-full bg-gray-800 text-gray-100 border border-indigo-500 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
-                                    <textarea id="edit-api-key" rows="2" placeholder="새 API 키 값"
-                                              class="w-full bg-gray-800 text-gray-100 border border-indigo-500 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">${editingApiKey.key}</textarea>
-                                    <div class="flex justify-end space-x-2">
-                                        <button onclick="window.cancelEditApiKey()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition">취소</button>
-                                        <button onclick="window.saveEditApiKey()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg text-sm transition">저장</button>
-                                    </div>
-                                </div>
-                            </li>
-                        `;
-                    }
-                    
-                    return `
-                        <li class="flex justify-between items-center p-3 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 rounded-md transition duration-150 ${isActive ? 'bg-indigo-900/50 border border-indigo-500' : ''}">
-                            <div class="flex items-center space-x-3">
-                                <input type="radio" name="active_key" value="${item.name}" 
-                                    id="key-radio-${item.name}" 
-                                    onchange="window.selectApiKey('${item.name}')"
-                                    ${isActive ? 'checked' : ''}
-                                    class="form-radio h-4 w-4 text-indigo-500 bg-gray-600 border-gray-500 focus:ring-indigo-500 cursor-pointer">
-                                <label for="key-radio-${item.name}" class="font-medium cursor-pointer" title="${item.key}">
-                                    ${item.name} 
-                                    <span class="text-xs text-gray-400 ml-2">(${item.key.substring(0, 4)}...${item.key.substring(item.key.length - 4)})</span>
-                                </label>
-                                ${isActive ? '<span class="text-xs text-indigo-400 border border-indigo-400 px-1 rounded-full">활성</span>' : ''}
-                            </div>
-                            <div class="flex space-x-2">
-                                <button onclick="window.startEditApiKey('${item.name}')" class="text-gray-400 hover:text-indigo-400 transition" title="편집">
-                                    <i data-lucide="pencil" class="w-4 h-4"></i>
-                                </button>
-                                <button onclick="window.deleteApiKey('${item.name}')" class="text-red-400 hover:text-red-500 transition" title="삭제">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        </li>
-                    `;
-                 }).join('') || '<li class="p-3 text-center text-gray-400">저장된 API 키가 없습니다.</li>';
-                 lucide.createIcons();
-            }
-        };
-
-        const renderChannelCategorySelectionModal = () => {
-            const modal = document.getElementById('channel-category-selection-modal');
-            if (!modal) return;
-            modal.classList.toggle('hidden', !window.state.isChannelCategoryModalOpen);
-
-            if (window.state.isChannelCategoryModalOpen) {
-                const { id, current } = window.state.editingChannelCategory;
-                const channel = window.state.channels.find(c => c.id === id);
-                if (!channel) return;
+                videoListTableBody.appendChild(mainRow);
                 
-                document.getElementById('channel-category-title').textContent = `${channel.channelName} 채널 카테고리 변경`;
-                
-                const list = document.getElementById('channel-category-list');
-                list.innerHTML = window.state.categories.map(cat => {
-                    const colorClass = window.state.categoryColors[cat] || 'bg-gray-700';
-                    return `
-                        <li class="p-3 hover:bg-gray-700/70 rounded-lg cursor-pointer flex items-center space-x-3 transition duration-150">
-                            <input type="radio" name="new_category_select" id="cat-select-${cat}" value="${cat}"
-                                ${current === cat ? 'checked' : ''}
-                                class="form-radio h-4 w-4 text-indigo-500 bg-gray-600 border-gray-500 focus:ring-indigo-500 cursor-pointer">
-                            <label for="cat-select-${cat}" class="flex items-center space-x-2 font-medium w-full cursor-pointer">
-                                <span class="px-2 py-1 rounded-full text-xs font-semibold text-white ${colorClass}">${cat}</span>
-                            </label>
-                        </li>
-                    `;
-                }).join('');
-                
-                // 모달이 열릴 때 Enter 키 리스너 등록
-                document.getElementById('channel-category-selection-modal').addEventListener('keydown', handleEnterKeyInModal);
-            } else {
-                 // 모달이 닫힐 때 Enter 키 리스너 제거
-                document.getElementById('channel-category-selection-modal').removeEventListener('keydown', handleEnterKeyInModal);
-            }
-        };
-
-        const handleEnterKeyInModal = (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                window.saveChannelCategorySelection();
-            }
-        };
-
-
-        const renderMemoModal = () => {
-             const modal = document.getElementById('memo-modal');
-            if (!modal) return;
-            modal.classList.toggle('hidden', !window.state.editingChannelMemoId);
-
-            if (window.state.editingChannelMemoId) {
-                document.getElementById('memo-input').value = window.state.editingChannelMemoValue;
-                // 포커스 설정
-                setTimeout(() => document.getElementById('memo-input').focus(), 100);
-            }
-        }
-        
-        window.render = render; // 전역 노출
-
-        // --- Firebase CRUD Functions ---
-
-        // Firebase 초기화 및 인증
-        const setupFirebase = async () => {
-            let config = firebaseConfig; // Tries to use injected config first
-            const loadingElement = document.getElementById('initial-loading');
-
-            // Canvas 환경 외부에서 실행될 경우 config가 null/undefined일 수 있습니다.
-            if (!config) {
-                try {
-                    loadingElement.textContent = "GitHub 환경 감지: firebase-config.json 파일을 로드 중...";
-                    const response = await fetch('firebase-config.json');
-                    
-                    if (response.ok) {
-                        config = await response.json();
-                    } else {
-                         throw new Error(`Failed to load firebase-config.json. Status: ${response.status}`);
-                    }
-                } catch (error) {
-                    console.error("Firebase config 로드 오류:", error);
-                    loadingElement.textContent = "오류: Firebase 설정 파일(firebase-config.json)을 로드할 수 없습니다. 파일을 확인하거나 Canvas 환경에서 실행하세요.";
-                    return;
-                }
-            }
-
-
-            // 최종적으로 config가 없으면 종료
-            if (!config) {
-                console.error("Firebase config is not available.");
-                loadingElement.textContent = "Firebase 설정이 필요합니다.";
-                return;
-            }
-
-            try {
-                // setLogLevel('debug'); // 디버그 로그 활성화
-                app = initializeApp(config);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // 인증 처리 (익명 로그인 또는 커스텀 토큰 로그인)
-                await new Promise(resolve => {
-                    onAuthStateChanged(auth, async (user) => {
-                        if (!user) {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } else {
-                                await signInAnonymously(auth);
-                            }
-                        }
-                        isAuthReady = true;
-                        resolve();
-                    });
-                });
-
-                // Firebase 설정 완료 메시지 제거 (요청 반영)
-                loadingElement.classList.add('hidden');
-                
-                // Firestore 리스너 설정
-                setupListeners();
-
-            } catch (error) {
-                console.error("Firebase 초기화 또는 인증 오류:", error);
-                loadingElement.textContent = `초기화 오류: ${error.message}`;
-                loadingElement.classList.remove('hidden');
-            }
-        };
-
-        // 데이터 리스너 설정
-        const setupListeners = () => {
-            if (!isAuthReady) return;
-
-            // 1. 채널 목록 리스너: 공개(Public) 경로를 사용합니다.
-            const channelsCollection = collection(db, `artifacts/${appId}/public/data/channels`);
-            onSnapshot(channelsCollection, (snapshot) => {
-                window.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                render();
-            }, (error) => {
-                console.error("채널 데이터 리스너 오류:", error);
+                const descRow = document.createElement('tr');
+                descRow.id = `desc-row-${videoId}`;
+                descRow.classList.add('hidden', 'bg-card-bg/50');
+                descRow.innerHTML = `
+                    <td colspan="11" class="p-4 text-sm text-text-light/80 border-t border-bg-dark">
+                        <h4 class="font-bold text-primary-accent mb-2">설명:</h4>
+                        <pre class="whitespace-pre-wrap font-sans text-xs">${video.description || '설명 내용이 없습니다.'}</pre>
+                    </td>
+                `;
+                videoListTableBody.appendChild(descRow);
             });
+        }
+        window.renderVideoList = renderVideoList; // 전역 등록
+        
+        function renderShortsPreview() {
+            const sortBy = shortsSortBy ? shortsSortBy.value : 'publishedAt';
+            const contentDiv = document.getElementById('shortsContent');
+            const shortsContainer = document.getElementById('shortsContainer');
+            const leftBtn = document.getElementById('shortsLeftBtn');
+            const rightBtn = document.getElementById('shortsRightBtn');
+            
+            if (!contentDiv || !shortsContainer) return;
 
-            // 2. 카테고리 목록 리스너 (단일 문서): 공개(Public) 경로를 사용합니다.
-            const categoriesDocRef = doc(db, `artifacts/${appId}/public/data/categories`, 'customCategories');
-            onSnapshot(categoriesDocRef, (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    window.state.categories = docSnapshot.data().names || ['미분류'];
+            let shorts = allVideosData
+                .filter(video => video.durationSeconds <= 60);
+
+            shorts.sort((a, b) => {
+                let valA, valB;
+
+                if (sortBy === 'publishedAt') {
+                    valA = new Date(a.publishedAt);
+                    valB = new Date(b.publishedAt);
+                    return valB - valA; 
                 } else {
-                    // 문서가 없으면 기본값으로 생성
-                    setDoc(categoriesDocRef, { names: ['미분류'] });
-                    window.state.categories = ['미분류'];
+                    valA = parseInt(a[sortBy] || 0, 10);
+                    valB = parseInt(b[sortBy] || 0, 10);
+                    return valB - valA; 
                 }
-                render();
-            }, (error) => {
-                console.error("카테고리 데이터 리스너 오류:", error);
-            });
-            
-            // 3. API 설정 리스너 (새로 추가): 공개(Public) 경로를 사용합니다.
-            const apiSettingsDocRef = doc(db, `artifacts/${appId}/public/data/api_settings`, 'keys');
-            onSnapshot(apiSettingsDocRef, (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    const data = docSnapshot.data();
-                    window.state.apiKeys = data.apiKeys || [];
-                    window.state.activeApiKeyName = data.activeApiKeyName || '';
-                    window.state.youtubeApiKey = getActiveApiKey(window.state.apiKeys, window.state.activeApiKeyName);
-                } else {
-                    // 문서가 없으면 기본값으로 생성
-                    setDoc(apiSettingsDocRef, { apiKeys: [], activeApiKeyName: '' });
-                    window.state.apiKeys = [];
-                    window.state.activeApiKeyName = '';
-                    window.state.youtubeApiKey = '';
-                }
-                render();
-            }, (error) => {
-                console.error("API 설정 데이터 리스너 오류:", error);
-            });
-        };
-
-        // --- YouTube Data API Implementation ---
-        const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
-        const DAYS_90 = 90 * 24 * 60 * 60 * 1000;
-        const RETRY_COUNT = 3;
-        
-        // Fetcher utility with exponential backoff
-        async function fetchWithBackoff(url, retries = RETRY_COUNT) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ message: response.statusText }));
-                        if (response.status === 403 || response.status === 429) {
-                             // Quota or Permission error
-                             throw new Error(`YouTube API Error (${response.status}): ${errorData.error.message || errorData.message}`);
-                        }
-                        throw new Error(`API Request Failed: ${response.status} ${response.statusText}`);
-                    }
-                    return response.json();
-                } catch (error) {
-                    if (i === retries - 1) throw error; // Rethrow on final attempt
-                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-        
-        /**
-         * 다양한 형태의 URL에서 채널 ID 또는 핸들을 추출합니다.
-         */
-        const extractChannelIdentifier = (url) => {
-            try {
-                const urlObj = new URL(url.includes('http') ? url : `https://${url}`);
-                const pathname = urlObj.pathname.toLowerCase();
-                const pathParts = pathname.split('/').filter(p => p);
-                
-                // 1. 표준 채널 ID: /channel/UCXXXXX
-                if (pathname.includes('/channel/') && pathParts.length >= 2) {
-                    return { type: 'channelId', value: pathParts[pathParts.indexOf('channel') + 1] };
-                }
-
-                // 2. 레거시 사용자 이름: /user/username
-                if (pathname.includes('/user/') && pathParts.length >= 2) {
-                    return { type: 'username', value: pathParts[pathParts.indexOf('user') + 1] };
-                }
-                
-                // 3. 핸들: /@handle, /@handle/shorts, /@handle/videos 등
-                if (pathname.includes('/@')) {
-                    // 첫 번째 경로 세그먼트가 핸들일 가능성이 높음 (디코딩 처리)
-                    const handle = decodeURIComponent(pathParts[0].startsWith('@') ? pathParts[0].substring(1) : pathParts[0]);
-                    return { type: 'handle', value: handle };
-                }
-
-                // 4. 동영상 링크에서 채널 ID 찾기 (복잡, 일단 건너뛰고 search API로 대체)
-                
-                // 5. 단축 링크 (youtu.be/video_id?si=...) 또는 동영상 링크 (/watch?v=...)
-                const videoIdMatch = url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([^"&?\/\s]{11})|(?:\?si=)([^"&?\/\s]{16})/);
-                if (videoIdMatch) {
-                    // 비디오 ID를 기반으로 채널 ID를 찾는 것은 Search API로 하는 것이 일반적입니다.
-                    // 이 경우 전체 URL을 query로 사용하거나, videoId를 사용해야 합니다.
-                    // 복잡성을 피하기 위해, 이 시점에서 추출이 안되면 전체 URL/핸들을 사용하여 search API를 사용하는 것이 가장 안정적입니다.
-                }
-
-                // 6. 루트 URL (채널 이름이나 핸들만 있는 경우)
-                if (pathParts.length > 0 && !pathname.includes('/watch')) {
-                    // https://www.youtube.com/info한글/
-                    const potentialHandle = decodeURIComponent(pathParts[0]);
-                     if (!potentialHandle.match(/^[a-z0-9]/i)) {
-                         // ID나 username이 아닌 경우 (ex: /feed, /trending 등)를 제외
-                        return { type: 'handle', value: potentialHandle };
-                     }
-                }
-                
-            } catch (e) {
-                // URL 파싱 실패 (유효하지 않은 URL 형식)
-                return { type: 'error', value: e.message };
-            }
-            
-            // 추출 실패 시, 전체 URL을 쿼리로 사용하도록 기본 처리
-            return { type: 'query', value: url };
-        };
-
-
-        window.fetchYouTubeData = async (url) => {
-            const apiKey = window.state.youtubeApiKey;
-            if (!apiKey) {
-                throw new Error("YouTube API Key가 설정되지 않았습니다. API 설정 모달을 통해 키를 입력해주세요.");
-            }
-
-            const loadingElement = document.getElementById('add-channel-loading-modal');
-            
-            // --- Step 1: URL에서 채널 ID 추출 ---
-            const identifier = extractChannelIdentifier(url);
-            let channelId = '';
-            
-            loadingElement.querySelector('span').textContent = `채널 식별자 추출 및 ID 변환 중...`;
-
-            if (identifier.type === 'error') {
-                 throw new Error(`유효하지 않은 URL 형식입니다: ${identifier.value}`);
-            }
-
-            if (identifier.type === 'channelId') {
-                 channelId = identifier.value;
-            } else if (identifier.type === 'username') {
-                // 레거시 username으로 ID 검색
-                const searchUrl = `${YOUTUBE_API_BASE}/channels?key=${apiKey}&forUsername=${identifier.value}&part=id`;
-                const searchData = await fetchWithBackoff(searchUrl);
-                channelId = searchData.items[0]?.id;
-            } else if (identifier.type === 'handle' || identifier.type === 'query') {
-                // 핸들이나 복잡한 URL (또는 video URL)을 쿼리로 사용하여 채널 검색
-                const queryTerm = identifier.value;
-                const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${queryTerm}&type=channel&part=snippet&maxResults=1`;
-                const searchData = await fetchWithBackoff(searchUrl);
-                channelId = searchData.items[0]?.id?.channelId;
-            }
-            
-            if (!channelId) {
-                throw new Error("유효한 YouTube 채널 ID를 찾을 수 없습니다. URL을 다시 확인해주세요.");
-            }
-
-
-            // --- Step 2: 채널 상세 정보 가져오기 ---
-            loadingElement.querySelector('span').textContent = `채널 상세 정보 로딩 중...`;
-            const channelInfoUrl = `${YOUTUBE_API_BASE}/channels?key=${apiKey}&id=${channelId}&part=snippet,contentDetails,statistics,brandingSettings`;
-            const channelDataResponse = await fetchWithBackoff(channelInfoUrl);
-            const channelItem = channelDataResponse.items[0];
-
-            if (!channelItem) {
-                throw new Error(`채널 상세 정보를 찾을 수 없습니다. (ID: ${channelId})`);
-            }
-            
-            const stats = channelItem.statistics;
-            const snippet = channelItem.snippet;
-
-            const uploadPlaylistId = channelItem.contentDetails.relatedPlaylists.uploads;
-            const creationDate = snippet.publishedAt;
-
-
-            // --- Step 3: 최근 90일 통계 계산 ---
-            loadingElement.querySelector('span').textContent = `90일 통계 계산을 위한 영상 목록 로딩 중...`;
-            const cutoffDate = new Date(Date.now() - DAYS_90).toISOString();
-            
-            // 3-1. 최근 90일 동안의 영상 ID 목록 가져오기 (Uploads Playlist 이용)
-            let videoIds = [];
-            let nextPageToken = null;
-            let videoCount = 0;
-            let oldestVideoDate = null;
-            let videosApiUrl = `${YOUTUBE_API_BASE}/playlistItems?key=${apiKey}&playlistId=${uploadPlaylistId}&part=contentDetails&maxResults=50`; // 50개씩 페이징
-
-            while (videoCount < 1000) { // 안전을 위해 최대 1000개의 영상만 확인
-                const playlistResponse = await fetchWithBackoff(videosApiUrl + (nextPageToken ? `&pageToken=${nextPageToken}` : ''));
-                
-                for (const item of playlistResponse.items) {
-                    const videoPublishedAt = item.contentDetails.videoPublishedAt;
-                    if (videoPublishedAt > cutoffDate) {
-                        videoIds.push(item.contentDetails.videoId);
-                        videoCount++;
-                    } else {
-                        // 90일 이전 영상 발견. 여기서 반복 중단 (가장 오래된 영상 게시일도 저장)
-                        if (!oldestVideoDate || videoPublishedAt < oldestVideoDate) {
-                            oldestVideoDate = videoPublishedAt;
-                        }
-                        // 90일 이전 영상이면서, 아직 oldestVideoDate가 설정되지 않았다면 설정
-                        if (oldestVideoDate === null) {
-                            oldestVideoDate = videoPublishedAt;
-                        }
-                        nextPageToken = null; // 90일 이전 영상이므로, 다음 페이지는 볼 필요 없음
-                        break;
-                    }
-                }
-                
-                nextPageToken = playlistResponse.nextPageToken;
-                if (!nextPageToken || videoIds.length === 0) break;
-
-                // 다음 페이지 URL 업데이트
-                videosApiUrl = `${YOUTUBE_API_BASE}/playlistItems?key=${apiKey}&playlistId=${uploadPlaylistId}&part=contentDetails&maxResults=50`;
-            }
-            
-            // 3-2. 영상 통계 가져와서 합산
-            let totalViews90d = 0;
-            let totalLikes90d = 0;
-            let totalComments90d = 0;
-            const videosFetched = videoIds.length;
-            
-            if (videosFetched > 0) {
-                 loadingElement.querySelector('span').textContent = `${videosFetched}개 영상 통계 합산 중...`;
-
-                 // YouTube API는 한 번에 최대 50개의 비디오 ID만 허용
-                 const videoIdChunks = [];
-                 for (let i = 0; i < videosFetched; i += 50) {
-                     videoIdChunks.push(videoIds.slice(i, i + 50).join(','));
-                 }
-                 
-                 for (const chunk of videoIdChunks) {
-                     const videoStatsUrl = `${YOUTUBE_API_BASE}/videos?key=${apiKey}&id=${chunk}&part=statistics`;
-                     const videoStatsResponse = await fetchWithBackoff(videoStatsUrl);
-                     
-                     for (const videoItem of videoStatsResponse.items) {
-                         const vStats = videoItem.statistics;
-                         totalViews90d += parseInt(vStats.viewCount || 0);
-                         totalLikes90d += parseInt(vStats.likeCount || 0);
-                         totalComments90d += parseInt(vStats.commentCount || 0);
-                     }
-                 }
-            }
-            
-            // 3-3. 평균 계산
-            // 가장 오래된 영상 게시일이 없으면 (영상 0개), 채널 생성일을 기준으로 계산
-            const videosForAvgFreq = parseInt(stats.videoCount || 0);
-            let avgUploadFreqDays = 0;
-            if (videosForAvgFreq > 0) {
-                const effectiveStartDate = oldestVideoDate || creationDate;
-                const totalDays = Math.floor((new Date() - new Date(effectiveStartDate)) / (1000 * 60 * 60 * 24)) || 1;
-                avgUploadFreqDays = (totalDays / videosForAvgFreq).toFixed(1);
-            } else {
-                avgUploadFreqDays = 'N/A';
-            }
-
-
-            // --- Step 4: 결과 데이터 객체 반환 ---
-            return {
-                channelUrl: url,
-                profileIconUrl: snippet.thumbnails.default.url || '', // 기본 썸네일 URL 사용
-                channelName: snippet.title,
-                ytCategory: channelItem.brandingSettings?.channel?.keywords?.split('"').join('').split(',')[0] || 'N/A', // Branding keywords에서 첫번째 항목 사용 (카테고리 정보가 channel API에 명시적이지 않음)
-                country: snippet.country || 'N/A',
-                subscribers: parseInt(stats.subscriberCount || 0),
-                totalViews: parseInt(stats.viewCount || 0),
-                totalVideos: parseInt(stats.videoCount || 0),
-                channelCreationDate: creationDate,
-                oldestVideoPostDate: oldestVideoDate || creationDate, // 가장 오래된 영상 게시일
-                avgUploadFreqDays: avgUploadFreqDays, 
-                avgViews90d: videosFetched > 0 ? Math.round(totalViews90d / videosFetched) : 0,
-                avgLikes90d: videosFetched > 0 ? Math.round(totalLikes90d / videosFetched) : 0,
-                avgComments90d: videosFetched > 0 ? Math.round(totalComments90d / videosFetched) : 0,
-                note: '',
-                customCategory: '미분류',
-                channelId: channelId,
-            };
-        };
-
-
-        // --- Event Handlers (Globalized for HTML calls) ---
-
-        // API 설정 모달 열기/닫기
-        window.toggleApiSettingsModal = (open) => {
-            window.state.isApiModalOpen = open;
-            if (!open) {
-                window.state.editingApiKey = { name: null, key: null, originalName: null }; // 편집 상태 초기화
-            }
-            render();
-        };
-
-        // 새 API 키 추가
-        window.addApiKey = () => {
-            const nameInput = document.getElementById('new-api-name-input');
-            const keyInput = document.getElementById('new-api-key-input');
-            const name = nameInput.value.trim();
-            const key = keyInput.value.trim();
-
-            if (!name || !key) {
-                alertModal("경고", "키 이름과 API 키를 모두 입력해주세요.");
-                return;
-            }
-
-            if (window.state.apiKeys.some(k => k.name === name)) {
-                alertModal("경고", `"${name}" 이름의 키가 이미 존재합니다.`);
-                return;
-            }
-            
-            // 키 추가
-            const newKeys = [...window.state.apiKeys, { name, key }];
-            let newActiveName = window.state.activeApiKeyName;
-            
-            // 처음 추가 시 활성화
-            if (newKeys.length === 1) {
-                newActiveName = name;
-            }
-
-            updateApiStorage(newKeys, newActiveName);
-            nameInput.value = '';
-            keyInput.value = '';
-            alertModal("성공", `API 키 "${name}"이(가) 저장되었습니다.`);
-        };
-
-        // 활성 API 키 선택 (토글 방식)
-        window.selectApiKey = (name) => {
-            let newActiveName = '';
-            // 현재 활성 키를 다시 클릭하면 비활성화
-            if (window.state.activeApiKeyName === name) {
-                newActiveName = ''; // Deactivate
-            } else {
-                newActiveName = name; // Activate the selected key
-            }
-            
-            updateApiStorage(window.state.apiKeys, newActiveName);
-            alertModal("활성 키 변경", newActiveName ? `활성 API 키가 "${newActiveName}"(으)로 변경되었습니다.` : "활성 API 키가 해제되었습니다.");
-        };
-        
-        // API 키 편집 시작
-        window.startEditApiKey = (name) => {
-            const keyToEdit = window.state.apiKeys.find(k => k.name === name);
-            if (!keyToEdit) return;
-
-            window.state.editingApiKey = {
-                name: keyToEdit.name,
-                key: keyToEdit.key,
-                originalName: keyToEdit.name
-            };
-            render();
-        };
-
-        // API 키 편집 취소
-        window.cancelEditApiKey = () => {
-            window.state.editingApiKey = { name: null, key: null, originalName: null };
-            render();
-        };
-        
-        // API 키 편집 저장
-        window.saveEditApiKey = () => {
-            const originalName = window.state.editingApiKey.originalName;
-            const newName = document.getElementById('edit-api-name').value.trim();
-            const newKey = document.getElementById('edit-api-key').value.trim();
-
-            if (!newName || !newKey) {
-                alertModal("경고", "키 이름과 API 키를 모두 입력해주세요.");
-                return;
-            }
-            
-            // 이름 중복 검사 (이름이 변경된 경우에만)
-            if (newName !== originalName && window.state.apiKeys.some(k => k.name === newName)) {
-                alertModal("경고", `"${newName}" 이름의 키가 이미 존재합니다.`);
-                return;
-            }
-            
-            const newKeys = window.state.apiKeys.map(key => {
-                if (key.name === originalName) {
-                    return { name: newName, key: newKey };
-                }
-                return key;
             });
 
-            let newActiveName = window.state.activeApiKeyName;
-            // 활성 키 이름이 변경된 경우 활성 키 이름도 업데이트
-            if (newActiveName === originalName) {
-                newActiveName = newName;
-            }
+            contentDiv.innerHTML = ''; 
 
-            updateApiStorage(newKeys, newActiveName);
-            window.cancelEditApiKey(); // 편집 상태 초기화
-            alertModal("저장 완료", `API 키 "${newName}"이(가) 업데이트되었습니다.`);
-        };
-
-        // API 키 삭제
-        window.deleteApiKey = async (name) => {
-            if (await customConfirm("API 키 삭제", `정말로 "${name}" 키를 삭제하시겠습니까?`)) {
+            if (shorts.length === 0) {
+                contentDiv.innerHTML = '<div class="w-full text-center py-4"><p class="text-text-light/50 inline-block whitespace-normal">1분 이하의 Shorts 영상이 없습니다.</p></div>';
                 
-                if (name === window.state.activeApiKeyName) {
-                    alertModal("경고", "활성화된 API 키는 삭제할 수 없습니다. 다른 키를 선택한 후 삭제해주세요.");
-                    return;
-                }
+                shortsContainer.classList.remove('hidden');
                 
-                const newKeys = window.state.apiKeys.filter(k => k.name !== name);
-                let newActiveName = window.state.activeApiKeyName;
+                if(leftBtn) leftBtn.style.display = 'none';
+                if(rightBtn) rightBtn.style.display = 'none';
                 
-                // 삭제 후 목록이 비어 있으면 활성 이름 초기화
-                if (newKeys.length === 0) {
-                     newActiveName = '';
-                } else if (!newKeys.some(k => k.name === newActiveName)) {
-                    // 현재 활성 이름이 삭제된 경우, 목록의 첫 번째 키를 활성화 (선택 사항)
-                    newActiveName = newKeys[0]?.name || '';
-                }
-                
-                await updateApiStorage(newKeys, newActiveName);
-                alertModal("삭제 완료", `API 키 "${name}"이(가) 삭제되었습니다.`);
-            }
-        };
-        
-        // 채널 추가
-        window.handleAddChannel = async (event) => {
-            event.preventDefault();
-            const urlInput = document.getElementById('youtube-url-input');
-            const url = urlInput.value.trim();
-
-            if (!url) {
-                alertModal("경고", "유튜브 채널 URL을 입력해주세요.");
                 return;
             }
             
-            if (!window.state.youtubeApiKey) {
-                alertModal("경고", "활성화된 YouTube API Key가 없습니다. API 설정에서 키를 등록/선택하세요.");
-                return;
-            }
-
-            // 모달 표시
-            const addModal = document.getElementById('add-channel-loading-modal');
-            addModal.classList.remove('hidden');
-
-            try {
-                // 1. YouTube API로 데이터 가져오기 (실제 API 호출)
-                const channelData = await window.fetchYouTubeData(url);
+            shortsContainer.classList.remove('hidden');
+            // CSS @media 쿼리가 처리하므로 JS에서 숨기는 로직은 제거 (PC에서는 자동으로 표시됨)
+            // if(leftBtn) leftBtn.style.display = ''; 
+            // if(rightBtn) rightBtn.style.display = '';
+            
+            shorts.forEach(video => {
+                const videoId = video.videoId;
+                const videoUrl = `https://youtu.be/${videoId}`;
+                const thumbnailSrc = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                const publishedDate = new Date(video.publishedAt).toLocaleDateString('ko-KR');
                 
-                // 2. Firestore에 저장: 공개(Public) 경로를 사용합니다.
-                const channelsCollection = collection(db, `artifacts/${appId}/public/data/channels`);
-                await addDoc(channelsCollection, {
-                    ...channelData,
-                    addedDate: new Date().toISOString(),
-                    // Firestore 정렬을 위해 숫자형 필드를 명시적으로 저장
-                    subscribers: channelData.subscribers,
-                    totalViews: channelData.totalViews,
-                    totalVideos: channelData.totalVideos,
-                });
-
-                urlInput.value = ''; // 성공 시 입력 필드 초기화
-                alertModal("성공", `${channelData.channelName} 채널이 목록에 추가되었습니다.`);
-
-            } catch (error) {
-                console.error("채널 추가 오류:", error);
-                alertModal("오류", `채널 추가 중 오류가 발생했습니다: ${error.message}`);
-            } finally {
-                addModal.classList.add('hidden'); // 모달 숨김
-            }
-        };
-        
-        // 정렬 처리
-        window.handleSort = (key) => {
-            const current = window.state.currentSort;
-            let direction = 'desc';
-
-            if (current.key === key) {
-                direction = current.direction === 'desc' ? 'asc' : 'desc';
-            }
-
-            window.state.currentSort = { key, direction };
-            render();
-        };
-
-        // 검색어 변경
-        window.handleSearchChange = (event) => {
-            window.state.searchTerm = event.target.value;
-            render();
-        };
-
-        // 필터 변경
-        window.handleFilterChange = (type, value) => {
-            if (type === 'custom') {
-                window.state.categoryFilter = value;
-            } 
-            // ytCategoryFilter 로직 제거됨
-            // else if (type === 'yt') {
-            //     window.state.ytCategoryFilter = value;
-            // }
-            render();
-        };
-
-        // 카테고리 (Firestore 저장만 담당)
-        window.handleCategoryChange = async (channelId, newCategory) => {
-            try {
-                // 공개(Public) 경로를 사용합니다.
-                const channelRef = doc(db, `artifacts/${appId}/public/data/channels`, channelId);
-                await updateDoc(channelRef, { customCategory: newCategory });
-            } catch (error) {
-                console.error("카테고리 업데이트 오류:", error);
-                // 모달 내에서는 오류를 던져서 상위 함수에서 처리하도록 합니다.
-                throw new Error("카테고리 업데이트 중 오류가 발생했습니다.");
-            }
-        };
-        
-        // 카테고리 선택 모달 시작
-        window.startCategorySelection = (id, current) => {
-            window.state.editingChannelCategory = { id, current };
-            window.state.isChannelCategoryModalOpen = true;
-            render();
-        };
-
-        // 카테고리 선택 모달 취소
-        window.cancelChannelCategorySelection = () => {
-            window.state.editingChannelCategory = { id: null, current: null };
-            window.state.isChannelCategoryModalOpen = false;
-            render();
-        };
-        
-        // 카테고리 선택 저장
-        window.saveChannelCategorySelection = async () => {
-            const id = window.state.editingChannelCategory.id;
-            const selectedRadio = document.querySelector('input[name="new_category_select"]:checked');
-            
-            if (!id || !selectedRadio) {
-                window.cancelChannelCategorySelection();
-                return;
-            }
-            
-            const newCategory = selectedRadio.value;
-            
-            try {
-                // 기존 handleCategoryChange 로직 재사용
-                await window.handleCategoryChange(id, newCategory);
-                alertModal("저장 완료", `채널 카테고리가 '${newCategory}'(으)로 변경되었습니다.`);
-            } catch (error) {
-                console.error("카테고리 업데이트 오류:", error); 
-                alertModal("오류", "카테고리 업데이트 중 오류가 발생했습니다.");
-            } finally {
-                window.cancelChannelCategorySelection();
-            }
-        };
-
-
-        // 채널 삭제
-        window.deleteChannel = async (channelId) => {
-            if (await customConfirm("채널 삭제", "정말로 이 채널을 목록에서 삭제하시겠습니까?")) {
-                 try {
-                    // 공개(Public) 경로를 사용합니다.
-                    const channelRef = doc(db, `artifacts/${appId}/public/data/channels`, channelId);
-                    await deleteDoc(channelRef);
-                    alertModal("삭제 완료", "채널이 목록에서 삭제되었습니다.");
-                } catch (error) {
-                    console.error("채널 삭제 오류:", error);
-                    alertModal("오류", "채널 삭제 중 오류가 발생했습니다.");
-                }
-            }
-        }
-        
-        // 메모 편집 시작
-        window.startMemoEdit = (id, currentValue) => {
-            // 주의: HTML 속성에 따옴표가 포함될 경우 인코딩 필요
-            window.state.editingChannelMemoId = id;
-            window.state.editingChannelMemoValue = currentValue.replace(/\\'/g, "'");
-            renderMemoModal();
-        }
-
-        // 메모 편집 저장
-        window.saveMemoEdit = async () => {
-            const id = window.state.editingChannelMemoId;
-            const newValue = document.getElementById('memo-input').value.trim();
-
-            if (!id) {
-                window.state.editingChannelMemoId = null;
-                renderMemoModal();
-                return;
-            }
-
-            try {
-                // 공개(Public) 경로를 사용합니다.
-                const channelRef = doc(db, `artifacts/${appId}/public/data/channels`, id);
-                // 빈 문자열도 저장 가능하도록 수정
-                await updateDoc(channelRef, { note: newValue });
-                window.state.editingChannelMemoId = null;
-                alertModal("저장 완료", "메모가 업데이트되었습니다.");
-            } catch (error) {
-                console.error("메모 업데이트 오류:", error);
-                alertModal("오류", "메모 업데이트 중 오류가 발생했습니다.");
-            } finally {
-                renderMemoModal();
-            }
-        }
-
-        // 메모 편집 취소
-        window.cancelMemoEdit = () => {
-            window.state.editingChannelMemoId = null;
-            renderMemoModal();
-        }
-
-        // 카테고리 관리 모달 열기/닫기
-        window.toggleCategoryModal = (open) => {
-            window.state.isCategoryModalOpen = open;
-            window.state.editingCategoryName = null; // 편집 상태 초기화
-            render();
-        };
-
-        // 새 카테고리 추가
-        window.addCategory = async () => {
-            const input = document.getElementById('new-category-input');
-            const newCat = input.value.trim();
-            if (!newCat || window.state.categories.includes(newCat)) return;
-
-            try {
-                // 공개(Public) 경로를 사용합니다.
-                const categoriesDocRef = doc(db, `artifacts/${appId}/public/data/categories`, 'customCategories');
-                await setDoc(categoriesDocRef, { names: [...window.state.categories, newCat] }, { merge: true });
-                input.value = '';
-            } catch (error) {
-                console.error("카테고리 추가 오류:", error);
-                alertModal("오류", "카테고리 추가 중 오류가 발생했습니다.");
-            }
-        };
-
-        // 카테고리 편집 시작
-        window.startCategoryEdit = (name) => {
-            window.state.editingCategoryName = name;
-            window.state.editingCategoryNewName = name;
-            render();
-        };
-
-        // 카테고리 편집 취소
-        window.cancelCategoryEdit = () => {
-            window.state.editingCategoryName = null;
-            window.state.editingCategoryNewName = '';
-            render();
-        };
-
-        // 카테고리 편집 저장 (이름 변경)
-        window.saveCategoryEdit = async () => {
-            const oldName = window.state.editingCategoryName;
-            const newName = document.getElementById('edit-cat-input').value.trim();
-
-            if (!oldName || !newName || oldName === newName || window.state.categories.includes(newName)) {
-                alertModal("경고", "유효하지 않거나 이미 존재하는 카테고리 이름입니다.");
-                return;
-            }
-            
-            // 1. Firestore의 카테고리 목록 업데이트: 공개(Public) 경로를 사용합니다.
-            const newCategories = window.state.categories.map(cat => cat === oldName ? newName : cat);
-            const categoriesDocRef = doc(db, `artifacts/${appId}/public/data/categories`, 'customCategories');
-            
-            // 2. 모든 채널 문서에서 해당 카테고리 이름 업데이트: 공개(Public) 경로를 사용합니다.
-            const batchPromises = window.state.channels
-                .filter(c => c.customCategory === oldName)
-                .map(c => {
-                    const channelRef = doc(db, `artifacts/${appId}/public/data/channels`, c.id);
-                    return updateDoc(channelRef, { customCategory: newName });
-                });
-
-            try {
-                // 카테고리 이름 목록 저장
-                await setDoc(categoriesDocRef, { names: newCategories });
-                // 채널 업데이트 배치 처리 (업데이트는 리스너로 자동 반영됨)
-                await Promise.all(batchPromises);
+                const card = document.createElement('div');
+                card.className = 'inline-block w-40 sm:w-48 bg-card-bg/70 rounded-lg overflow-hidden shadow-lg mr-3 align-top flex-shrink-0 hover:ring-2 ring-primary-accent transition duration-200';
                 
-                alertModal("성공", `'${oldName}' 카테고리가 '${newName}'으로 변경되었습니다.`);
-            } catch (error) {
-                console.error("카테고리 이름 변경 오류:", error);
-                alertModal("오류", "카테고리 이름 변경 중 오류가 발생했습니다.");
-            } finally {
-                window.state.editingCategoryName = null;
-                window.state.editingCategoryNewName = '';
-                render();
-            }
-        };
-
-        // 카테고리 삭제
-        window.deleteCategory = async (name) => {
-            if (name === '미분류') {
-                alertModal("경고", "'미분류' 카테고리는 삭제할 수 없습니다.");
-                return;
-            }
-            
-            if (await customConfirm("카테고리 삭제", `'${name}' 카테고리를 삭제하시겠습니까? 이 카테고리에 할당된 모든 채널은 '미분류'로 자동 변경됩니다.`)) {
-                
-                // 1. 카테고리 목록에서 제거: 공개(Public) 경로를 사용합니다.
-                const newCategories = window.state.categories.filter(cat => cat !== name);
-                const categoriesDocRef = doc(db, `artifacts/${appId}/public/data/categories`, 'customCategories');
-
-                // 2. 모든 채널 문서에서 해당 카테고리 '미분류'로 업데이트: 공개(Public) 경로를 사용합니다.
-                const batchPromises = window.state.channels
-                    .filter(c => c.customCategory === name)
-                    .map(c => {
-                        const channelRef = doc(db, `artifacts/${appId}/public/data/channels`, c.id);
-                        return updateDoc(channelRef, { customCategory: '미분류' });
-                    });
-                
-                try {
-                    await setDoc(categoriesDocRef, { names: newCategories });
-                    await Promise.all(batchPromises);
-                    alertModal("삭제 완료", `'${name}' 카테고리가 삭제되고 관련 채널이 '미분류'로 재할당되었습니다.`);
-                } catch (error) {
-                    console.error("카테고리 삭제 오류:", error);
-                    alertModal("오류", "카테고리 삭제 중 오류가 발생했습니다.");
-                }
-            }
-        }
-        
-        // --- Utility Functions ---
-
-        // 클립보드 복사
-        window.copyToClipboard = (text) => {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                alertModal("복사 완료", "링크가 클립보드에 복사되었습니다.");
-            } catch (err) {
-                console.error('클립보드 복사 실패:', err);
-                alertModal("복사 실패", "클립보드 복사에 실패했습니다.");
-            }
-            document.body.removeChild(textarea);
-        };
-        
-        // 커스텀 Confirm 모달
-        const customConfirm = (title, message) => {
-            return new Promise((resolve) => {
-                const modal = document.getElementById('confirm-modal');
-                const titleEl = document.getElementById('confirm-title');
-                const messageEl = document.getElementById('confirm-message');
-                const confirmBtn = document.getElementById('confirm-yes-btn');
-                const cancelBtn = document.getElementById('confirm-no-btn');
-                
-                titleEl.textContent = title;
-                messageEl.textContent = message;
-                modal.classList.remove('hidden');
-
-                const cleanup = () => {
-                    modal.classList.add('hidden');
-                    confirmBtn.removeEventListener('click', onConfirm);
-                    cancelBtn.removeEventListener('click', onCancel);
-                };
-
-                const onConfirm = () => {
-                    cleanup();
-                    resolve(true);
-                };
-
-                const onCancel = () => {
-                    cleanup();
-                    resolve(false);
-                };
-
-                confirmBtn.addEventListener('click', onConfirm);
-                cancelBtn.addEventListener('click', onCancel);
-            });
-        };
-
-        // 커스텀 Alert 모달
-        window.alertModal = (title, message) => {
-            const modal = document.getElementById('alert-modal');
-            document.getElementById('alert-title').textContent = title;
-            document.getElementById('alert-message').textContent = message;
-            modal.classList.remove('hidden');
-
-            document.getElementById('alert-close-btn').onclick = () => {
-                modal.classList.add('hidden');
-            };
-        };
-
-        // 페이지 로드 시 Firebase 초기화
-        window.onload = setupFirebase;
-    </script>
-</head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-4 sm:p-8">
-
-    <div class="container mx-auto">
-        <div class="flex justify-between items-start mb-6">
-             <!-- 유튜브 아이콘 추가 -->
-             <div class="flex items-center space-x-3">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12.0121 2.5C11.9796 2.5 11.9472 2.5 11.9147 2.50024C6.27315 2.5638 2.5 6.00282 2.5 11.9147C2.5 17.6534 6.27315 21.5003 11.9147 21.5C17.5843 21.5 21.5 17.6534 21.5 11.9147C21.5 6.00282 17.7554 2.5638 12.0121 2.5Z" fill="#FF0000" stroke="#FF0000" stroke-width="0.5"/>
-                    <path d="M16.5 12.0003L10.5 8.00027V16.0003L16.5 12.0003Z" fill="#F3F4F6"/>
-                </svg>
-                <h1 class="text-3xl font-extrabold text-white">YouTube 채널 관리 대시보드</h1>
-             </div>
-             <!-- API 설정 버튼 (우측 상단) -->
-             <button id="api-settings-button" onclick="window.toggleApiSettingsModal(true)" 
-                     class="bg-gray-700 hover:bg-gray-600 text-indigo-300 font-bold py-2 px-4 rounded-lg transition duration-200 whitespace-nowrap flex items-center shadow-md">
-                 <i data-lucide="key" class="w-5 h-5 mr-1"></i> API 설정
-             </button>
-        </div>
-
-        <div id="initial-loading" class="text-center p-8 text-indigo-400 font-medium hidden">
-             <i data-lucide="loader" class="w-6 h-6 animate-spin inline-block mr-2"></i> 로딩 중...
-        </div>
-        
-        <!-- 데이터 저장 경로 표시 업데이트 (요청에 따라 제거됨) -->
-        <div class="text-sm text-gray-500 mb-4 hidden" id="user-id-display"></div>
-
-        <!-- 상단 컨트롤 섹션 (UI 재구성) -->
-        <div class="flex flex-col space-y-4 mb-8">
-            
-            <!-- Row 1: 유튜브 링크 입력 및 추가 (단독 한 줄) -->
-            <form id="add-channel-form" onsubmit="window.handleAddChannel(event)" class="flex space-x-2">
-                <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 입력 (예: https://www.youtube.com/@ChannelHandle)" required
-                       class="flex-grow bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
-                <button type="submit" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md flex-shrink-0 text-lg">
-                    추가
-                </button>
-            </form>
-
-            <!-- Row 2: 검색 바 (단독 한 줄) -->
-            <div class="flex items-center space-x-2">
-                <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
-                <input type="text" id="search-input" oninput="window.handleSearchChange(event)" placeholder="채널명, 메모, 국가, 카테고리 등 전체 리스트 검색"
-                       class="w-full bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
-            </div>
-            
-            <!-- Row 3: 카테고리 필터 및 관리 (PC에서 오른쪽 정렬) -->
-            <div id="filter-container" class="flex flex-wrap gap-4 items-center justify-start md:justify-end">
-                
-                <!-- 사용자 정의 카테고리 필터 -->
-                <div class="flex items-center space-x-2">
-                    <label for="category-filter-select" class="text-gray-300 whitespace-nowrap text-sm">카테고리 필터:</label>
-                    <select id="category-filter-select" onchange="window.handleFilterChange('custom', this.value)"
-                            class="bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[120px]">
-                        <!-- Options populated by JS -->
-                    </select>
-                </div>
-                
-                <!-- 카테고리 편집 버튼 -->
-                <button onclick="window.toggleCategoryModal(true)" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-3 rounded-lg transition duration-200 whitespace-nowrap text-sm flex items-center">
-                    <i data-lucide="settings" class="w-4 h-4 inline-block mr-1"></i> 카테고리 편집
-                </button>
-            </div>
-        </div>
-
-        <!-- 채널 목록 테이블 -->
-        <div class="bg-gray-800 rounded-xl shadow-lg mt-8 p-4">
-            <div class="scrollable-table">
-                <table class="min-w-full divide-y divide-gray-700 text-sm">
-                    <thead class="bg-gray-700 sticky top-0 z-10">
-                        <tr>
-                            <!-- 1. 프로필 아이콘 (새로 분리) -->
-                            <th class="header-cell p-2">프로필</th>
-                            <!-- 2. 채널명 -->
-                            <th class="header-cell" onclick="window.handleSort('channelName')">채널명</th>
-                            <!-- 3. 채널링크 복사 버튼 (정렬 불가) -->
-                            <th class="header-cell p-2">링크</th>
-                            <!-- 4. 카테고리 (사용자 정의) -->
-                            <th class="header-cell" onclick="window.handleSort('customCategory')">카테고리</th>
-                            <!-- 5. 국가 -->
-                            <th class="header-cell" onclick="window.handleSort('country')">국가</th>
-                            <!-- 6. 비고(메모) -->
-                            <th class="header-cell" onclick="window.handleSort('note')">비고(메모)</th>
-                            <!-- 7. 구독자 수 -->
-                            <th class="header-cell" onclick="window.handleSort('subscribers')">구독자 수</th>
-                            <!-- 8. 총 조회수 -->
-                            <th class="header-cell" onclick="window.handleSort('totalViews')">총 조회수</th>
-                            <!-- 9. 총 영상수 -->
-                            <th class="header-cell" onclick="window.handleSort('totalVideos')">총 영상수</th>
-                            <!-- 10. 채널 생성일 -->
-                            <th class="header-cell" onclick="window.handleSort('channelCreationDate')">채널 생성일</th>
-                            <!-- 11. 채널 경과 시간 (새로 추가) -->
-                            <th class="header-cell">경과 시간</th>
-                            <!-- 12. 평균 업로드 주기 -->
-                            <th class="header-cell" onclick="window.handleSort('avgUploadFreqDays')">평균 업로드 주기</th>
-                            <!-- 13. 90일 평균 조회수 -->
-                            <th class="header-cell" onclick="window.handleSort('avgViews90d')">90일 평균 조회수</th>
-                            <!-- 14. 90일 평균 좋아요 수 -->
-                            <th class="header-cell" onclick="window.handleSort('avgLikes90d')">90일 평균 좋아요</th>
-                            <!-- 15. 90일 평균 댓글 수 -->
-                            <th class="header-cell" onclick="window.handleSort('avgComments90d')">90일 평균 댓글 수</th>
-                            <!-- 16. 삭제 버튼 (정렬 불가) -->
-                            <th class="header-cell p-2"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="channel-list" class="divide-y divide-gray-800">
-                        <!-- 채널 데이터는 JS에서 렌더링됩니다. -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 모달: API 설정 (멀티 키 관리) -->
-    <div id="api-settings-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <h3 class="text-xl font-bold text-white">YouTube API 키 관리</h3>
-                <button onclick="window.toggleApiSettingsModal(false)" class="text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            
-            <p class="text-sm text-gray-400 mb-4">
-                YouTube Data API 키를 등록하고 사용할 키를 선택하세요.
-                현재 활성 키: <span class="font-bold text-indigo-400">${window.state.activeApiKeyName || '선택 안됨'}</span>
-            </p>
-
-            <!-- 새 키 추가 섹션 -->
-            <div class="mb-6 p-4 bg-gray-700/50 rounded-lg">
-                 <h4 class="text-lg font-semibold mb-3 border-b border-gray-600 pb-2">새 API 키 등록</h4>
-                <div class="flex flex-col space-y-3">
-                    <input type="text" id="new-api-name-input" placeholder="API 키 이름 (예: 개인 키, 백업 키)" 
-                           class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    <input type="text" id="new-api-key-input" placeholder="YouTube Data API Key" 
-                           class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    <div class="flex justify-end">
-                        <button onclick="window.addApiKey()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">키 추가 및 저장</button>
+                card.innerHTML = `
+                    <a href="${videoUrl}" target="_blank" title="${video.title}">
+                        <img src="${thumbnailSrc}" onerror="this.onerror=null;this.src='https://placehold.co/320x180/282a4d/f8f8f8?text=NO+IMG';" 
+                             class="w-full h-24 object-cover">
+                    </a>
+                    <div class="p-2 text-xs">
+                        <p class="font-medium text-text-light truncate">${video.title}</p>
+                        <p class="text-text-light/60 mt-1">
+                            <span class="text-success-status font-bold">조회수 ${formatNumber(video.viewCount)}</span> • ${publishedDate}
+                        </p>
+                        <div class="flex space-x-3 mt-1 text-text-light/80">
+                            <span title="좋아요 수" class="flex items-center">👍 ${formatNumber(video.likeCount)}</span>
+                            <span title="댓글 수" class="flex items-center">💬 ${formatNumber(video.commentCount)}</span>
+                        </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- 저장된 키 목록 섹션 -->
-            <h4 class="text-lg font-semibold mb-3 mt-6 border-b border-gray-700 pb-2">저장된 키 목록 (활성 키 선택)</h4>
-            <ul id="api-key-list-body" class="max-h-64 overflow-y-auto divide-y divide-gray-700">
-                <!-- API 키 목록은 JS에서 렌더링됩니다. -->
-            </ul>
-
-            <div class="flex justify-end space-x-3 mt-4">
-                <button onclick="window.toggleApiSettingsModal(false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">닫기</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 모달: 채널 카테고리 선택 (새로 추가) -->
-    <div id="channel-category-selection-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <h3 id="channel-category-title" class="text-xl font-bold text-white">채널 카테고리 변경</h3>
-                <button onclick="window.cancelChannelCategorySelection()" class="text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
+                `;
+                contentDiv.appendChild(card);
+            });
             
-            <ul id="channel-category-list" class="max-h-64 overflow-y-auto divide-y divide-gray-700 pr-2">
-                <!-- 카테고리 목록은 JS에서 렌더링됩니다. -->
-            </ul>
-            
-            <div class="flex justify-end space-x-3 mt-4 border-t border-gray-700 pt-3">
-                <button onclick="window.cancelChannelCategorySelection()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
-                <button onclick="window.saveChannelCategorySelection()" id="save-category-selection-btn" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
-            </div>
-        </div>
-    </div>
+            if (contentDiv.lastChild) {
+                contentDiv.lastChild.classList.remove('mr-3');
+            }
+        }
+        window.renderShortsPreview = renderShortsPreview; 
 
-    <!-- 모달: 카테고리 편집 -->
-    <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <h3 class="text-xl font-bold text-white">카테고리 편집</h3>
-                <button onclick="window.toggleCategoryModal(false)" class="text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            
-            <div class="mb-4">
-                <h4 class="text-lg font-semibold mb-2">새 카테고리 추가</h4>
-                <div class="flex space-x-2">
-                    <input type="text" id="new-category-input" placeholder="새 카테고리 이름" 
-                           class="flex-grow bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    <button onclick="window.addCategory()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">추가</button>
-                </div>
-            </div>
+        function scrollShorts(distance) {
+            const contentDiv = document.getElementById('shortsContent');
+            if (contentDiv) {
+                contentDiv.scrollLeft += distance;
+            }
+        }
+        window.scrollShorts = scrollShorts; 
 
-            <h4 class="text-lg font-semibold mb-2 mt-6 border-t border-gray-700 pt-4">기존 카테고리 목록</h4>
-            <ul id="category-list-body" class="max-h-64 overflow-y-auto divide-y divide-gray-700 pr-2">
-                <!-- 카테고리 목록은 JS에서 렌더링됩니다. -->
-            </ul>
-        </div>
-    </div>
-    
-    <!-- 모달: 비고(메모) 편집 -->
-    <div id="memo-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <h3 class="text-xl font-bold text-white">비고(메모) 편집</h3>
-                <button onclick="window.cancelMemoEdit()" class="text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            
-            <textarea id="memo-input" rows="4" placeholder="메모를 입력하세요..." 
-                      class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
-            
-            <div class="flex justify-end space-x-3 mt-4">
-                <button onclick="window.cancelMemoEdit()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
-                <button onclick="window.saveMemoEdit()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 모달: 채널 추가 로딩 -->
-    <div id="add-channel-loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 flex items-center space-x-3">
-            <i data-lucide="loader" class="w-6 h-6 animate-spin text-indigo-400"></i>
-            <span class="text-white font-medium">채널 정보를 불러오는 중...</span>
-        </div>
-    </div>
 
-    <!-- 모달: Alert (경고/성공 메시지) -->
-    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
-            <h3 id="alert-title" class="text-xl font-bold text-white border-b border-gray-700 pb-2 mb-3"></h3>
-            <p id="alert-message" class="text-gray-300 mb-4"></p>
-            <div class="flex justify-end">
-                <button id="alert-close-btn" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">확인</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 모달: Confirm (확인/취소 메시지) -->
-    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
-            <h3 id="confirm-title" class="text-xl font-bold text-white border-b border-gray-700 pb-2 mb-3"></h3>
-            <p id="confirm-message" class="text-gray-300 mb-4"></p>
-            <div class="flex justify-end space-x-3">
-                <button id="confirm-no-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
-                <button id="confirm-yes-btn" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition">확인</button>
-            </div>
-        </div>
-    </div>
+        async function fetchAllVideoIds(apiKey, uploadsPlaylistId, videosArray = [], pageToken = null) {
+            let url = `${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${uploadsPlaylistId}&maxResults=50&key=${apiKey}`;
+            if (pageToken) {
+                url += `&pageToken=${pageToken}`;
+            }
 
-    <script>
-        // 페이지 로드 시 initial-loading 요소 보이기
-        document.addEventListener('DOMContentLoaded', () => {
-             // Firebase 초기화 전에 로딩 표시
-             document.getElementById('initial-loading').classList.remove('hidden');
-        });
+            setStatus(`[${videosArray.length}개] 비디오 ID를 수집 중입니다... (API 할당량 소비)`, false);
+            
+            const response = await fetchWithRetry(url);
+            const data = await checkResponse(response);
+            
+            data.items.forEach(item => {
+                if (item.snippet.title !== 'Deleted video' && item.contentDetails.videoId) {
+                    videosArray.push({
+                        videoId: item.contentDetails.videoId,
+                        title: item.snippet.title,
+                        publishedAt: item.snippet.publishedAt,
+                        tags: [], 
+                        viewCount: 'N/A',
+                        likeCount: 'N/A',
+                        commentCount: 'N/A',
+                        description: '', 
+                        durationSeconds: 0,
+                        durationCategory: 'N/A',
+                        likeRatio: 0,
+                        commentRatio: 0,
+                        likeRating: 1,
+                        commentRating: 1,
+                    });
+                }
+            });
+
+            if (data.nextPageToken) {
+                return fetchAllVideoIds(apiKey, uploadsPlaylistId, videosArray, data.nextPageToken);
+            }
+            return videosArray;
+        }
+
+        async function fetchVideoStatsBatch(apiKey, videoIds) {
+            const batchSize = 50;
+            const allStats = [];
+
+            for (let i = 0; i < videoIds.length; i += batchSize) {
+                const batchIds = videoIds.slice(i, i + batchSize);
+                const idsString = batchIds.join(',');
+
+                setStatus(`비디오 상세 통계/태그 배치 [${i / batchSize + 1}] 수집 중...`, false);
+
+                const statsUrl = `${API_BASE_URL}videos?part=snippet,statistics,contentDetails&id=${idsString}&key=${apiKey}`;
+                const response = await fetchWithRetry(statsUrl);
+                const data = await checkResponse(response);
+                
+                allStats.push(...data.items);
+            }
+            return allStats;
+        }
+
+
+        function calculate90DayAverages(videos) {
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            
+            const recentVideos = videos.filter(video => new Date(video.publishedAt) >= ninetyDaysAgo);
+            
+            if (recentVideos.length === 0) {
+                return { avgViews: 0, avgLikes: 0, avgComments: 0 };
+            }
+
+            const totalViews = recentVideos.reduce((sum, v) => sum + parseInt(v.viewCount || 0), 0);
+            const totalLikes = recentVideos.reduce((sum, v) => sum + parseInt(v.likeCount || 0), 0);
+            const totalComments = recentVideos.reduce((sum, v) => sum + parseInt(v.commentCount || 0), 0);
+            
+            const count = recentVideos.length;
+            
+            return {
+                avgViews: Math.round(totalViews / count),
+                avgLikes: Math.round(totalLikes / count),
+                avgComments: Math.round(totalComments / count)
+            };
+        }
+
+
+        async function startAnalysis() {
+            // Use active API key from Firestore state
+            const apiKey = currentApiKey;
+            const rawInput = channelIdInput.value.trim();
+            let channelId = extractChannelId(rawInput);
+            let uploadsPlaylistId = '';
+
+            if (!apiKey) {
+                setStatus('오류: 활성화된 API 키가 없습니다. "API 설정"을 통해 키를 선택해주세요.', true);
+                return;
+            }
+            if (!channelId) {
+                setStatus('채널 ID 또는 링크를 입력해 주세요.', true);
+                return;
+            }
+
+            analyzeButton.disabled = true;
+            buttonText.textContent = '분석 중...';
+            setStatus('유튜브 API를 호출하고 데이터를 가져오는 중입니다.', false);
+            resultsSection.classList.add('hidden');
+            channelInfoDiv.innerHTML = '';
+            videoListTableBody.innerHTML = '';
+            allVideosData = []; 
+            downloadCsvBtn.disabled = true;
+            monthlyCalendarData = {};
+            currentCalendarDate = null;
+            currentFilterDate = null;
+            resetFilterBtn.classList.add('hidden');
+            renderCalendar({}); 
+            renderShortsPreview(); 
+            avgViews90Days.textContent = avgLikes90Days.textContent = avgComments90Days.textContent = '0'; 
+
+
+            try {
+                let channelItem;
+                
+                // 1. Video ID Check (extractChannelId is already called, but we re-check for video link handling)
+                const videoId = extractVideoId(rawInput);
+                let fetchChannelByVideo = false;
+
+                if (videoId && rawInput.toLowerCase().includes('youtu')) {
+                    setStatus('영상 링크 감지됨. 채널 ID를 추출하는 중...', false);
+                    const videoUrl = `${API_BASE_URL}videos?part=snippet&id=${videoId}&key=${apiKey}`;
+                    const videoResponse = await fetchWithRetry(videoUrl);
+                    const videoData = await checkResponse(videoResponse);
+
+                    if (videoData.items && videoData.items.length > 0) {
+                        channelId = videoData.items[0].snippet.channelId;
+                        fetchChannelByVideo = true;
+                    } else {
+                        // If video ID is found but lookup fails, proceed with original extracted ID (which might be a handle)
+                    }
+                }
+
+                const partList = 'snippet,statistics,contentDetails';
+                
+                // 2. Channel/Handle Lookup
+                if (!channelId.startsWith('UC')) {
+                    setStatus('사용자 핸들 또는 이름을 통해 채널 ID를 검색 중입니다...', false);
+                    // Fix: ensure handle search starts with @ if it doesn't look like an old channel name
+                    const searchHandle = channelId.startsWith('@') ? channelId : `@${channelId}`;
+                    const searchUrl = `${API_BASE_URL}channels?part=${partList}&forHandle=${searchHandle}&key=${apiKey}`;
+                    const searchResponse = await fetchWithRetry(searchUrl);
+                    const searchData = await checkResponse(searchResponse);
+                    
+                    if (!searchData.items || searchData.items.length === 0) {
+                        throw new Error(`핸들/ID ${channelId}를 가진 채널을 찾을 수 없습니다.`);
+                    }
+                    channelId = searchData.items[0].id; 
+                    channelItem = searchData.items[0]; 
+                } else if (!channelItem) {
+                    // 3. Direct Channel ID Lookup (only if not already fetched by video or handle)
+                    setStatus('채널 ID로 기본 정보를 가져오는 중입니다...', false);
+                    const channelUrl = `${API_BASE_URL}channels?part=${partList}&id=${channelId}&key=${apiKey}`;
+                    const channelResponse = await fetchWithRetry(channelUrl);
+                    const channelData = await checkResponse(channelResponse);
+                    
+                    if (!channelData.items || channelData.items.length === 0) {
+                        throw new Error('채널을 찾을 수 없거나 잘못된 ID입니다.');
+                    }
+                    channelItem = channelData.items[0]; 
+                }
+
+                uploadsPlaylistId = channelItem.contentDetails.relatedPlaylists.uploads;
+
+
+                const channelSnippet = channelItem.snippet;
+                const channelStats = channelItem.statistics;
+
+                channelMetadata = {
+                    title: channelSnippet.title,
+                    id: channelId,
+                    subscribers: channelStats.subscriberCount,
+                    totalViews: channelStats.viewCount,
+                    totalVideos: channelStats.videoCount,
+                    description: channelSnippet.description,
+                    publishedAt: channelSnippet.publishedAt,
+                    country: channelSnippet.country || 'N/A'
+                };
+                
+                channelInfoDiv.innerHTML = `
+                    <div class="flex items-start space-x-4 p-4 bg-bg-dark rounded-xl shadow-inner col-span-full md:col-span-1">
+                        <img src="${channelSnippet.thumbnails.default.url}" alt="${channelSnippet.title} 썸네일" 
+                             class="w-20 h-20 rounded-full object-cover border-4 border-primary-accent flex-shrink-0">
+                        <div class="min-w-0">
+                            <p class="text-xl font-bold">${channelSnippet.title}</p>
+                            <a href="https://youtube.com/channel/${channelId}" target="_blank" class="text-xs text-text-light/60 hover:text-primary-accent transition block truncate">
+                                채널 ID: ${channelId}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="md:col-span-1 p-4 bg-bg-dark rounded-xl shadow-inner">
+                        <p class="text-sm italic text-text-light/80 line-clamp-3">${channelSnippet.description}</p>
+                        <p class="text-xs mt-3 text-text-light/50">채널 생성일: ${new Date(channelSnippet.publishedAt).toLocaleDateString('ko-KR')}</p>
+                    </div>
+                `;
+
+                statSubscribers.textContent = formatNumber(channelStats.subscriberCount);
+                statViews.textContent = formatNumber(channelStats.viewCount);
+                statVideos.textContent = formatNumber(channelStats.videoCount);
+                totalVideosCount.textContent = formatNumber(channelStats.videoCount);
+
+                allVideosData = await fetchAllVideoIds(apiKey, uploadsPlaylistId);
+                
+                if (allVideosData.length === 0) {
+                    renderCalendar({}); 
+                    throw new Error('채널에 공개된 비디오가 없습니다.');
+                }
+                
+                const videoIdsToFetch = allVideosData.map(v => v.videoId);
+
+                const allStats = await fetchVideoStatsBatch(apiKey, videoIdsToFetch);
+                
+                const statsMap = new Map();
+                allStats.forEach(item => {
+                    const durationSeconds = parseDurationToSeconds(item.contentDetails.duration);
+                    
+                    statsMap.set(item.id, {
+                        viewCount: item.statistics.viewCount,
+                        likeCount: item.statistics.likeCount,
+                        commentCount: item.statistics.commentCount,
+                        tags: item.snippet.tags || [],
+                        description: item.snippet.description || '', 
+                        durationSeconds: durationSeconds,
+                        durationCategory: classifyDuration(durationSeconds),
+                    });
+                });
+                
+                allVideosData = allVideosData.map(video => {
+                    const stats = statsMap.get(video.videoId) || {};
+                    return {
+                        ...video,
+                        viewCount: stats.viewCount || '0',
+                        likeCount: stats.likeCount || '0',
+                        commentCount: stats.commentCount || '0',
+                        tags: stats.tags || [],
+                        description: stats.description || '', 
+                        durationSeconds: stats.durationSeconds || 0,
+                        durationCategory: stats.durationCategory || 'N/A',
+                        likeRatio: 0,
+                        commentRatio: 0,
+                        likeRating: 1,
+                        commentRating: 1,
+                    };
+                });
+                
+                calculateEngagementRatings(allVideosData);
+                const avg90Days = calculate90DayAverages(allVideosData);
+
+                avgViews90Days.textContent = formatNumber(avg90Days.avgViews);
+                avgLikes90Days.textContent = formatNumber(avg90Days.avgLikes);
+                avgComments90Days.textContent = formatNumber(avg90Days.avgComments);
+
+
+                monthlyCalendarData = generateUploadCalendarData(allVideosData);
+                renderCalendar(monthlyCalendarData); 
+                renderShortsPreview(); 
+                renderVideoList(); 
+                
+                resultsSection.classList.remove('hidden');
+                setStatus(`분석이 성공적으로 완료되었습니다! 총 ${formatNumber(allVideosData.length)}개의 비디오 분석 완료.`, false);
+                downloadCsvBtn.disabled = false;
+
+            } catch (error) {
+                console.error('분석 중 오류 발생:', error);
+                
+                let userFriendlyError = error.message;
+                if (error.message.includes('API key not valid')) {
+                    userFriendlyError = 'API 키가 유효하지 않거나 잘못되었습니다. "API 설정"을 통해 확인해 주세요.';
+                } else if (userFriendlyError.includes('400') || userFriendlyError.includes('404')) {
+                    userFriendlyError = '채널 ID가 잘못되었거나 해당 채널/핸들을 찾을 수 없습니다.';
+                } else if (error.message.includes('Quota exceeded')) {
+                    userFriendlyError = 'API 할당량이 소진되었습니다. 다음 날 다시 시도하거나 할당량을 늘려주세요.';
+                }
+                
+                setStatus(`분석 실패: ${userFriendlyError}`, true);
+                resultsSection.classList.add('hidden');
+                downloadCsvBtn.disabled = true;
+            } finally {
+                analyzeButton.disabled = false;
+                buttonText.textContent = '채널 분석 시작';
+            }
+        }
+        window.startAnalysis = startAnalysis; // 전역 등록
+
+        
+        window.onload = () => {
+              setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
+        };
+        
+        // Back to Top Button Logic
+        window.onscroll = function() {
+            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+                if (backToTopBtn) {
+                    backToTopBtn.classList.remove('opacity-0', 'translate-y-4');
+                    backToTopBtn.classList.add('opacity-100', 'translate-y-0');
+                }
+            } else {
+                if (backToTopBtn) {
+                    backToTopBtn.classList.remove('opacity-100', 'translate-y-0');
+                    backToTopBtn.classList.add('opacity-0', 'translate-y-4');
+                }
+            }
+        };
+
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        window.scrollToTop = scrollToTop; // 전역 등록
     </script>
 </body>
 </html>
