@@ -518,8 +518,11 @@
                     });
                 });
 
-                document.getElementById('user-id-display').textContent = `데이터 저장 경로: /artifacts/${appId}/public/data/...`;
-                loadingElement.innerHTML = `<i data-lucide="check-circle" class="w-6 h-6 inline-block mr-2 text-green-400"></i> Firebase 설정 완료`;
+                // 데이터 저장 경로 표시를 제거 (요청 반영)
+                // document.getElementById('user-id-display').textContent = `데이터 저장 경로: /artifacts/${appId}/public/data/...`;
+                
+                // Firebase 설정 완료 메시지 제거 (요청 반영)
+                loadingElement.classList.add('hidden');
                 
                 // Firestore 리스너 설정
                 setupListeners();
@@ -527,6 +530,7 @@
             } catch (error) {
                 console.error("Firebase 초기화 또는 인증 오류:", error);
                 loadingElement.textContent = `초기화 오류: ${error.message}`;
+                loadingElement.classList.remove('hidden');
             }
         };
 
@@ -1222,8 +1226,8 @@
              <i data-lucide="loader" class="w-6 h-6 animate-spin inline-block mr-2"></i> 로딩 중...
         </div>
         
-        <!-- 데이터 저장 경로 표시 업데이트 -->
-        <div class="text-sm text-gray-500 mb-4" id="user-id-display"></div>
+        <!-- 데이터 저장 경로 표시 업데이트 (요청에 따라 제거됨) -->
+        <div class="text-sm text-gray-500 mb-4 hidden" id="user-id-display"></div>
 
         <!-- 상단 컨트롤 섹션 (UI 재구성) -->
         <div class="flex flex-col space-y-4 mb-8">
@@ -1232,8 +1236,8 @@
             <form id="add-channel-form" onsubmit="window.handleAddChannel(event)" class="flex space-x-2">
                 <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 입력 (예: https://www.youtube.com/@ChannelHandle)" required
                        class="flex-grow bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
-                <button type="submit" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md flex-shrink-0">
-                    <i data-lucide="plus" class="w-5 h-5"></i>
+                <button type="submit" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md flex-shrink-0 text-lg">
+                    추가
                 </button>
             </form>
 
