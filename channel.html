@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 📺 YouTube 채널 관리 대시보드</title>
+    <title>YouTube 채널 관리 대시보드</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
@@ -90,7 +90,7 @@
             currentSort: { key: 'subscribers', direction: 'desc' },
             searchTerm: '',
             categoryFilter: '전체',
-            ytCategoryFilter: '전체',
+            // ytCategoryFilter 제거됨
             isCategoryModalOpen: false,
             isApiModalOpen: false, // API 모달 상태 추가
             
@@ -152,7 +152,7 @@
 
             ensureCategoryColors(); // 카테고리가 변경될 때마다 색상 맵을 갱신
             
-            const { channels, categories, currentSort, searchTerm, categoryFilter, ytCategoryFilter } = window.state;
+            const { channels, categories, currentSort, searchTerm, categoryFilter } = window.state;
 
             // 1. 필터링
             let filtered = channels.filter(channel => {
@@ -165,7 +165,7 @@
                     channel.note,
                     channel.country,
                     channel.customCategory,
-                    channel.ytCategory,
+                    // channel.ytCategory 제거됨
                     channel.subscribers ? channel.subscribers.toString() : '',
                     channel.totalViews ? channel.totalViews.toString() : '',
                     channel.totalVideos ? channel.totalVideos.toString() : '',
@@ -182,8 +182,8 @@
                 // 사용자 정의 카테고리 필터
                 if (categoryFilter !== '전체' && channel.customCategory !== categoryFilter) return false;
 
-                // YouTube 카테고리 필터
-                if (ytCategoryFilter !== '전체' && channel.ytCategory !== ytCategoryFilter) return false;
+                // 기존 YouTube 카테고리 필터 로직 제거
+                // if (ytCategoryFilter !== '전체' && channel.ytCategory !== ytCategoryFilter) return false;
 
                 return true;
             });
@@ -292,8 +292,6 @@
                                 </span>
                             </div>
                         </td>
-                        <!-- YouTube 카테고리 -->
-                        <td class="p-2 whitespace-nowrap">${channel.ytCategory || 'N/A'}</td>
                         <!-- 국가 -->
                         <td class="p-2 whitespace-nowrap">${channel.country || 'N/A'}</td>
                         <!-- 비고(메모) -->
@@ -330,7 +328,7 @@
                         </td>
                     </tr>
                 `;
-            }).join('') || '<tr><td colspan="16" class="p-4 text-center text-gray-400">등록된 채널이 없습니다.</td></tr>';
+            }).join('') || '<tr><td colspan="15" class="p-4 text-center text-gray-400">등록된 채널이 없습니다.</td></tr>'; // colspan 조정
             
             // Lucide 아이콘 다시 렌더링
             lucide.createIcons();
@@ -340,21 +338,24 @@
             const filterContainer = document.getElementById('filter-container');
             if (!filterContainer) return;
 
-            // 중복 없는 YouTube 카테고리 목록 생성
-            const ytCategories = [...new Set(channels.map(c => c.ytCategory).filter(c => c))].sort();
+            // 중복 없는 YouTube 카테고리 목록 생성 (사용되지 않음: ytCategories)
+            // const ytCategories = [...new Set(channels.map(c => c.ytCategory).filter(c => c))].sort();
 
             const customCategorySelect = document.getElementById('category-filter-select');
-            const ytCategorySelect = document.getElementById('yt-category-filter-select');
+            const ytCategorySelect = document.getElementById('yt-category-filter-select'); // 이 요소를 제거하는 대신 숨김
 
             // 사용자 정의 카테고리 필터 업데이트
             customCategorySelect.innerHTML = `<option value="전체">전체 카테고리</option>` + categories.map(cat => 
                 `<option value="${cat}" ${window.state.categoryFilter === cat ? 'selected' : ''}>${cat}</option>`
             ).join('');
 
-            // YouTube 카테고리 필터 업데이트
-            ytCategorySelect.innerHTML = `<option value="전체">전체 유튜브 카테고리</option>` + ytCategories.map(cat => 
-                `<option value="${cat}" ${window.state.ytCategoryFilter === cat ? 'selected' : ''}>${cat}</option>`
-            ).join('');
+            // YouTube 카테고리 필터 업데이트 (제거됨, UI에서 숨김)
+            if (ytCategorySelect) {
+                // 이전에 렌더링되던 YouTube 카테고리 필터 관련 로직 제거
+                // ytCategorySelect.innerHTML = `<option value="전체">전체 유튜브 카테고리</option>` + ytCategories.map(cat => 
+                //     `<option value="${cat}" ${window.state.ytCategoryFilter === cat ? 'selected' : ''}>${cat}</option>`
+                // ).join('');
+            }
         };
 
         const renderCategoryModal = () => {
@@ -1060,9 +1061,11 @@
         window.handleFilterChange = (type, value) => {
             if (type === 'custom') {
                 window.state.categoryFilter = value;
-            } else if (type === 'yt') {
-                window.state.ytCategoryFilter = value;
-            }
+            } 
+            // ytCategoryFilter 로직 제거됨
+            // else if (type === 'yt') {
+            //     window.state.ytCategoryFilter = value;
+            // }
             render();
         };
 
@@ -1407,15 +1410,13 @@
                     </select>
                 </div>
                 
-
-                <!-- YouTube 카테고리 필터 -->
-                <div class="flex items-center space-x-2">
+                <!-- YouTube 카테고리 필터 (제거됨) -->
+                <!-- <div class="flex items-center space-x-2">
                     <label for="yt-category-filter-select" class="text-gray-300 whitespace-nowrap text-sm">유튜브 카테고리:</label>
                     <select id="yt-category-filter-select" onchange="window.handleFilterChange('yt', this.value)"
                             class="bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[120px]">
-                        <!-- Options populated by JS -->
                     </select>
-                </div>
+                </div> -->
 
                 <!-- 카테고리 편집 버튼 -->
                 <button onclick="window.toggleCategoryModal(true)" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-3 rounded-lg transition duration-200 whitespace-nowrap text-sm flex items-center">
@@ -1438,31 +1439,29 @@
                             <th class="header-cell p-2">링크</th>
                             <!-- 4. 카테고리 (사용자 정의) -->
                             <th class="header-cell" onclick="window.handleSort('customCategory')">카테고리</th>
-                            <!-- 5. 유튜브 카테고리 -->
-                            <th class="header-cell" onclick="window.handleSort('ytCategory')">유튜브 카테고리</th>
-                            <!-- 6. 국가 -->
+                            <!-- 5. 국가 -->
                             <th class="header-cell" onclick="window.handleSort('country')">국가</th>
-                            <!-- 7. 비고(메모) -->
+                            <!-- 6. 비고(메모) -->
                             <th class="header-cell" onclick="window.handleSort('note')">비고(메모)</th>
-                            <!-- 8. 구독자 수 -->
+                            <!-- 7. 구독자 수 -->
                             <th class="header-cell" onclick="window.handleSort('subscribers')">구독자 수</th>
-                            <!-- 9. 총 조회수 -->
+                            <!-- 8. 총 조회수 -->
                             <th class="header-cell" onclick="window.handleSort('totalViews')">총 조회수</th>
-                            <!-- 10. 총 영상수 -->
+                            <!-- 9. 총 영상수 -->
                             <th class="header-cell" onclick="window.handleSort('totalVideos')">총 영상수</th>
-                            <!-- 11. 채널 생성일 -->
+                            <!-- 10. 채널 생성일 -->
                             <th class="header-cell" onclick="window.handleSort('channelCreationDate')">채널 생성일</th>
-                            <!-- 12. 채널 경과 시간 (새로 추가) -->
+                            <!-- 11. 채널 경과 시간 (새로 추가) -->
                             <th class="header-cell">경과 시간</th>
-                            <!-- 13. 평균 업로드 주기 -->
+                            <!-- 12. 평균 업로드 주기 -->
                             <th class="header-cell" onclick="window.handleSort('avgUploadFreqDays')">평균 업로드 주기</th>
-                            <!-- 14. 90일 평균 조회수 -->
+                            <!-- 13. 90일 평균 조회수 -->
                             <th class="header-cell" onclick="window.handleSort('avgViews90d')">90일 평균 조회수</th>
-                            <!-- 15. 90일 평균 좋아요 수 -->
+                            <!-- 14. 90일 평균 좋아요 수 -->
                             <th class="header-cell" onclick="window.handleSort('avgLikes90d')">90일 평균 좋아요</th>
-                            <!-- 16. 90일 평균 댓글 수 -->
+                            <!-- 15. 90일 평균 댓글 수 -->
                             <th class="header-cell" onclick="window.handleSort('avgComments90d')">90일 평균 댓글 수</th>
-                            <!-- 17. 삭제 버튼 (정렬 불가) -->
+                            <!-- 16. 삭제 버튼 (정렬 불가) -->
                             <th class="header-cell p-2"></th>
                         </tr>
                     </thead>
