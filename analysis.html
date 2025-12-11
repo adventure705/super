@@ -525,7 +525,7 @@
         };
         
         // ----------------------------------------------------
-        // FIREBASE CONFIG LOADER (NEW)
+        // FIREBASE CONFIG LOADER 
         // ----------------------------------------------------
 
         async function loadFirebaseConfig() {
@@ -542,6 +542,7 @@
             // 2. GitHub/로컬 환경: firebase-config.json 파일 로드 시도
             try {
                 console.log("Attempting to load firebase-config.json...");
+                // Note: The path './firebase-config.json' assumes the file is in the same directory as the HTML file.
                 const response = await fetch('./firebase-config.json');
                 
                 if (response.ok) {
@@ -584,6 +585,7 @@
                             await fetchApiKeys(); 
                         } else {
                             try {
+                                // GitHub 환경에서 firebase-config.json이 로드되었으나 익명 인증이 필요한 경우
                                 if (initialAuthToken) {
                                     await signInWithCustomToken(auth, initialAuthToken);
                                 } else {
@@ -966,7 +968,7 @@
                     <input type="password" id="edit-value-${oldKeyName}" value="${currentValue}" placeholder="새 API Key 값" class="p-2 rounded-lg bg-bg-dark border border-text-light/20 text-text-light">
                 </div>
                 <div class="flex justify-end space-x-2 mt-3">
-                    <button onclick="fetchApiKeys();" class="py-1 px-3 text-sm bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/80">
+                    <button onclick="event.stopPropagation(); fetchApiKeys();" class="py-1 px-3 text-sm bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/80">
                         취소
                     </button>
                     <button onclick="updateApiKeyAndRefresh('${oldKeyName}', document.getElementById('edit-name-${oldKeyName}').value, document.getElementById('edit-value-${oldKeyName}').value, ${isActive}, event)" 
