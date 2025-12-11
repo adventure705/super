@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 채널 심층 분석기 (다크 모드)</title>
+    <title> 🔍 YouTube 채널 심층 분석기 </title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -134,7 +134,7 @@
                 <div class="flex flex-col gap-3">
                     <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
                     <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light">
-                    <button onclick="saveApiKey()" class="py-2 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">키 저장</button>
+                    <button onclick="saveApiKey(event)" class="py-2 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">키 저장</button>
                 </div>
             </div>
 
@@ -146,8 +146,11 @@
                 </div>
                 <p id="noKeysMessage" class="text-text-light/50 text-sm mt-2 hidden">저장된 키가 없습니다.</p>
             </div>
-
-            <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden');" class="mt-4 py-2 px-4 bg-primary-accent text-white rounded-lg hover:bg-primary-accent/80">닫기</button>
+            
+            <!-- 닫기 버튼을 오른쪽으로 배치 -->
+            <div class="flex justify-end">
+                <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden');" class="mt-4 py-2 px-4 bg-primary-accent text-white rounded-lg hover:bg-primary-accent/80">닫기</button>
+            </div>
             <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다. (Firebase 미설정 시 로컬 저장소에 임시 저장)</p>
         </div>
     </div>
@@ -620,7 +623,9 @@
             }
         }
         
-        async function saveApiKey() {
+        async function saveApiKey(event) { // FIX: event 인자 추가
+            if (event) event.stopPropagation(); // FIX: 이벤트 버블링 방지
+            
             const keyName = document.getElementById('newKeyName').value.trim();
             const keyValue = document.getElementById('newKeyValue').value.trim();
 
@@ -725,7 +730,9 @@
         }
         window.updateApiKey = updateApiKey;
 
-        function promptDeleteApiKey(keyName) {
+        function promptDeleteApiKey(keyName, event) { // FIX: event 인자 추가
+            if (event) event.stopPropagation(); // FIX: 이벤트 버블링 방지
+
             const modal = document.getElementById('deleteConfirmModal');
             const keyNameSpan = document.getElementById('keyNameToDelete');
             const confirmBtn = document.getElementById('confirmDeleteBtn');
@@ -763,7 +770,9 @@
         }
         window.deleteApiKey = deleteApiKey;
 
-        async function setActiveKey(keyName, keyValue) {
+        async function setActiveKey(keyName, keyValue, event) { // FIX: event 인자 추가
+            if (event) event.stopPropagation(); // FIX: 이벤트 버블링 방지
+            
             try {
                 if (isFirebaseReady && db && masterUserId) {
                     // 1. Firebase 활성화
@@ -894,13 +903,13 @@
                             ${isActive ? '<span class="text-xs text-success-status ml-2">[활성]</span>' : ''}
                         </div>
                         <div class="flex space-x-2 flex-shrink-0">
-                            <button onclick="setActiveKey('${key.id}', '${key.value}')" class="py-1 px-3 text-xs rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
+                            <button onclick="setActiveKey('${key.id}', '${key.value}', event)" class="py-1 px-3 text-xs rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
                                 ${isActive ? '활성화됨' : '활성화'}
                             </button>
-                            <button onclick="enableEditMode('${key.id}', '${key.name}', '${key.value}', ${isActive})" class="py-1 px-3 text-xs bg-text-light/10 text-text-light/80 rounded-lg hover:bg-text-light/20">
+                            <button onclick="enableEditMode('${key.id}', '${key.name}', '${key.value}', ${isActive}, event)" class="py-1 px-3 text-xs bg-text-light/10 text-text-light/80 rounded-lg hover:bg-text-light/20">
                                 편집
                             </button>
-                            <button onclick="promptDeleteApiKey('${key.id}')" class="py-1 px-3 text-xs bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
+                            <button onclick="promptDeleteApiKey('${key.id}', event)" class="py-1 px-3 text-xs bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
                                 삭제
                             </button>
                         </div>
@@ -910,7 +919,9 @@
             });
         }
 
-        function enableEditMode(oldKeyName, currentName, currentValue, isActive) {
+        function enableEditMode(oldKeyName, currentName, currentValue, isActive, event) { // FIX: event 인자 추가
+            if (event) event.stopPropagation(); // FIX: 이벤트 버블링 방지
+
             const itemElement = document.getElementById(`key-item-${oldKeyName}`);
             if (!itemElement) return;
 
@@ -923,7 +934,7 @@
                     <button onclick="fetchApiKeys();" class="py-1 px-3 text-sm bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/80">
                         취소
                     </button>
-                    <button onclick="updateApiKeyAndRefresh('${oldKeyName}', document.getElementById('edit-name-${oldKeyName}').value, document.getElementById('edit-value-${oldKeyName}').value, ${isActive})" 
+                    <button onclick="updateApiKeyAndRefresh('${oldKeyName}', document.getElementById('edit-name-${oldKeyName}').value, document.getElementById('edit-value-${oldKeyName}').value, ${isActive}, event)" 
                             class="py-1 px-3 text-sm bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">
                         저장
                     </button>
@@ -932,7 +943,9 @@
         }
         window.enableEditMode = enableEditMode;
 
-        async function updateApiKeyAndRefresh(oldKeyName, newKeyName, newKeyValue, isActive) {
+        async function updateApiKeyAndRefresh(oldKeyName, newKeyName, newKeyValue, isActive, event) { // FIX: event 인자 추가
+            if (event) event.stopPropagation(); // FIX: 이벤트 버블링 방지
+            
             await updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive);
             // Firebase onSnapshot이 갱신을 처리하므로, 여기서는 모달만 닫음
             document.getElementById('apiSettingsModal').classList.add('hidden');
@@ -987,6 +1000,8 @@
             // API Settings Modal Check
             const modal = document.getElementById('apiSettingsModal');
             if (modal && !modal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
+                // 모달 내부의 버튼들이 이미 stopPropagation을 호출하고 있으므로, 
+                // 모달 컨텐츠 외부를 클릭했을 때만 닫히도록 유지.
                 modal.classList.add('hidden');
             }
 
@@ -1970,7 +1985,7 @@
         function scrollToTop() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        window.scrollToTop = scrollToTop; // FIX: 전역 등록
+        window.scrollToTop = scrollToTop; // 전역 등록
     </script>
 </body>
 </html>
