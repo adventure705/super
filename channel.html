@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 채널 관리 대시보드</title>
+    <title> 📺 YouTube 채널 관리 대시보드</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
@@ -672,9 +672,9 @@
          */
         const extractChannelIdentifier = (url) => {
             try {
-                // 쿼리 파라미터를 제거하고 URL 객체를 생성하여 pathname만 사용
-                const cleanUrl = url.split('?')[0]; 
-                const urlObj = new URL(cleanUrl.includes('http') ? cleanUrl : `https://${cleanUrl}`);
+                // 쿼리 파라미터와 #fragment를 제거하고 URL 객체를 생성하여 pathname만 사용
+                const urlParts = url.split('?')[0].split('#')[0];
+                const urlObj = new URL(urlParts.includes('http') ? urlParts : `https://${urlParts}`);
                 const pathname = urlObj.pathname.toLowerCase();
                 const pathParts = pathname.split('/').filter(p => p);
                 
@@ -692,19 +692,26 @@
                 if (pathname.includes('/@')) {
                     // 첫 번째 경로 세그먼트가 핸들일 가능성이 높음 (디코딩 처리)
                     const handleSegment = pathParts.find(p => p.startsWith('@')) || pathParts[0];
+                    // %ED%95%9C%EA%B5%AD 등 인코딩된 문자열을 디코딩하여 핸들로 사용
                     const handle = decodeURIComponent(handleSegment.startsWith('@') ? handleSegment.substring(1) : handleSegment);
                     return { type: 'handle', value: handle };
                 }
+
+                // 4. 단축 URL (youtu.be) 처리: video ID 추출 후 search API로 채널 검색
+                if (urlObj.hostname.includes('youtu.be')) {
+                     // 단축 링크는 비디오 ID가 경로의 첫 번째 부분입니다.
+                     const videoId = pathParts[0];
+                     if (videoId) {
+                         // video ID를 쿼리하여 채널 ID를 찾는 방식으로 처리
+                         return { type: 'query', value: videoId };
+                     }
+                }
                 
-                // 4. 루트 URL에 핸들만 남은 경우 (https://youtube.com/handle)
-                // /shorts, /videos와 같은 경로 세그먼트를 제거하고 첫 번째 부분을 시도
+                // 5. 루트 URL에 핸들만 남은 경우 (https://youtube.com/handle)
                 let potentialHandle = null;
                 if (pathParts.length > 0) {
                      let normalizedPath = pathParts[0].toLowerCase();
-                     if (normalizedPath === 'shorts' && pathParts.length > 1) {
-                         // ex: youtube.com/shorts/video_id -> 이 경우 channel ID 추출이 어려움.
-                         // 하지만 /@handle/shorts/ 형태는 3번에서 처리됨.
-                     } else if (normalizedPath !== 'watch') {
+                     if (normalizedPath !== 'watch' && normalizedPath !== 'shorts' && normalizedPath !== 'videos') {
                          potentialHandle = decodeURIComponent(pathParts[0]);
                      }
                 }
@@ -754,8 +761,18 @@
             } else if (identifier.type === 'handle' || identifier.type === 'query') {
                 // 핸들이나 복잡한 URL (또는 video URL)을 쿼리로 사용하여 채널 검색
                 const queryTerm = identifier.value;
-                const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${queryTerm}&type=channel&part=snippet&maxResults=1`;
+                
+                // 핸들(`@handle` 형태)로 검색할 때는 `search` API가 아닌
+                // `channels` API의 `forHandle` 또는 `forUsername` 파라미터를 사용해야 정확도가 높지만,
+                // YouTube Data API v3는 `forHandle`을 직접 지원하지 않으므로,
+                // 최대한 정확한 검색어를 사용하여 `search` API를 이용합니다.
+                
+                // '스토리슈퍼'와 같은 핸들을 검색할 때, `channel` 유형으로 필터링하고 정확도를 높임.
+                const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${encodeURIComponent(queryTerm)}&type=channel&part=snippet&maxResults=5`; 
                 const searchData = await fetchWithBackoff(searchUrl);
+                
+                // 검색 결과에서 가장 관련성이 높은 채널 (채널 ID, title, handle 등이 일치하는 항목)을 찾거나,
+                // 단순히 첫 번째 결과를 사용합니다. (현재 API의 한계로 첫 번째 결과를 사용)
                 channelId = searchData.items[0]?.id?.channelId;
             }
             
@@ -765,7 +782,7 @@
 
 
             // --- Step 2: 채널 상세 정보 가져오기 ---
-            loadingElement.querySelector('span').textContent = `채널 상세 정보 로딩 중...`;
+            loadingElement.querySelector('span').textContent = `채널 상세 정보 로딩 중... (ID: ${channelId})`;
             const channelInfoUrl = `${YOUTUBE_API_BASE}/channels?key=${apiKey}&id=${channelId}&part=snippet,contentDetails,statistics,brandingSettings`;
             const channelDataResponse = await fetchWithBackoff(channelInfoUrl);
             const channelItem = channelDataResponse.items[0];
@@ -1379,6 +1396,7 @@
 
             // Listener function to handle Enter key press
             const handleAlertEnter = (event) => {
+                // Ensure only one listener is active (optional, but good practice)
                 if (event.key === 'Enter') {
                     event.preventDefault();
                     closeModal();
