@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 채널 심층 분석기 (다크 모드)</title>
+    <title> 🔍 YouTube 채널 심층 분석기</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -151,7 +151,22 @@
             <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다.</p>
         </div>
     </div>
-    <!-- END Modal -->
+    <!-- END API Settings Modal -->
+
+    <!-- 키 삭제 확인 모달 -->
+    <div id="deleteConfirmModal" class="modal hidden">
+        <div class="modal-content w-80">
+            <h3 class="text-xl font-bold text-primary-accent mb-4">키 삭제 확인</h3>
+            <p class="text-sm text-text-light/80 mb-4">
+                정말로 '<span id="keyNameToDelete" class="font-bold text-success-status"></span>' 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <div class="flex justify-end space-x-3">
+                <button onclick="document.getElementById('deleteConfirmModal').classList.add('hidden')" class="py-2 px-4 bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/50">취소</button>
+                <button id="confirmDeleteBtn" class="py-2 px-4 bg-primary-accent text-white font-bold rounded-lg hover:bg-primary-accent/80">삭제 확인</button>
+            </div>
+        </div>
+    </div>
+    <!-- END Delete Confirm Modal -->
 
     <!-- 헤더 섹션 -->
     <header id="top" class="p-4 sm:p-6 bg-card-bg shadow-lg sticky top-0 z-10 rounded-b-xl">
@@ -446,19 +461,73 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Initialization and State
+        // DOM 요소와 전역 상태 변수들 (모듈 스코프)
+        // DOM 요소 참조 시, window.onload가 아니라 모듈 스코프에서 선언하는 것이 더 안전함
+        const apiKeyInput = document.getElementById('apiKey');
+        const channelIdInput = document.getElementById('channelId');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const buttonText = document.getElementById('buttonText');
+        const statusMessage = document.getElementById('statusMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const channelInfoDiv = document.getElementById('channelInfo');
+        const statSubscribers = document.getElementById('statSubscribers');
+        const statViews = document.getElementById('statViews');
+        const statVideos = document.getElementById('statVideos');
+        const avgViews90Days = document.getElementById('avgViews90Days');
+        const avgLikes90Days = document.getElementById('avgLikes90Days');
+        const avgComments90Days = document.getElementById('avgComments90Days');
+        const totalVideosCount = document.getElementById('totalVideosCount');
+        const videoListTableBody = document.getElementById('videoListTableBody');
+        const noVideosMessage = document.getElementById('noVideosMessage');
+        const backToTopBtn = document.getElementById('backToTopBtn');
+        const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+        const calendarBodyElement = document.getElementById('calendarBody');
+        const calendarNavHeader = document.getElementById('calendarNavHeader');
+        const resetFilterBtn = document.getElementById('resetFilterBtn');
+        const shortsContainer = document.getElementById('shortsContainer');
+        const shortsSortBy = document.getElementById('shortsSortBy');
+        const filterMenu = document.getElementById('filterMenu');
+
+        // Firestore 및 인증 관련 상태
         let db;
         let auth;
-        let masterUserId; // Master User ID for persistent storage
+        let masterUserId; 
         let currentApiKey = '';
 
-        // Canvas provided globals
+        // UI/Data State
+        let allVideosData = []; 
+        let channelMetadata = null; 
+        let sortKey = 'publishedAt'; 
+        let sortDirection = 'desc'; 
+        let monthlyCalendarData = {}; 
+        let availableMonths = [];     
+        let currentCalendarDate = null; 
+        let currentFilterDate = null; 
+
+        // Filter State
+        let currentFilters = {
+            duration: ['short', 'mid', 'long'],
+            likeRating: [1, 2, 3, 4, 5],
+            commentRating: [1, 2, 3, 4, 5]
+        };
+
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Document Ready Check & Firebase Setup
+        const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
+
+        // ----------------------------------------------------
+        // FIREBASE AUTH & INIT
+        // ----------------------------------------------------
+
+        // Firebase Initialization and Authentication
         window.addEventListener('DOMContentLoaded', async () => {
+            // FIX: setStatus를 window에 등록하여 DOMContentLoaded에서도 사용 가능하게 함
+            if (typeof window.setStatus === 'function') {
+                 setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
+            }
+
             if (Object.keys(firebaseConfig).length > 0) {
                 try {
                     const app = initializeApp(firebaseConfig);
@@ -466,14 +535,12 @@
                     auth = getAuth(app);
                     console.log("Firebase Initialized.");
 
-                    // Sign-in logic
                     onAuthStateChanged(auth, async (user) => {
                         if (user) {
                             masterUserId = user.uid;
                             console.log("User signed in:", masterUserId);
-                            await fetchApiKeys(); // Load keys upon sign-in
+                            await fetchApiKeys(); 
                         } else {
-                            // Attempt sign-in using initial token or anonymously
                             try {
                                 if (initialAuthToken) {
                                     await signInWithCustomToken(auth, initialAuthToken);
@@ -481,189 +548,27 @@
                                     await signInAnonymously(auth);
                                 }
                             } catch (e) {
-                                console.error("Anonymous sign-in failed:", e);
-                                // Fallback to a random ID if anonymous sign-in truly fails
+                                console.error("Sign-in failed:", e);
                                 masterUserId = 'anonymous-' + Math.random().toString(36).substring(2, 9);
                             }
                         }
                     });
                 } catch (e) {
                     console.error("Firebase initialization failed:", e);
-                    setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
+                    if (typeof window.setStatus === 'function') {
+                         setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
+                    }
                 }
             } else {
                 console.warn("Firebase config not found.");
-                setStatus('경고: Firebase 설정이 누락되어 API 키 저장이 불가능합니다.', true);
+                if (typeof window.setStatus === 'function') {
+                    setStatus('경고: Firebase 설정이 누락되어 API 키 저장이 불가능합니다.', true);
+                }
             }
         });
         
         // ----------------------------------------------------
-        // FIREBASE DATA FUNCTIONS (API Key Management)
-        // ----------------------------------------------------
-
-        async function saveApiKey() {
-            if (!db || !masterUserId) {
-                setStatus('키 저장 실패: 인증 상태를 확인하세요.', true);
-                return;
-            }
-            const keyName = document.getElementById('newKeyName').value.trim();
-            const keyValue = document.getElementById('newKeyValue').value.trim();
-
-            if (!keyName || !keyValue) {
-                setStatus('키 이름과 값을 모두 입력해주세요.', true);
-                return;
-            }
-            if (!keyValue.startsWith('AIza')) {
-                 setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
-                 return;
-            }
-
-            try {
-                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-                await setDoc(keyRef, {
-                    name: keyName,
-                    value: keyValue,
-                    createdAt: new Date().toISOString(),
-                    active: false
-                });
-                document.getElementById('newKeyName').value = '';
-                document.getElementById('newKeyValue').value = '';
-                setStatus(`✔️ API 키 "${keyName}"이 저장되었습니다.`, false);
-                // fetchApiKeys will be called by onSnapshot listener
-            } catch (e) {
-                console.error("Error saving API key:", e);
-                setStatus('키 저장 중 오류 발생.', true);
-            }
-        }
-        window.saveApiKey = saveApiKey;
-
-        async function deleteApiKey(keyName) {
-            if (!db || !masterUserId) return;
-            if (!confirm(`정말로 키 "${keyName}"을 삭제하시겠습니까?`)) return;
-
-            try {
-                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-                await deleteDoc(keyRef);
-                setStatus(`✔️ API 키 "${keyName}"이 삭제되었습니다.`, false);
-            } catch (e) {
-                console.error("Error deleting API key:", e);
-                setStatus('키 삭제 중 오류 발생.', true);
-            }
-        }
-        window.deleteApiKey = deleteApiKey;
-
-        async function setActiveKey(keyName, keyValue) {
-            if (!db || !masterUserId) return;
-            
-            // 1. Deactivate all existing keys (for simplicity, only one active key)
-            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
-            const snapshot = await getDocs(keysCollectionRef);
-            
-            snapshot.docs.forEach(async (d) => {
-                if (d.id !== keyName) {
-                    await setDoc(d.ref, { active: false }, { merge: true });
-                }
-            });
-
-            // 2. Activate the selected key
-            const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-            await setDoc(keyRef, { active: true }, { merge: true });
-            
-            // 3. Update active state
-            currentApiKey = keyValue;
-            document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
-            setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
-            document.getElementById('apiSettingsModal').classList.add('hidden');
-        }
-        window.setActiveKey = setActiveKey;
-
-        // Fetch keys and set up real-time listener
-        function fetchApiKeys() {
-            if (!db || !masterUserId) return;
-            
-            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
-
-            // Real-time listener using onSnapshot
-            onSnapshot(keysCollectionRef, (snapshot) => {
-                const keysData = [];
-                let activeKey = null;
-
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    keysData.push({ id: doc.id, ...data });
-                    if (data.active) {
-                        activeKey = { name: doc.id, value: data.value };
-                    }
-                });
-
-                renderApiKeyList(keysData);
-                
-                // Set active key state if found
-                if (activeKey) {
-                    currentApiKey = activeKey.value;
-                    document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
-                } else if (currentApiKey) {
-                     // If previously active but now missing active=true flag
-                     currentApiKey = '';
-                     document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
-                }
-            }, (error) => {
-                console.error("Error listening to API keys:", error);
-                setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
-            });
-        }
-        
-        function renderApiKeyList(keys) {
-            const listElement = document.getElementById('apiKeyList');
-            const countElement = document.getElementById('apiKeyCount');
-            const noKeysMessage = document.getElementById('noKeysMessage');
-
-            listElement.innerHTML = '';
-            countElement.textContent = keys.length;
-
-            if (keys.length === 0) {
-                noKeysMessage.classList.remove('hidden');
-                return;
-            }
-            noKeysMessage.classList.add('hidden');
-
-            keys.forEach(key => {
-                const isActive = key.active;
-                const buttonClass = isActive 
-                    ? 'bg-success-status/20 text-success-status font-extrabold border-success-status'
-                    : 'bg-bg-dark text-text-light/80 border-card-bg hover:bg-card-bg/50';
-                
-                const item = document.createElement('div');
-                item.className = 'flex justify-between items-center p-3 border rounded-lg';
-                item.innerHTML = `
-                    <div class="truncate flex-grow mr-4">
-                        <span class="text-sm font-semibold">${key.name}</span>
-                        ${isActive ? '<span class="text-xs text-success-status ml-2">[활성]</span>' : ''}
-                    </div>
-                    <div class="flex space-x-2 flex-shrink-0">
-                        <button onclick="setActiveKey('${key.id}', '${key.value}')" class="py-1 px-3 text-sm rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
-                            ${isActive ? '활성화됨' : '활성화'}
-                        </button>
-                        <button onclick="deleteApiKey('${key.id}')" class="py-1 px-3 text-sm bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
-                            삭제
-                        </button>
-                    </div>
-                `;
-                listElement.appendChild(item);
-            });
-        }
-
-        function openApiSettings(event) {
-            // FIX: 모달 버튼 클릭 시 이벤트 버블링 방지
-            if (event) {
-                event.stopPropagation();
-            }
-            document.getElementById('apiSettingsModal').classList.remove('hidden');
-        }
-        window.openApiSettings = openApiSettings;
-
-        // ----------------------------------------------------
-        // API 호출 및 오류 처리 함수
+        // API CALL HANDLERS
         // ----------------------------------------------------
 
         async function checkResponse(response) {
@@ -695,7 +600,253 @@
 
 
         // ----------------------------------------------------
-        // 유틸리티 함수
+        // FIREBASE DATA FUNCTIONS
+        // ----------------------------------------------------
+
+        async function saveApiKey() {
+            if (!db || !masterUserId) {
+                setStatus('키 저장 실패: 인증 상태를 확인하세요.', true);
+                return;
+            }
+            const keyName = document.getElementById('newKeyName').value.trim();
+            const keyValue = document.getElementById('newKeyValue').value.trim();
+
+            if (!keyName || !keyValue) {
+                setStatus('키 이름과 값을 모두 입력해주세요.', true);
+                return;
+            }
+            if (!keyValue.startsWith('AIza')) {
+                 setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
+                 return;
+            }
+
+            try {
+                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                await setDoc(keyRef, {
+                    name: keyName,
+                    value: keyValue,
+                    createdAt: new Date().toISOString(),
+                    active: false
+                });
+                document.getElementById('newKeyName').value = '';
+                document.getElementById('newKeyValue').value = '';
+                setStatus(`✔️ API 키 "${keyName}"이 저장되었습니다.`, false);
+            } catch (e) {
+                console.error("Error saving API key:", e);
+                setStatus('키 저장 중 오류 발생.', true);
+            }
+        }
+        window.saveApiKey = saveApiKey;
+
+        // [NEW] 키 업데이트 함수
+        async function updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive) {
+            if (!db || !masterUserId) {
+                setStatus('키 수정 실패: 인증 상태를 확인하세요.', true);
+                return;
+            }
+             if (!newKeyName || !newKeyValue) {
+                setStatus('키 이름과 값을 모두 입력해주세요.', true);
+                return;
+            }
+
+            try {
+                const oldKeyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', oldKeyName);
+                
+                if (oldKeyName !== newKeyName) {
+                    // 키 이름이 변경된 경우: 기존 문서 삭제 후 새 문서 생성
+                    await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', newKeyName), {
+                        name: newKeyName,
+                        value: newKeyValue,
+                        createdAt: new Date().toISOString(),
+                        active: isActive
+                    });
+                    await deleteDoc(oldKeyRef);
+                } else {
+                    // 키 값만 변경된 경우: 기존 문서 업데이트
+                     await setDoc(oldKeyRef, {
+                        value: newKeyValue,
+                        active: isActive
+                    }, { merge: true });
+                }
+
+                setStatus(`✔️ API 키 "${newKeyName}"이 성공적으로 수정되었습니다.`, false);
+            } catch (e) {
+                console.error("Error updating API key:", e);
+                setStatus('키 수정 중 오류 발생.', true);
+            }
+        }
+        window.updateApiKey = updateApiKey;
+
+        function promptDeleteApiKey(keyName) {
+            const modal = document.getElementById('deleteConfirmModal');
+            const keyNameSpan = document.getElementById('keyNameToDelete');
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+            keyNameSpan.textContent = keyName;
+            
+            confirmBtn.onclick = async () => {
+                await deleteApiKey(keyName);
+                modal.classList.add('hidden');
+            };
+
+            modal.classList.remove('hidden');
+        }
+        window.promptDeleteApiKey = promptDeleteApiKey;
+
+        async function deleteApiKey(keyName) {
+            if (!db || !masterUserId) {
+                setStatus('키 삭제 실패: 인증 상태를 확인하세요.', true);
+                return;
+            }
+            
+            try {
+                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                await deleteDoc(keyRef);
+                setStatus(`✔️ API 키 "${keyName}"이 삭제되었습니다.`, false);
+            } catch (e) {
+                console.error("Error deleting API key:", e);
+                setStatus('키 삭제 중 오류 발생.', true);
+            }
+        }
+        window.deleteApiKey = deleteApiKey;
+
+        async function setActiveKey(keyName, keyValue) {
+            if (!db || !masterUserId) return;
+            
+            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+            const snapshot = await getDocs(keysCollectionRef);
+            
+            // 1. Deactivate all existing keys
+            snapshot.docs.forEach(async (d) => {
+                if (d.id !== keyName) {
+                    await setDoc(d.ref, { active: false }, { merge: true });
+                }
+            });
+
+            // 2. Activate the selected key
+            const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+            await setDoc(keyRef, { active: true }, { merge: true });
+            
+            // 3. Update active state
+            currentApiKey = keyValue;
+            document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
+            setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
+            document.getElementById('apiSettingsModal').classList.add('hidden');
+        }
+        window.setActiveKey = setActiveKey;
+
+        function fetchApiKeys() {
+            if (!db || !masterUserId) return;
+            
+            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+
+            onSnapshot(keysCollectionRef, (snapshot) => {
+                const keysData = [];
+                let activeKey = null;
+
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    keysData.push({ id: doc.id, ...data });
+                    if (data.active) {
+                        activeKey = { name: doc.id, value: data.value };
+                    }
+                });
+
+                renderApiKeyList(keysData);
+                
+                if (activeKey) {
+                    currentApiKey = activeKey.value;
+                    document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
+                } else if (!activeKey && currentApiKey) {
+                     currentApiKey = '';
+                     document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                }
+            }, (error) => {
+                console.error("Error listening to API keys:", error);
+                setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
+            });
+        }
+        
+        function renderApiKeyList(keys) {
+            const listElement = document.getElementById('apiKeyList');
+            const countElement = document.getElementById('apiKeyCount');
+            const noKeysMessage = document.getElementById('noKeysMessage');
+
+            if(!listElement || !countElement || !noKeysMessage) return; // Safety check
+
+            listElement.innerHTML = '';
+            countElement.textContent = keys.length;
+
+            if (keys.length === 0) {
+                noKeysMessage.classList.remove('hidden');
+                return;
+            }
+            noKeysMessage.classList.add('hidden');
+
+            keys.forEach(key => {
+                const isActive = key.active;
+                const itemId = `key-item-${key.id}`;
+                
+                const item = document.createElement('div');
+                item.id = itemId;
+                item.className = 'flex flex-col p-3 border rounded-lg bg-card-bg/50';
+                
+                // Read/View Mode
+                item.innerHTML = `
+                    <div class="flex justify-between items-center space-x-3">
+                        <div class="truncate flex-grow mr-4">
+                            <span class="text-sm font-semibold text-text-light">${key.name}</span>
+                            ${isActive ? '<span class="text-xs text-success-status ml-2">[활성]</span>' : ''}
+                        </div>
+                        <div class="flex space-x-2 flex-shrink-0">
+                            <button onclick="setActiveKey('${key.id}', '${key.value}')" class="py-1 px-3 text-xs rounded-lg ${isActive ? 'bg-primary-accent text-white hover:bg-primary-accent/80' : 'bg-card-bg text-primary-accent border border-primary-accent hover:bg-primary-accent/10'}">
+                                ${isActive ? '활성화됨' : '활성화'}
+                            </button>
+                            <button onclick="enableEditMode('${key.id}', '${key.name}', '${key.value}', ${isActive})" class="py-1 px-3 text-xs bg-text-light/10 text-text-light/80 rounded-lg hover:bg-text-light/20">
+                                편집
+                            </button>
+                            <button onclick="promptDeleteApiKey('${key.id}')" class="py-1 px-3 text-xs bg-primary-accent/30 text-primary-accent rounded-lg hover:bg-primary-accent/50">
+                                삭제
+                            </button>
+                        </div>
+                    </div>
+                `;
+                listElement.appendChild(item);
+            });
+        }
+
+        function enableEditMode(oldKeyName, currentName, currentValue, isActive) {
+            const itemElement = document.getElementById(`key-item-${oldKeyName}`);
+            if (!itemElement) return;
+
+            itemElement.innerHTML = `
+                <div class="flex flex-col gap-2 p-2">
+                    <input type="text" id="edit-name-${oldKeyName}" value="${currentName}" placeholder="새 키 이름" class="p-2 rounded-lg bg-bg-dark border border-text-light/20 text-text-light font-semibold">
+                    <input type="password" id="edit-value-${oldKeyName}" value="${currentValue}" placeholder="새 API Key 값" class="p-2 rounded-lg bg-bg-dark border border-text-light/20 text-text-light">
+                </div>
+                <div class="flex justify-end space-x-2 mt-3">
+                    <button onclick="fetchApiKeys();" class="py-1 px-3 text-sm bg-card-bg border border-text-light/20 text-text-light rounded-lg hover:bg-card-bg/80">
+                        취소
+                    </button>
+                    <button onclick="updateApiKeyAndRefresh('${oldKeyName}', document.getElementById('edit-name-${oldKeyName}').value, document.getElementById('edit-value-${oldKeyName}').value, ${isActive})" 
+                            class="py-1 px-3 text-sm bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80">
+                        저장
+                    </button>
+                </div>
+            `;
+        }
+        window.enableEditMode = enableEditMode;
+
+        async function updateApiKeyAndRefresh(oldKeyName, newKeyName, newKeyValue, isActive) {
+            await updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive);
+            // Firebase onSnapshot이 갱신을 처리하므로, 여기서는 모달만 닫음
+            document.getElementById('apiSettingsModal').classList.add('hidden');
+        }
+        window.updateApiKeyAndRefresh = updateApiKeyAndRefresh;
+
+
+        // ----------------------------------------------------
+        // UTILITY FUNCTIONS (Non-Firebase)
         // ----------------------------------------------------
         
         function toggleDescription(videoId) {
@@ -714,20 +865,24 @@
         }
         window.toggleDescription = toggleDescription; 
 
-        // [NEW] 필터 메뉴 토글
+        function openApiSettings(event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            document.getElementById('apiSettingsModal').classList.remove('hidden');
+        }
+        window.openApiSettings = openApiSettings;
+
         function toggleFilterMenu() {
             filterMenu.classList.toggle('hidden');
         }
         window.toggleFilterMenu = toggleFilterMenu;
 
-        // [NEW] 필터 상태 업데이트 및 목록 갱신
         function updateFilters() {
-            // 체크박스 상태 읽기
             currentFilters.duration = Array.from(document.querySelectorAll('.filter-type:checked')).map(el => el.value);
             currentFilters.likeRating = Array.from(document.querySelectorAll('.filter-like:checked')).map(el => parseInt(el.value));
             currentFilters.commentRating = Array.from(document.querySelectorAll('.filter-comment:checked')).map(el => parseInt(el.value));
             
-            // 필터링 적용하여 목록 갱신
             renderVideoList();
         }
         window.updateFilters = updateFilters;
@@ -737,8 +892,13 @@
             // API Settings Modal Check
             const modal = document.getElementById('apiSettingsModal');
             if (modal && !modal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
-                // 모달 콘텐츠 내부가 아닌 곳을 클릭했을 때 모달 닫기
                 modal.classList.add('hidden');
+            }
+
+            // Delete Confirm Modal Check
+            const deleteModal = document.getElementById('deleteConfirmModal');
+            if (deleteModal && !deleteModal.classList.contains('hidden') && !event.target.closest('.modal-content')) {
+                deleteModal.classList.add('hidden');
             }
 
             // Filter Menu Check
@@ -753,25 +913,20 @@
         });
 
 
-        // [NEW] 영상 ID 추출 함수
         function extractVideoId(input) {
-            // 다양한 유튜브 URL 포맷을 지원하는 정규식
             const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?\/\s]{11})/;
             const match = input.match(regex);
             return match ? match[1] : null;
         }
 
         function extractChannelId(input) {
-            // FIX: URL 뒤의 쿼리 파라미터를 먼저 제거하고 핸들/ID 추출을 시도
             const cleanedInput = input.split('?')[0].split('&')[0].trim();
 
-            // 1. Handle/Channel/User/Custom URL extraction (@handle, /channel/, /user/, /c/)
             const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
             if (urlMatch && urlMatch[1]) {
                 return urlMatch[1];
             }
             
-            // 2. Fallback: If it's a direct ID/Handle
             return cleanedInput;
         }
 
@@ -915,10 +1070,14 @@
 
 
         function setStatus(message, isError = false) {
-            statusMessage.textContent = message;
-            statusMessage.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            const statusElement = document.getElementById('statusMessage');
+            if(statusElement) {
+                statusElement.textContent = message;
+                statusElement.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            }
         }
-        
+        window.setStatus = setStatus; // FIX: setStatus를 window에 등록
+
         function formatNumber(num) {
             if (num === '0' || num === undefined || num === null || num === 'N/A') return 'N/A';
             try {
@@ -1206,7 +1365,7 @@
             }
             renderVideoList();
         }
-        window.toggleSortDirection = toggleSortDirection; // 전역 등록
+        window.toggleSortDirection = toggleSortDirection; 
 
         function renderVideoList() {
             videoListTableBody.innerHTML = '';
@@ -1248,8 +1407,6 @@
             }
             noVideosMessage.classList.add('hidden');
             downloadCsvBtn.disabled = false;
-
-            // window.copyToClipboard, window.toggleDescription 등은 이미 전역 등록되어 있음
 
             displayList.forEach((video, index) => {
                 const videoId = video.videoId;
@@ -1315,7 +1472,7 @@
                 videoListTableBody.appendChild(descRow);
             });
         }
-        window.renderVideoList = renderVideoList; // 전역 등록
+        window.renderVideoList = renderVideoList; 
         
         function renderShortsPreview() {
             const sortBy = shortsSortBy ? shortsSortBy.value : 'publishedAt';
@@ -1458,6 +1615,41 @@
                 allStats.push(...data.items);
             }
             return allStats;
+        }
+
+
+        function extractChannelId(input) {
+            const cleanedInput = input.split('?')[0].split('&')[0].trim();
+
+            const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
+            if (urlMatch && urlMatch[1]) {
+                return urlMatch[1];
+            }
+            
+            return cleanedInput;
+        }
+
+        function calculate90DayAverages(videos) {
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            
+            const recentVideos = videos.filter(video => new Date(video.publishedAt) >= ninetyDaysAgo);
+            
+            if (recentVideos.length === 0) {
+                return { avgViews: 0, avgLikes: 0, avgComments: 0 };
+            }
+
+            const totalViews = recentVideos.reduce((sum, v) => sum + parseInt(v.viewCount || 0), 0);
+            const totalLikes = recentVideos.reduce((sum, v) => sum + parseInt(v.likeCount || 0), 0);
+            const totalComments = recentVideos.reduce((sum, v) => sum + parseInt(v.commentCount || 0), 0);
+            
+            const count = recentVideos.length;
+            
+            return {
+                avgViews: Math.round(totalViews / count),
+                avgLikes: Math.round(totalLikes / count),
+                avgComments: Math.round(totalComments / count)
+            };
         }
 
 
@@ -1650,8 +1842,8 @@
                 let userFriendlyError = error.message;
                 if (error.message.includes('API key not valid')) {
                     userFriendlyError = 'API 키가 유효하지 않거나 잘못되었습니다. "API 설정"을 통해 확인해 주세요.';
-                } else if (error.message.includes('channelId')) {
-                    userFriendlyError = '채널 ID가 잘못되었거나 해당 채널이 존재하지 않습니다.';
+                } else if (userFriendlyError.includes('400') || userFriendlyError.includes('404')) {
+                    userFriendlyError = '채널 ID가 잘못되었거나 해당 채널/핸들을 찾을 수 없습니다.';
                 } else if (error.message.includes('Quota exceeded')) {
                     userFriendlyError = 'API 할당량이 소진되었습니다. 다음 날 다시 시도하거나 할당량을 늘려주세요.';
                 }
@@ -1667,10 +1859,12 @@
         window.startAnalysis = startAnalysis; // 전역 등록
 
         
-        window.onload = () => {
-             setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
-        };
+        // FIX: window.onload 대신 DOMContentLoaded 내에서 setStatus를 호출하도록 했으나,
+        // window.onload에 남아있는 호출 코드를 제거하거나, window.onload를 DOMContentLoaded로 대체합니다.
         
+        // window.onload 제거
+        
+        // '상단으로 바로가기' 버튼 가시성 제어 및 기능
         window.onscroll = function() {
             if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
                 backToTopBtn.classList.remove('opacity-0', 'translate-y-4');
