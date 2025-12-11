@@ -113,41 +113,21 @@
 
         // 카테고리 색상 매핑 보장 함수
         const ensureCategoryColors = () => {
+            // 다양한 색상 팔레트를 준비합니다.
             const palette = ['red', 'green', 'blue', 'yellow', 'purple', 'indigo', 'pink', 'teal'];
             const colorClasses = palette.map(p => `bg-${p}-700`);
             
-            const newColors = { '미분류': 'bg-gray-700' };
-            const usedColors = new Set(['bg-gray-700']);
-
+            const newColors = { ...window.state.categoryColors, '미분류': 'bg-gray-700' };
+            const existingCategories = Object.keys(newColors);
             let colorIndex = 0;
 
-            // 기존 색상 맵에 없는 카테고리에 색상 할당
             for (const cat of window.state.categories) {
                 if (cat === '미분류') continue;
 
-                if (!window.state.categoryColors[cat]) {
-                    // 팔레트에서 아직 사용되지 않은 색상 찾기
-                    let newColorClass = '';
-                    while (colorIndex < colorClasses.length) {
-                        const classCandidate = colorClasses[colorIndex];
-                        if (!usedColors.has(classCandidate)) {
-                            newColorClass = classCandidate;
-                            break;
-                        }
-                        colorIndex++;
-                    }
-                    
-                    // 팔레트 색상이 모두 사용되었다면 순환해서 재사용
-                    if (!newColorClass) {
-                        newColorClass = colorClasses[(colorIndex++) % colorClasses.length];
-                    }
-                    
-                    newColors[cat] = newColorClass;
-                    usedColors.add(newColorClass);
-                } else {
-                    // 기존 색상 유지
-                    newColors[cat] = window.state.categoryColors[cat];
-                    usedColors.add(newColors[cat]);
+                if (!newColors[cat]) {
+                    // 순환하며 고유한 색상 클래스를 할당
+                    newColors[cat] = colorClasses[colorIndex % colorClasses.length];
+                    colorIndex++;
                 }
             }
             
@@ -168,21 +148,22 @@
                 const searchMatch = searchTerm.toLowerCase();
                 
                 // 검색어 필터 (리스트에 보이는 모든 필드 포함)
+                // Date 객체를 문자열로 변환하여 검색 범위에 포함
                 const textContent = [
                     channel.channelName,
                     channel.note,
                     channel.country,
                     channel.customCategory,
                     channel.ytCategory,
-                    channel.subscribers.toString(),
-                    channel.totalViews.toString(),
-                    channel.totalVideos.toString(),
-                    new Date(channel.channelCreationDate).toLocaleDateString('ko-KR'),
-                    new Date(channel.oldestVideoPostDate).toLocaleDateString('ko-KR'),
-                    channel.avgUploadFreqDays.toString(),
-                    channel.avgViews90d.toString(),
-                    channel.avgLikes90d.toString(),
-                    channel.avgComments90d.toString(),
+                    channel.subscribers ? channel.subscribers.toString() : '',
+                    channel.totalViews ? channel.totalViews.toString() : '',
+                    channel.totalVideos ? channel.totalVideos.toString() : '',
+                    channel.channelCreationDate ? new Date(channel.channelCreationDate).toLocaleDateString('ko-KR') : '',
+                    channel.oldestVideoPostDate ? new Date(channel.oldestVideoPostDate).toLocaleDateString('ko-KR') : '',
+                    channel.avgUploadFreqDays ? channel.avgUploadFreqDays.toString() : '',
+                    channel.avgViews90d ? channel.avgViews90d.toString() : '',
+                    channel.avgLikes90d ? channel.avgLikes90d.toString() : '',
+                    channel.avgComments90d ? channel.avgComments90d.toString() : '',
                 ].join(' ').toLowerCase();
 
                 if (searchTerm && !textContent.includes(searchMatch)) return false;
@@ -221,7 +202,7 @@
             if (!tbody) return;
             tbody.innerHTML = channels.map(channel => {
                 // 구독자수, 조회수 등 숫자는 포맷팅
-                const formatNumber = (num) => num.toLocaleString('ko-KR');
+                const formatNumber = (num) => num ? num.toLocaleString('ko-KR') : 'N/A';
 
                 // D-day 계산 (가장 오래된 영상 게시일로부터)
                 const oldestVideoDate = channel.oldestVideoPostDate ? new Date(channel.oldestVideoPostDate) : null;
@@ -235,7 +216,7 @@
                     <tr class="border-b border-gray-700 hover:bg-gray-800 transition duration-150">
                         <!-- 채널명 및 프로필 아이콘 통합 -->
                         <td class="p-2 font-medium flex items-center space-x-2">
-                            <img src="${channel.profileIconUrl}" alt="Profile" class="w-8 h-8 rounded-full object-cover">
+                            <img src="${channel.profileIconUrl}" alt="Profile" onerror="this.onerror=null;this.src='https://placehold.co/40x40/374151/f3f4f6?text=C'" class="w-8 h-8 rounded-full object-cover">
                             <a href="${channel.channelUrl}" target="_blank" class="text-indigo-400 hover:text-indigo-300 transition">${channel.channelName}</a>
                         </td>
                         <!-- 채널링크 복사 버튼 -->
@@ -244,7 +225,7 @@
                                 <i data-lucide="copy" class="w-4 h-4"></i>
                             </button>
                         </td>
-                        <!-- 카테고리 (사용자 정의) - 드롭다운 제거, 수정 버튼 추가 -->
+                        <!-- 카테고리 (사용자 정의) - 수정 버튼 추가 -->
                         <td class="p-2 whitespace-nowrap">
                             <div class="flex items-center space-x-2">
                                 <span class="px-2 py-1 rounded-full text-xs font-semibold text-white ${categoryColorClass}">
@@ -265,7 +246,7 @@
                         <!-- 비고(메모) -->
                         <td class="p-2 min-w-40">
                             <span id="memo-display-${channel.id}" 
-                                onclick="window.startMemoEdit('${channel.id}', '${channel.note.replace(/'/g, "\\'")}')" 
+                                onclick="window.startMemoEdit('${channel.id}', '${(channel.note || '').replace(/'/g, "\\'")}')" 
                                 class="cursor-pointer hover:bg-gray-700 rounded-md p-1 block">
                                 ${channel.note || '메모 추가...'}
                             </span>
@@ -277,11 +258,11 @@
                         <!-- 총 영상수 -->
                         <td class="p-2 whitespace-nowrap">${formatNumber(channel.totalVideos)}</td>
                         <!-- 채널 생성일 -->
-                        <td class="p-2 whitespace-nowrap">${new Date(channel.channelCreationDate).toLocaleDateString('ko-KR')}</td>
+                        <td class="p-2 whitespace-nowrap">${channel.channelCreationDate ? new Date(channel.channelCreationDate).toLocaleDateString('ko-KR') : 'N/A'}</td>
                         <!-- 가장 오래된 영상 게시일 -->
                         <td class="p-2 whitespace-nowrap" title="D+${dDay}">${oldestVideoDate ? oldestVideoDate.toLocaleDateString('ko-KR') : 'N/A'}</td>
                         <!-- 평균 업로드 주기 -->
-                        <td class="p-2 whitespace-nowrap">${channel.avgUploadFreqDays}일</td>
+                        <td class="p-2 whitespace-nowrap">${channel.avgUploadFreqDays ? channel.avgUploadFreqDays + '일' : 'N/A'}</td>
                         <!-- 90일 평균 조회수 -->
                         <td class="p-2 whitespace-nowrap">${formatNumber(channel.avgViews90d)}</td>
                         <!-- 90일 평균 좋아요 수 -->
@@ -439,22 +420,22 @@
         // Firebase 초기화 및 인증
         const setupFirebase = async () => {
             let config = firebaseConfig; // Tries to use injected config first
+            const loadingElement = document.getElementById('initial-loading');
 
             // Canvas 환경 외부에서 실행될 경우 config가 null/undefined일 수 있습니다.
             if (!config) {
                 try {
-                    document.getElementById('initial-loading').textContent = "GitHub 환경 감지: firebase-config.json 파일을 로드 중...";
+                    loadingElement.textContent = "GitHub 환경 감지: firebase-config.json 파일을 로드 중...";
                     const response = await fetch('firebase-config.json');
                     
                     if (response.ok) {
                         config = await response.json();
                     } else {
-                        // If fetching the local file fails, throw an error
                          throw new Error(`Failed to load firebase-config.json. Status: ${response.status}`);
                     }
                 } catch (error) {
                     console.error("Firebase config 로드 오류:", error);
-                    document.getElementById('initial-loading').textContent = "오류: Firebase 설정 파일(firebase-config.json)을 로드할 수 없습니다. 파일을 확인하거나 Canvas 환경에서 실행하세요.";
+                    loadingElement.textContent = "오류: Firebase 설정 파일(firebase-config.json)을 로드할 수 없습니다. 파일을 확인하거나 Canvas 환경에서 실행하세요.";
                     return;
                 }
             }
@@ -463,7 +444,7 @@
             // 최종적으로 config가 없으면 종료
             if (!config) {
                 console.error("Firebase config is not available.");
-                document.getElementById('initial-loading').textContent = "Firebase 설정이 필요합니다.";
+                loadingElement.textContent = "Firebase 설정이 필요합니다.";
                 return;
             }
 
@@ -489,13 +470,14 @@
                 });
 
                 document.getElementById('user-id-display').textContent = `데이터 저장 경로: /artifacts/${appId}/public/data/...`;
+                loadingElement.innerHTML = `<i data-lucide="check-circle" class="w-6 h-6 inline-block mr-2 text-green-400"></i> Firebase 설정 완료`;
                 
                 // Firestore 리스너 설정
                 setupListeners();
 
             } catch (error) {
                 console.error("Firebase 초기화 또는 인증 오류:", error);
-                document.getElementById('initial-loading').textContent = `초기화 오류: ${error.message}`;
+                loadingElement.textContent = `초기화 오류: ${error.message}`;
             }
         };
 
@@ -528,34 +510,184 @@
             });
         };
 
-        // --- Mock YouTube API Function (TODO: Replace with actual API Call) ---
-        const fetchYouTubeData = (url) => {
-            // API Key가 없으면 경고
-            if (!window.state.youtubeApiKey) {
+        // --- YouTube Data API Implementation ---
+        const YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3";
+        const DAYS_90 = 90 * 24 * 60 * 60 * 1000;
+        const RETRY_COUNT = 3;
+        
+        // Fetcher utility with exponential backoff
+        async function fetchWithBackoff(url, retries = RETRY_COUNT) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+                        if (response.status === 403 || response.status === 429) {
+                             // Quota or Permission error
+                             throw new Error(`YouTube API Error (${response.status}): ${errorData.error.message || errorData.message}`);
+                        }
+                        throw new Error(`API Request Failed: ${response.status} ${response.statusText}`);
+                    }
+                    return response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error; // Rethrow on final attempt
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        /**
+         * 1. URL에서 채널 ID 추출
+         * 2. 채널 ID로 채널 상세 정보 가져오기
+         * 3. 채널의 최근 90일 영상 목록 및 통계 계산
+         */
+        window.fetchYouTubeData = async (url) => {
+            const apiKey = window.state.youtubeApiKey;
+            if (!apiKey) {
                 throw new Error("YouTube API Key가 설정되지 않았습니다. API 설정 모달을 통해 키를 입력해주세요.");
             }
+
+            const loadingElement = document.getElementById('add-channel-loading-modal');
             
-            // 실제 API에서 가져와야 하는 데이터 필드 (Mock)
-            const mockName = `모의 채널 ${Math.floor(Math.random() * 100)}`;
+            // --- Step 1: URL에서 채널 ID 추출 ---
+            let channelId = '';
             
+            // 1-1. URL에서 직접 ID/Username 파싱 시도 (가장 빠름)
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split('/').filter(p => p);
+            
+            if (url.includes('/channel/') && pathParts.length >= 2) {
+                channelId = pathParts[pathParts.indexOf('channel') + 1];
+            } else if (url.includes('/user/') && pathParts.length >= 2) {
+                // Legacy /user/name URL: search API를 사용해야 함
+                const username = pathParts[pathParts.indexOf('user') + 1];
+                loadingElement.querySelector('span').textContent = `채널 ID 변환 중... (User: ${username})`;
+                const searchUrl = `${YOUTUBE_API_BASE}/channels?key=${apiKey}&forUsername=${username}&part=id`;
+                const searchData = await fetchWithBackoff(searchUrl);
+                channelId = searchData.items[0]?.id;
+            } else if (url.includes('@') || pathParts.length === 1) {
+                // Handle @handle URLs or short form URLs (use search API)
+                const query = url.includes('@') ? urlObj.pathname.substring(1) : pathParts[0];
+                loadingElement.querySelector('span').textContent = `채널 ID 변환 중... (Handle: ${query})`;
+                const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${query}&type=channel&part=snippet&maxResults=1`;
+                const searchData = await fetchWithBackoff(searchUrl);
+                channelId = searchData.items[0]?.id.channelId;
+            }
+            
+            if (!channelId) {
+                throw new Error("유효한 YouTube 채널 ID를 추출할 수 없습니다. URL 형식을 확인해주세요.");
+            }
+
+
+            // --- Step 2: 채널 상세 정보 가져오기 ---
+            loadingElement.querySelector('span').textContent = `채널 상세 정보 로딩 중...`;
+            const channelInfoUrl = `${YOUTUBE_API_BASE}/channels?key=${apiKey}&id=${channelId}&part=snippet,contentDetails,statistics,brandingSettings`;
+            const channelDataResponse = await fetchWithBackoff(channelInfoUrl);
+            const channelItem = channelDataResponse.items[0];
+
+            if (!channelItem) {
+                throw new Error(`채널 상세 정보를 찾을 수 없습니다. (ID: ${channelId})`);
+            }
+            
+            const stats = channelItem.statistics;
+            const snippet = channelItem.snippet;
+
+            const uploadPlaylistId = channelItem.contentDetails.relatedPlaylists.uploads;
+            const creationDate = snippet.publishedAt;
+
+
+            // --- Step 3: 최근 90일 통계 계산 ---
+            loadingElement.querySelector('span').textContent = `90일 통계 계산을 위한 영상 목록 로딩 중...`;
+            const cutoffDate = new Date(Date.now() - DAYS_90).toISOString();
+            
+            // 3-1. 최근 90일 동안의 영상 ID 목록 가져오기 (Uploads Playlist 이용)
+            let videoIds = [];
+            let nextPageToken = null;
+            let videoCount = 0;
+            let oldestVideoDate = null;
+            let videosApiUrl = `${YOUTUBE_API_BASE}/playlistItems?key=${apiKey}&playlistId=${uploadPlaylistId}&part=contentDetails&maxResults=50`; // 50개씩 페이징
+
+            while (videoCount < 1000) { // 안전을 위해 최대 1000개의 영상만 확인
+                const playlistResponse = await fetchWithBackoff(videosApiUrl + (nextPageToken ? `&pageToken=${nextPageToken}` : ''));
+                
+                for (const item of playlistResponse.items) {
+                    const videoPublishedAt = item.contentDetails.videoPublishedAt;
+                    if (videoPublishedAt > cutoffDate) {
+                        videoIds.push(item.contentDetails.videoId);
+                        videoCount++;
+                    } else {
+                        // 90일 이전 영상 발견. 여기서 반복 중단 (가장 오래된 영상 게시일도 저장)
+                        if (!oldestVideoDate || videoPublishedAt < oldestVideoDate) {
+                            oldestVideoDate = videoPublishedAt;
+                        }
+                        nextPageToken = null; // 90일 이전 영상이므로, 다음 페이지는 볼 필요 없음
+                        break;
+                    }
+                    if (oldestVideoDate === null) {
+                         oldestVideoDate = videoPublishedAt;
+                    }
+                }
+                
+                nextPageToken = playlistResponse.nextPageToken;
+                if (!nextPageToken || videoIds.length === 0) break;
+
+                // 다음 페이지 URL 업데이트
+                videosApiUrl = `${YOUTUBE_API_BASE}/playlistItems?key=${apiKey}&playlistId=${uploadPlaylistId}&part=contentDetails&maxResults=50`;
+            }
+            
+            // 3-2. 영상 통계 가져와서 합산
+            let totalViews90d = 0;
+            let totalLikes90d = 0;
+            let totalComments90d = 0;
+            const videosFetched = videoIds.length;
+            
+            if (videosFetched > 0) {
+                 loadingElement.querySelector('span').textContent = `${videosFetched}개 영상 통계 합산 중...`;
+
+                 // YouTube API는 한 번에 최대 50개의 비디오 ID만 허용
+                 const videoIdChunks = [];
+                 for (let i = 0; i < videosFetched; i += 50) {
+                     videoIdChunks.push(videoIds.slice(i, i + 50).join(','));
+                 }
+                 
+                 for (const chunk of videoIdChunks) {
+                     const videoStatsUrl = `${YOUTUBE_API_BASE}/videos?key=${apiKey}&id=${chunk}&part=statistics`;
+                     const videoStatsResponse = await fetchWithBackoff(videoStatsUrl);
+                     
+                     for (const videoItem of videoStatsResponse.items) {
+                         const vStats = videoItem.statistics;
+                         totalViews90d += parseInt(vStats.viewCount || 0);
+                         totalLikes90d += parseInt(vStats.likeCount || 0);
+                         totalComments90d += parseInt(vStats.commentCount || 0);
+                     }
+                 }
+            }
+            
+            // 3-3. 평균 계산
+            const daysSinceCreation = oldestVideoDate ? Math.floor((new Date() - new Date(oldestVideoDate)) / (1000 * 60 * 60 * 24)) : 1; // 0으로 나누는 것 방지
+            const avgUploadFreqDays = stats.videoCount > 0 ? (daysSinceCreation / parseInt(stats.videoCount)).toFixed(1) : 'N/A';
+
+
+            // --- Step 4: 결과 데이터 객체 반환 ---
             return {
                 channelUrl: url,
-                profileIconUrl: `https://placehold.co/40x40/6A0DAD/EAEAEA?text=${mockName.charAt(0)}`,
-                channelName: mockName,
-                ytCategory: ['음악', '게임', '코미디', '교육'][Math.floor(Math.random() * 4)],
-                country: ['KR', 'US', 'JP'][Math.floor(Math.random() * 3)],
-                subscribers: Math.floor(Math.random() * 10000000),
-                totalViews: Math.floor(Math.random() * 500000000),
-                totalVideos: Math.floor(Math.random() * 2000),
-                channelCreationDate: new Date(Date.now() - Math.floor(Math.random() * 5 * 365 * 24 * 60 * 60 * 1000)).toISOString(),
-                oldestVideoPostDate: new Date(Date.now() - Math.floor(Math.random() * 3 * 365 * 24 * 60 * 60 * 1000)).toISOString(),
-                avgUploadFreqDays: Math.floor(Math.random() * 30) + 1,
-                avgViews90d: Math.floor(Math.random() * 100000),
-                avgLikes90d: Math.floor(Math.random() * 5000),
-                avgComments90d: Math.floor(Math.random() * 500),
+                profileIconUrl: snippet.thumbnails.default.url || '', // 기본 썸네일 URL 사용
+                channelName: snippet.title,
+                ytCategory: channelItem.brandingSettings?.channel?.keywords?.split('"').join('').split(',')[0] || 'N/A', // Branding keywords에서 첫번째 항목 사용 (카테고리 정보가 channel API에 명시적이지 않음)
+                country: snippet.country || 'N/A',
+                subscribers: parseInt(stats.subscriberCount || 0),
+                totalViews: parseInt(stats.viewCount || 0),
+                totalVideos: parseInt(stats.videoCount || 0),
+                channelCreationDate: creationDate,
+                oldestVideoPostDate: oldestVideoDate || creationDate, // 가장 오래된 영상 게시일
+                avgUploadFreqDays: avgUploadFreqDays, 
+                avgViews90d: videosFetched > 0 ? Math.round(totalViews90d / videosFetched) : 0,
+                avgLikes90d: videosFetched > 0 ? Math.round(totalLikes90d / videosFetched) : 0,
+                avgComments90d: videosFetched > 0 ? Math.round(totalComments90d / videosFetched) : 0,
                 note: '',
                 customCategory: '미분류',
-                channelId: 'MOCK_ID',
+                channelId: channelId,
             };
         };
 
@@ -650,8 +782,8 @@
             addModal.classList.remove('hidden');
 
             try {
-                // 1. YouTube API로 데이터 가져오기 (TODO: 실제 API 호출로 교체)
-                const channelData = fetchYouTubeData(url);
+                // 1. YouTube API로 데이터 가져오기 (실제 API 호출)
+                const channelData = await window.fetchYouTubeData(url);
                 
                 // 2. Firestore에 저장: 공개(Public) 경로를 사용합니다.
                 const channelsCollection = collection(db, `artifacts/${appId}/public/data/channels`);
@@ -1012,7 +1144,7 @@
             
             <!-- Row 1: 유튜브 링크 입력 및 추가 (단독 한 줄) -->
             <form id="add-channel-form" onsubmit="window.handleAddChannel(event)" class="flex space-x-2">
-                <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 입력" required
+                <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 입력 (예: https://www.youtube.com/@ChannelHandle)" required
                        class="flex-grow bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
                 <button type="submit" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md flex-shrink-0">
                     <i data-lucide="plus" class="w-5 h-5"></i>
