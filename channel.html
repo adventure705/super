@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 📺 YouTube 채널 관리 대시보드</title>
+    <title>YouTube 채널 관리 대시보드</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
@@ -129,16 +129,28 @@
             const colorClasses = palette.map(p => `bg-${p}-700`);
             
             const newColors = { ...window.state.categoryColors, '미분류': 'bg-gray-700' };
-            const existingCategories = Object.keys(newColors);
+            const usedColors = new Set(['bg-gray-700']);
             let colorIndex = 0;
 
             for (const cat of window.state.categories) {
                 if (cat === '미분류') continue;
 
-                if (!newColors[cat]) {
-                    // 순환하며 고유한 색상 클래스를 할당
-                    newColors[cat] = colorClasses[colorIndex % colorClasses.length];
-                    colorIndex++;
+                if (!newColors[cat] || !usedColors.has(newColors[cat])) {
+                    // 새 카테고리이거나, 이전에 할당되었더라도 현재 팔레트에 없고 겹치지 않게 새로 할당
+                    let newColorClass = colorClasses[colorIndex % colorClasses.length];
+                    
+                    // 이미 할당된 색상이 있다면 인덱스를 증가시켜 다음 색상을 찾습니다.
+                    while (usedColors.has(newColorClass) && colorIndex < colorClasses.length * 2) { 
+                         colorIndex++;
+                         newColorClass = colorClasses[colorIndex % colorClasses.length];
+                    }
+                    
+                    newColors[cat] = newColorClass;
+                    usedColors.add(newColorClass);
+                    colorIndex++; // 다음 카테고리를 위해 인덱스 증가
+                } else {
+                    // 기존 색상 유지
+                    usedColors.add(newColors[cat]);
                 }
             }
             
@@ -481,8 +493,22 @@
                         </li>
                     `;
                 }).join('');
+                
+                // 모달이 열릴 때 Enter 키 리스너 등록
+                document.getElementById('channel-category-selection-modal').addEventListener('keydown', handleEnterKeyInModal);
+            } else {
+                 // 모달이 닫힐 때 Enter 키 리스너 제거
+                document.getElementById('channel-category-selection-modal').removeEventListener('keydown', handleEnterKeyInModal);
             }
         };
+
+        const handleEnterKeyInModal = (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                window.saveChannelCategorySelection();
+            }
+        };
+
 
         const renderMemoModal = () => {
              const modal = document.getElementById('memo-modal');
@@ -1410,14 +1436,6 @@
                     </select>
                 </div>
                 
-                <!-- YouTube 카테고리 필터 (제거됨) -->
-                <!-- <div class="flex items-center space-x-2">
-                    <label for="yt-category-filter-select" class="text-gray-300 whitespace-nowrap text-sm">유튜브 카테고리:</label>
-                    <select id="yt-category-filter-select" onchange="window.handleFilterChange('yt', this.value)"
-                            class="bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[120px]">
-                    </select>
-                </div> -->
-
                 <!-- 카테고리 편집 버튼 -->
                 <button onclick="window.toggleCategoryModal(true)" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-3 rounded-lg transition duration-200 whitespace-nowrap text-sm flex items-center">
                     <i data-lucide="settings" class="w-4 h-4 inline-block mr-1"></i> 카테고리 편집
@@ -1530,7 +1548,7 @@
             
             <div class="flex justify-end space-x-3 mt-4 border-t border-gray-700 pt-3">
                 <button onclick="window.cancelChannelCategorySelection()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
-                <button onclick="window.saveChannelCategorySelection()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
+                <button onclick="window.saveChannelCategorySelection()" id="save-category-selection-btn" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
             </div>
         </div>
     </div>
@@ -1621,4 +1639,3 @@
     </script>
 </body>
 </html>
-
