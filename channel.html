@@ -69,9 +69,10 @@
         let app, db, auth;
         let isAuthReady = false;
         
-        // --- API Key LocalStorage 초기화 및 상태 관리 헬퍼 ---
-        const savedKeys = JSON.parse(localStorage.getItem('youtubeApiKeys')) || [];
-        const activeName = localStorage.getItem('activeApiKeyName') || (savedKeys.length > 0 ? savedKeys[0].name : '');
+        // --- API Key LocalStorage 초기화 및 상태 관리 헬퍼 (Firestore로 대체됨) ---
+        // 이전 localStorage 값은 제거
+        localStorage.removeItem('youtubeApiKeys');
+        localStorage.removeItem('activeApiKeyName');
         
         const getActiveApiKey = (keys, activeName) => keys.find(k => k.name === activeName)?.key || '';
 
@@ -81,10 +82,10 @@
             categories: ['미분류'], // 사용자 정의 카테고리
             categoryColors: {}, // { '카테고리명': 'bg-red-700', ... }
             
-            // API Key 새 구조
-            apiKeys: savedKeys,
-            activeApiKeyName: activeName,
-            youtubeApiKey: getActiveApiKey(savedKeys, activeName), // Derived active key
+            // API Key 상태 (Firestore에서 로드)
+            apiKeys: [],
+            activeApiKeyName: '',
+            youtubeApiKey: '', // Derived active key
 
             currentSort: { key: 'subscribers', direction: 'desc' },
             searchTerm: '',
@@ -102,13 +103,19 @@
             isChannelCategoryModalOpen: false,
         };
         
-        // LocalStorage 업데이트 및 상태 반영
-        const updateApiStorage = () => {
-            localStorage.setItem('youtubeApiKeys', JSON.stringify(window.state.apiKeys));
-            localStorage.setItem('activeApiKeyName', window.state.activeApiKeyName);
-            // Derived active key 업데이트
-            window.state.youtubeApiKey = getActiveApiKey(window.state.apiKeys, window.state.activeApiKeyName);
-            render();
+        // Firestore 업데이트 후 상태를 로컬에서 직접 업데이트하는 대신,
+        // Firestore 리스너를 통해 상태가 자동으로 업데이트되도록 합니다.
+        const updateApiStorage = async (newKeys, newActiveName) => {
+            const apiSettingsDocRef = doc(db, `artifacts/${appId}/public/data/api_settings`, 'keys');
+            try {
+                await setDoc(apiSettingsDocRef, {
+                    apiKeys: newKeys,
+                    activeApiKeyName: newActiveName
+                });
+            } catch (error) {
+                console.error("API 설정 Firestore 저장 오류:", error);
+                alertModal("오류", "API 설정 정보를 저장하는 데 실패했습니다.");
+            }
         };
 
         // 카테고리 색상 매핑 보장 함수
@@ -219,15 +226,17 @@
         
         // 업로드 주기 표시 헬퍼 함수
         const formatUploadFrequency = (avgDays, totalVideos) => {
-            if (!avgDays || totalVideos <= 0) return 'N/A';
+            if (!avgDays || totalVideos <= 0 || isNaN(parseFloat(avgDays))) return 'N/A';
+            
+            const numAvgDays = parseFloat(avgDays);
             
             // 평균 업로드 주기(일)이 1일 미만인 경우 (예: 0.5일) 처리
-            if (parseFloat(avgDays) < 1) {
-                const freq = (1 / parseFloat(avgDays)).toFixed(1);
+            if (numAvgDays < 1) {
+                const freq = (1 / numAvgDays).toFixed(1);
                 return `1일당 ${freq}개`;
             }
 
-            const days = Math.round(parseFloat(avgDays));
+            const days = Math.round(numAvgDays);
             return `${days}일당 1개`;
         };
 
@@ -548,6 +557,26 @@
             }, (error) => {
                 console.error("카테고리 데이터 리스너 오류:", error);
             });
+            
+            // 3. API 설정 리스너 (새로 추가): 공개(Public) 경로를 사용합니다.
+            const apiSettingsDocRef = doc(db, `artifacts/${appId}/public/data/api_settings`, 'keys');
+            onSnapshot(apiSettingsDocRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    const data = docSnapshot.data();
+                    window.state.apiKeys = data.apiKeys || [];
+                    window.state.activeApiKeyName = data.activeApiKeyName || '';
+                    window.state.youtubeApiKey = getActiveApiKey(window.state.apiKeys, window.state.activeApiKeyName);
+                } else {
+                    // 문서가 없으면 기본값으로 생성
+                    setDoc(apiSettingsDocRef, { apiKeys: [], activeApiKeyName: '' });
+                    window.state.apiKeys = [];
+                    window.state.activeApiKeyName = '';
+                    window.state.youtubeApiKey = '';
+                }
+                render();
+            }, (error) => {
+                console.error("API 설정 데이터 리스너 오류:", error);
+            });
         };
 
         // --- YouTube Data API Implementation ---
@@ -767,14 +796,15 @@
             }
             
             // 키 추가
-            window.state.apiKeys.push({ name, key });
+            const newKeys = [...window.state.apiKeys, { name, key }];
+            let newActiveName = window.state.activeApiKeyName;
             
             // 처음 추가 시 활성화
-            if (window.state.apiKeys.length === 1) {
-                window.state.activeApiKeyName = name;
+            if (newKeys.length === 1) {
+                newActiveName = name;
             }
 
-            updateApiStorage();
+            updateApiStorage(newKeys, newActiveName);
             nameInput.value = '';
             keyInput.value = '';
             alertModal("성공", `API 키 "${name}"이(가) 저장되었습니다.`);
@@ -782,31 +812,31 @@
 
         // 활성 API 키 선택
         window.selectApiKey = (name) => {
-            window.state.activeApiKeyName = name;
-            updateApiStorage();
+            if (window.state.activeApiKeyName === name) return;
+            
+            updateApiStorage(window.state.apiKeys, name);
             alertModal("활성 키 변경", `활성 API 키가 "${name}"(으)로 변경되었습니다.`);
         };
 
         // API 키 삭제
-        window.deleteApiKey = (name) => {
+        window.deleteApiKey = async (name) => {
             if (name === window.state.activeApiKeyName) {
                 alertModal("경고", "활성화된 API 키는 삭제할 수 없습니다. 다른 키를 선택한 후 삭제해주세요.");
                 return;
             }
             
-            if (window.state.apiKeys.length === 1 && name === window.state.apiKeys[0].name) {
-                 alertModal("경고", "마지막 남은 키는 삭제할 수 없습니다.");
-                 return;
+            const newKeys = window.state.apiKeys.filter(k => k.name !== name);
+            let newActiveName = window.state.activeApiKeyName;
+            
+            // 삭제 후 목록이 비어 있으면 활성 이름 초기화
+            if (newKeys.length === 0) {
+                 newActiveName = '';
+            } else if (!newKeys.some(k => k.name === newActiveName)) {
+                // 현재 활성 이름이 삭제된 경우, 목록의 첫 번째 키를 활성화 (선택 사항)
+                newActiveName = newKeys[0]?.name || '';
             }
             
-            if (window.state.apiKeys.length === 1) {
-                 window.state.apiKeys = []; // 마지막 키 삭제
-                 window.state.activeApiKeyName = '';
-            } else {
-                 window.state.apiKeys = window.state.apiKeys.filter(k => k.name !== name);
-            }
-
-            updateApiStorage();
+            await updateApiStorage(newKeys, newActiveName);
             alertModal("삭제 완료", `API 키 "${name}"이(가) 삭제되었습니다.`);
         };
         
