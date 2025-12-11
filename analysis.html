@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔍 YouTube 채널 심층 분석기</title>
+    <title> 🔍 YouTube 채널 심층 분석기 </title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -112,7 +112,7 @@
                         'bg-dark': '#1a1a2e',      // 1. Deep Blue/Purple Dark Background
                         'primary-accent': '#e94560', // 2. Vivid Red/Pink Accent
                         'text-light': '#f8f8f8',    // 3. Off-White/Light Gray Text
-                        'card-bg': '#282a4d',      // 4. Slightly Lighter Dark Blue Card Background
+                        'card-bg': '#282a4d',       // 4. Slightly Lighter Dark Blue Card Background
                         'success-status': '#6aff7b', // 5. Light Green Success/Status
                         'warning-star': '#fbbf24', // Yellow for stars
                     },
@@ -187,7 +187,7 @@
                 <label for="activeApiKeyDisplay" class="block text-sm font-medium mb-1">활성화된 API Key</label>
                 <div class="flex flex-col sm:flex-row gap-2 items-center">
                     <input type="text" id="activeApiKeyDisplay" readonly value="키를 선택해주세요." 
-                           class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-success-status text-success-status transition duration-200 cursor-default" placeholder="활성화된 키가 없습니다.">
+                            class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-success-status text-success-status transition duration-200 cursor-default" placeholder="활성화된 키가 없습니다.">
                     
                     <button id="apiSettingsBtn" onclick="openApiSettings(event)"
                             class="w-full sm:w-auto px-4 py-3 bg-primary-accent text-white font-medium rounded-lg hover:bg-primary-accent/80 transition duration-300 whitespace-nowrap">
@@ -200,7 +200,7 @@
             <div class="mb-6">
                 <label for="channelId" class="block text-sm font-medium mb-1">채널 ID 또는 영상 링크 (예: @username, youtu.be/...) </label>
                 <input type="text" id="channelId" placeholder="채널 ID, 핸들, 또는 영상 링크를 입력하세요" 
-                       class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent focus:ring-1 focus:ring-primary-accent text-text-light transition duration-200">
+                        class="w-full p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent focus:ring-1 focus:ring-primary-accent text-text-light transition duration-200">
             </div>
 
             <!-- 분석 버튼 -->
@@ -326,7 +326,7 @@
             </div>
 
             <!-- Shorts 스크롤 섹션 (추가됨) -->
-            <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 mt-10 flex justify-between items-center">
+            <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 mt-10 flex justify-between items-start md:items-center">
                 <span>🔥 최신 Shorts (1분 이하 영상) 미리보기</span>
                 <select id="shortsSortBy" class="p-2 rounded-lg bg-bg-dark border border-card-bg text-text-light text-sm" onchange="renderShortsPreview()">
                     <option value="publishedAt" selected>최신순</option>
@@ -445,15 +445,15 @@
         </section>
 
     </main>
-
-    <!-- 상단으로 바로가기 버튼 -->
-    <button id="backToTopBtn" 
-            class="fixed bottom-6 right-6 p-3 bg-primary-accent hover:bg-primary-accent/80 text-white rounded-full shadow-xl transition-all duration-300 opacity-0 transform translate-y-4 z-20"
-            onclick="scrollToTop()">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+    
+    <!-- Back to Top Button (추가됨) -->
+    <button id="backToTopBtn" onclick="scrollToTop()"
+            class="fixed bottom-6 right-6 p-3 bg-primary-accent text-white rounded-full shadow-lg hover:bg-primary-accent/80 transition-all duration-300 opacity-0 translate-y-4 z-20">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
         </svg>
     </button>
+    <!-- END Back to Top Button -->
 
     <script type="module">
         // Firebase Imports
@@ -462,8 +462,7 @@
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // DOM 요소와 전역 상태 변수들 (모듈 스코프)
-        // DOM 요소 참조 시, window.onload가 아니라 모듈 스코프에서 선언하는 것이 더 안전함
-        const apiKeyInput = document.getElementById('apiKey');
+        // const apiKeyInput = document.getElementById('apiKey'); // HTML에 없는 변수 제거
         const channelIdInput = document.getElementById('channelId');
         const analyzeButton = document.getElementById('analyzeButton');
         const buttonText = document.getElementById('buttonText');
@@ -479,7 +478,7 @@
         const totalVideosCount = document.getElementById('totalVideosCount');
         const videoListTableBody = document.getElementById('videoListTableBody');
         const noVideosMessage = document.getElementById('noVideosMessage');
-        const backToTopBtn = document.getElementById('backToTopBtn');
+        const backToTopBtn = document.getElementById('backToTopBtn'); // HTML에 추가됨
         const downloadCsvBtn = document.getElementById('downloadCsvBtn');
         const calendarBodyElement = document.getElementById('calendarBody');
         const calendarNavHeader = document.getElementById('calendarNavHeader');
@@ -521,11 +520,9 @@
         // FIREBASE AUTH & INIT
         // ----------------------------------------------------
 
-        // Firebase Initialization and Authentication
         window.addEventListener('DOMContentLoaded', async () => {
-            // FIX: setStatus를 window에 등록하여 DOMContentLoaded에서도 사용 가능하게 함
             if (typeof window.setStatus === 'function') {
-                 setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
+                setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
             }
 
             if (Object.keys(firebaseConfig).length > 0) {
@@ -556,7 +553,7 @@
                 } catch (e) {
                     console.error("Firebase initialization failed:", e);
                     if (typeof window.setStatus === 'function') {
-                         setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
+                        setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
                     }
                 }
             } else {
@@ -616,8 +613,8 @@
                 return;
             }
             if (!keyValue.startsWith('AIza')) {
-                 setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
-                 return;
+                setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
+                return;
             }
 
             try {
@@ -758,15 +755,16 @@
                     currentApiKey = activeKey.value;
                     document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
                 } else if (!activeKey && currentApiKey) {
-                     currentApiKey = '';
-                     document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                    currentApiKey = '';
+                    document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
                 }
             }, (error) => {
                 console.error("Error listening to API keys:", error);
                 setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
             });
         }
-        
+        window.fetchApiKeys = fetchApiKeys; // FIX: 전역 등록
+
         function renderApiKeyList(keys) {
             const listElement = document.getElementById('apiKeyList');
             const countElement = document.getElementById('apiKeyCount');
@@ -940,8 +938,8 @@
             
             const seconds = 
                 parts[4] * 3600 + // Hours
-                parts[5] * 60 +   // Minutes
-                parts[6];         // Seconds
+                parts[5] * 60 +    // Minutes
+                parts[6];          // Seconds
             
             return seconds;
         }
@@ -995,6 +993,7 @@
             
             document.body.removeChild(tempInput);
         }
+        window.copyToClipboard = copyToClipboard; // FIX: 전역 등록
 
         function calculateEngagementRatings(videos) {
             if (videos.length === 0) return;
@@ -1152,6 +1151,7 @@
 
             setStatus('CSV 파일 다운로드가 시작되었습니다.', false);
         }
+        window.exportToCSV = exportToCSV; // FIX: 전역 등록
         
         function generateUploadCalendarData(videos) {
             const uploadCounts = {};
@@ -1365,7 +1365,7 @@
             }
             renderVideoList();
         }
-        window.toggleSortDirection = toggleSortDirection; 
+        window.toggleSortDirection = toggleSortDirection; // 전역 등록
 
         function renderVideoList() {
             videoListTableBody.innerHTML = '';
@@ -1401,12 +1401,14 @@
             totalVideosCount.textContent = formatNumber(displayList.length);
 
             if (displayList.length === 0) {
-                 noVideosMessage.classList.remove('hidden');
-                 downloadCsvBtn.disabled = true;
-                 return;
+                noVideosMessage.classList.remove('hidden');
+                downloadCsvBtn.disabled = true;
+                return;
             }
             noVideosMessage.classList.add('hidden');
             downloadCsvBtn.disabled = false;
+
+            // window.copyToClipboard, window.toggleDescription 등은 이미 전역 등록되어 있음
 
             displayList.forEach((video, index) => {
                 const videoId = video.videoId;
@@ -1472,7 +1474,7 @@
                 videoListTableBody.appendChild(descRow);
             });
         }
-        window.renderVideoList = renderVideoList; 
+        window.renderVideoList = renderVideoList; // 전역 등록
         
         function renderShortsPreview() {
             const sortBy = shortsSortBy ? shortsSortBy.value : 'publishedAt';
@@ -1514,8 +1516,9 @@
             }
             
             shortsContainer.classList.remove('hidden');
-            if(leftBtn) leftBtn.style.display = ''; 
-            if(rightBtn) rightBtn.style.display = '';
+            // CSS @media 쿼리가 처리하므로 JS에서 숨기는 로직은 제거 (PC에서는 자동으로 표시됨)
+            // if(leftBtn) leftBtn.style.display = ''; 
+            // if(rightBtn) rightBtn.style.display = '';
             
             shorts.forEach(video => {
                 const videoId = video.videoId;
@@ -1618,17 +1621,6 @@
         }
 
 
-        function extractChannelId(input) {
-            const cleanedInput = input.split('?')[0].split('&')[0].trim();
-
-            const urlMatch = cleanedInput.match(/(?:channel\/|user\/|c\/|@)([^/]+)/);
-            if (urlMatch && urlMatch[1]) {
-                return urlMatch[1];
-            }
-            
-            return cleanedInput;
-        }
-
         function calculate90DayAverages(videos) {
             const ninetyDaysAgo = new Date();
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -1711,18 +1703,18 @@
                 
                 // 2. Channel/Handle Lookup
                 if (!channelId.startsWith('UC')) {
-                     setStatus('사용자 핸들 또는 이름을 통해 채널 ID를 검색 중입니다...', false);
-                     // Fix: ensure handle search starts with @ if it doesn't look like an old channel name
-                     const searchHandle = channelId.startsWith('@') ? channelId : `@${channelId}`;
-                     const searchUrl = `${API_BASE_URL}channels?part=${partList}&forHandle=${searchHandle}&key=${apiKey}`;
-                     const searchResponse = await fetchWithRetry(searchUrl);
-                     const searchData = await checkResponse(searchResponse);
-                     
-                     if (!searchData.items || searchData.items.length === 0) {
-                         throw new Error(`핸들/ID ${channelId}를 가진 채널을 찾을 수 없습니다.`);
-                     }
-                     channelId = searchData.items[0].id; 
-                     channelItem = searchData.items[0]; 
+                    setStatus('사용자 핸들 또는 이름을 통해 채널 ID를 검색 중입니다...', false);
+                    // Fix: ensure handle search starts with @ if it doesn't look like an old channel name
+                    const searchHandle = channelId.startsWith('@') ? channelId : `@${channelId}`;
+                    const searchUrl = `${API_BASE_URL}channels?part=${partList}&forHandle=${searchHandle}&key=${apiKey}`;
+                    const searchResponse = await fetchWithRetry(searchUrl);
+                    const searchData = await checkResponse(searchResponse);
+                    
+                    if (!searchData.items || searchData.items.length === 0) {
+                        throw new Error(`핸들/ID ${channelId}를 가진 채널을 찾을 수 없습니다.`);
+                    }
+                    channelId = searchData.items[0].id; 
+                    channelItem = searchData.items[0]; 
                 } else if (!channelItem) {
                     // 3. Direct Channel ID Lookup (only if not already fetched by video or handle)
                     setStatus('채널 ID로 기본 정보를 가져오는 중입니다...', false);
@@ -1859,25 +1851,29 @@
         window.startAnalysis = startAnalysis; // 전역 등록
 
         
-        // FIX: window.onload 대신 DOMContentLoaded 내에서 setStatus를 호출하도록 했으나,
-        // window.onload에 남아있는 호출 코드를 제거하거나, window.onload를 DOMContentLoaded로 대체합니다.
+        window.onload = () => {
+              setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
+        };
         
-        // window.onload 제거
-        
-        // '상단으로 바로가기' 버튼 가시성 제어 및 기능
+        // Back to Top Button Logic
         window.onscroll = function() {
             if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
-                backToTopBtn.classList.remove('opacity-0', 'translate-y-4');
-                backToTopBtn.classList.add('opacity-100', 'translate-y-0');
+                if (backToTopBtn) {
+                    backToTopBtn.classList.remove('opacity-0', 'translate-y-4');
+                    backToTopBtn.classList.add('opacity-100', 'translate-y-0');
+                }
             } else {
-                backToTopBtn.classList.remove('opacity-100', 'translate-y-0');
-                backToTopBtn.classList.add('opacity-0', 'translate-y-4');
+                if (backToTopBtn) {
+                    backToTopBtn.classList.remove('opacity-100', 'translate-y-0');
+                    backToTopBtn.classList.add('opacity-0', 'translate-y-4');
+                }
             }
         };
 
         function scrollToTop() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+        window.scrollToTop = scrollToTop; // FIX: 전역 등록
     </script>
 </body>
 </html>
