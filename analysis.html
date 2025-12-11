@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔍 YouTube 채널 심층 분석기 </title>
+    <title>YouTube 채널 심층 분석기 (다크 모드)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -148,7 +148,7 @@
             </div>
 
             <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden');" class="mt-4 py-2 px-4 bg-primary-accent text-white rounded-lg hover:bg-primary-accent/80">닫기</button>
-            <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다.</p>
+            <p class="text-xs text-text-light/50 mt-4">데이터는 Firebase Firestore에 사용자 고유 ID로 저장됩니다. (Firebase 미설정 시 로컬 저장소에 임시 저장)</p>
         </div>
     </div>
     <!-- END API Settings Modal -->
@@ -462,7 +462,6 @@
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // DOM 요소와 전역 상태 변수들 (모듈 스코프)
-        // const apiKeyInput = document.getElementById('apiKey'); // HTML에 없는 변수 제거
         const channelIdInput = document.getElementById('channelId');
         const analyzeButton = document.getElementById('analyzeButton');
         const buttonText = document.getElementById('buttonText');
@@ -478,7 +477,7 @@
         const totalVideosCount = document.getElementById('totalVideosCount');
         const videoListTableBody = document.getElementById('videoListTableBody');
         const noVideosMessage = document.getElementById('noVideosMessage');
-        const backToTopBtn = document.getElementById('backToTopBtn'); // HTML에 추가됨
+        const backToTopBtn = document.getElementById('backToTopBtn');
         const downloadCsvBtn = document.getElementById('downloadCsvBtn');
         const calendarBodyElement = document.getElementById('calendarBody');
         const calendarNavHeader = document.getElementById('calendarNavHeader');
@@ -492,6 +491,7 @@
         let auth;
         let masterUserId; 
         let currentApiKey = '';
+        let isFirebaseReady = false; // NEW: Firebase 초기화 완료 상태
 
         // UI/Data State
         let allVideosData = []; 
@@ -515,9 +515,10 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
+        const LOCAL_STORAGE_KEY = 'yt_analyzer_api_keys'; // Local Storage Key
 
         // ----------------------------------------------------
-        // FIREBASE AUTH & INIT
+        // FIREBASE AUTH & INIT (WITH FALLBACK)
         // ----------------------------------------------------
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -525,17 +526,17 @@
                 setStatus('API 키와 분석할 채널 ID 또는 링크를 입력하고 "채널 분석 시작" 버튼을 눌러주세요.');
             }
 
-            if (Object.keys(firebaseConfig).length > 0) {
+            if (Object.keys(firebaseConfig).length > 0 && typeof initializeApp === 'function') {
                 try {
                     const app = initializeApp(firebaseConfig);
                     db = getFirestore(app);
                     auth = getAuth(app);
-                    console.log("Firebase Initialized.");
-
+                    
                     onAuthStateChanged(auth, async (user) => {
                         if (user) {
                             masterUserId = user.uid;
-                            console.log("User signed in:", masterUserId);
+                            isFirebaseReady = true; // Firebase/Auth 초기화 완료
+                            console.log("Firebase Initialized & User signed in:", masterUserId);
                             await fetchApiKeys(); 
                         } else {
                             try {
@@ -545,22 +546,21 @@
                                     await signInAnonymously(auth);
                                 }
                             } catch (e) {
-                                console.error("Sign-in failed:", e);
-                                masterUserId = 'anonymous-' + Math.random().toString(36).substring(2, 9);
+                                console.error("Firebase Sign-in failed, checking Local Storage:", e);
+                                isFirebaseReady = false;
+                                await fetchApiKeys(); // Firebase 실패 시 로컬 로드 시도
                             }
                         }
                     });
                 } catch (e) {
-                    console.error("Firebase initialization failed:", e);
-                    if (typeof window.setStatus === 'function') {
-                        setStatus('오류: Firebase 초기화 실패. 콘솔을 확인하세요.', true);
-                    }
+                    console.error("Firebase initialization failed, falling back to Local Storage:", e);
+                    isFirebaseReady = false;
+                    await fetchApiKeys(); // 초기화 실패 시 로컬 로드 시도
                 }
             } else {
-                console.warn("Firebase config not found.");
-                if (typeof window.setStatus === 'function') {
-                    setStatus('경고: Firebase 설정이 누락되어 API 키 저장이 불가능합니다.', true);
-                }
+                console.warn("Firebase config missing or environment not supported. Using Local Storage for keys.");
+                isFirebaseReady = false;
+                await fetchApiKeys(); // Firebase 미사용 시 로컬 로드 시도
             }
         });
         
@@ -597,14 +597,30 @@
 
 
         // ----------------------------------------------------
-        // FIREBASE DATA FUNCTIONS
+        // FIREBASE & LOCAL STORAGE DATA FUNCTIONS
         // ----------------------------------------------------
 
-        async function saveApiKey() {
-            if (!db || !masterUserId) {
-                setStatus('키 저장 실패: 인증 상태를 확인하세요.', true);
-                return;
+        // Local Storage Helper Functions (Fallback for GitHub/Local)
+        function getLocalKeys() {
+            try {
+                const keysJson = localStorage.getItem(LOCAL_STORAGE_KEY);
+                return keysJson ? JSON.parse(keysJson) : [];
+            } catch (e) {
+                console.error("Error loading keys from local storage:", e);
+                return [];
             }
+        }
+
+        function saveLocalKeys(keys) {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(keys));
+            } catch (e) {
+                console.error("Error saving keys to local storage:", e);
+                setStatus("경고: 로컬 저장소에 키를 저장할 수 없습니다.", true);
+            }
+        }
+        
+        async function saveApiKey() {
             const keyName = document.getElementById('newKeyName').value.trim();
             const keyValue = document.getElementById('newKeyValue').value.trim();
 
@@ -613,21 +629,42 @@
                 return;
             }
             if (!keyValue.startsWith('AIza')) {
-                setStatus('유효하지 않은 YouTube API 키 형식입니다.', true);
+                setStatus('유효하지 않은 YouTube API 키 형식입니다. (AIza로 시작해야 합니다)', true);
                 return;
             }
 
             try {
-                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-                await setDoc(keyRef, {
-                    name: keyName,
-                    value: keyValue,
-                    createdAt: new Date().toISOString(),
-                    active: false
-                });
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 저장
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await setDoc(keyRef, {
+                        name: keyName,
+                        value: keyValue,
+                        createdAt: new Date().toISOString(),
+                        active: false
+                    });
+                } else {
+                    // 2. Local Storage 저장 (Fallback)
+                    let keys = getLocalKeys();
+                    
+                    // 중복 키 이름 제거
+                    keys = keys.filter(k => k.id !== keyName);
+                    
+                    keys.push({
+                        id: keyName,
+                        name: keyName,
+                        value: keyValue,
+                        active: false
+                    });
+                    saveLocalKeys(keys);
+                    // Local storage의 경우 onSnapshot이 없으므로 직접 UI 갱신을 호출
+                    renderApiKeyList(keys);
+                }
+
                 document.getElementById('newKeyName').value = '';
                 document.getElementById('newKeyValue').value = '';
                 setStatus(`✔️ API 키 "${keyName}"이 저장되었습니다.`, false);
+
             } catch (e) {
                 console.error("Error saving API key:", e);
                 setStatus('키 저장 중 오류 발생.', true);
@@ -635,35 +672,49 @@
         }
         window.saveApiKey = saveApiKey;
 
-        // [NEW] 키 업데이트 함수
         async function updateApiKey(oldKeyName, newKeyName, newKeyValue, isActive) {
-            if (!db || !masterUserId) {
-                setStatus('키 수정 실패: 인증 상태를 확인하세요.', true);
-                return;
-            }
              if (!newKeyName || !newKeyValue) {
                 setStatus('키 이름과 값을 모두 입력해주세요.', true);
                 return;
             }
 
             try {
-                const oldKeyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', oldKeyName);
-                
-                if (oldKeyName !== newKeyName) {
-                    // 키 이름이 변경된 경우: 기존 문서 삭제 후 새 문서 생성
-                    await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', newKeyName), {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 업데이트
+                    const oldKeyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', oldKeyName);
+                    
+                    if (oldKeyName !== newKeyName) {
+                        // 키 이름이 변경된 경우: 기존 문서 삭제 후 새 문서 생성
+                        await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', newKeyName), {
+                            name: newKeyName,
+                            value: newKeyValue,
+                            createdAt: new Date().toISOString(),
+                            active: isActive
+                        });
+                        await deleteDoc(oldKeyRef);
+                    } else {
+                        // 키 값만 변경된 경우: 기존 문서 업데이트
+                         await setDoc(oldKeyRef, {
+                            value: newKeyValue,
+                            active: isActive
+                        }, { merge: true });
+                    }
+                } else {
+                    // 2. Local Storage 업데이트 (Fallback)
+                    let keys = getLocalKeys();
+                    
+                    // 기존 키 제거
+                    keys = keys.filter(k => k.id !== oldKeyName);
+                    
+                    // 새 키 추가
+                    keys.push({
+                        id: newKeyName,
                         name: newKeyName,
                         value: newKeyValue,
-                        createdAt: new Date().toISOString(),
                         active: isActive
                     });
-                    await deleteDoc(oldKeyRef);
-                } else {
-                    // 키 값만 변경된 경우: 기존 문서 업데이트
-                     await setDoc(oldKeyRef, {
-                        value: newKeyValue,
-                        active: isActive
-                    }, { merge: true });
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys);
                 }
 
                 setStatus(`✔️ API 키 "${newKeyName}"이 성공적으로 수정되었습니다.`, false);
@@ -691,14 +742,19 @@
         window.promptDeleteApiKey = promptDeleteApiKey;
 
         async function deleteApiKey(keyName) {
-            if (!db || !masterUserId) {
-                setStatus('키 삭제 실패: 인증 상태를 확인하세요.', true);
-                return;
-            }
-            
             try {
-                const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-                await deleteDoc(keyRef);
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 삭제
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await deleteDoc(keyRef);
+                } else {
+                    // 2. Local Storage 삭제 (Fallback)
+                    let keys = getLocalKeys();
+                    keys = keys.filter(k => k.id !== keyName);
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys);
+                }
+
                 setStatus(`✔️ API 키 "${keyName}"이 삭제되었습니다.`, false);
             } catch (e) {
                 console.error("Error deleting API key:", e);
@@ -708,60 +764,101 @@
         window.deleteApiKey = deleteApiKey;
 
         async function setActiveKey(keyName, keyValue) {
-            if (!db || !masterUserId) return;
-            
-            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
-            const snapshot = await getDocs(keysCollectionRef);
-            
-            // 1. Deactivate all existing keys
-            snapshot.docs.forEach(async (d) => {
-                if (d.id !== keyName) {
-                    await setDoc(d.ref, { active: false }, { merge: true });
-                }
-            });
+            try {
+                if (isFirebaseReady && db && masterUserId) {
+                    // 1. Firebase 활성화
+                    const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+                    const snapshot = await getDocs(keysCollectionRef);
+                    
+                    // Deactivate all existing keys (only necessary when updating via Firestore)
+                    snapshot.docs.forEach(async (d) => {
+                        if (d.id !== keyName) {
+                            await setDoc(d.ref, { active: false }, { merge: true });
+                        }
+                    });
 
-            // 2. Activate the selected key
-            const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
-            await setDoc(keyRef, { active: true }, { merge: true });
-            
-            // 3. Update active state
-            currentApiKey = keyValue;
-            document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
-            setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
-            document.getElementById('apiSettingsModal').classList.add('hidden');
+                    // Activate the selected key
+                    const keyRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', keyName);
+                    await setDoc(keyRef, { active: true }, { merge: true });
+                    
+                } else {
+                    // 2. Local Storage 활성화 (Fallback)
+                    let keys = getLocalKeys();
+                    keys = keys.map(k => ({ ...k, active: k.id === keyName }));
+                    saveLocalKeys(keys);
+                    renderApiKeyList(keys); // UI 갱신
+                }
+
+                // 3. Update active state
+                currentApiKey = keyValue;
+                document.getElementById('activeApiKeyDisplay').value = `활성화: ${keyName}`;
+                setStatus(`🔑 API 키 "${keyName}"이 활성화되었습니다.`, false);
+                document.getElementById('apiSettingsModal').classList.add('hidden');
+            } catch (e) {
+                console.error("Error setting active key:", e);
+                setStatus('키 활성화 중 오류 발생.', true);
+            }
         }
         window.setActiveKey = setActiveKey;
 
-        function fetchApiKeys() {
-            if (!db || !masterUserId) return;
-            
-            const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
+        async function fetchApiKeys() {
+            let keysData = [];
+            let activeKey = null;
 
-            onSnapshot(keysCollectionRef, (snapshot) => {
-                const keysData = [];
-                let activeKey = null;
-
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    keysData.push({ id: doc.id, ...data });
-                    if (data.active) {
-                        activeKey = { name: doc.id, value: data.value };
-                    }
-                });
-
-                renderApiKeyList(keysData);
+            if (isFirebaseReady && db && masterUserId) {
+                // 1. Firebase 로드
+                const keysCollectionRef = collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys');
                 
-                if (activeKey) {
-                    currentApiKey = activeKey.value;
-                    document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
-                } else if (!activeKey && currentApiKey) {
-                    currentApiKey = '';
-                    document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                // Firestore는 onSnapshot을 사용해야 실시간 업데이트를 처리할 수 있음
+                // Canvas 환경에서는 onSnapshot을 사용하되, GitHub 환경에서는 getDocs를 사용하도록 분리해야 함
+                
+                // Canvas 환경에서는 onSnapshot이 실행 중이므로, onSnapshot 콜백 내에서 렌더링을 처리함
+                // GitHub 환경을 위해 Firebase Ready가 아닌 경우 getLocalKeys를 사용함
+
+                if (isFirebaseReady) {
+                    // Canvas 환경: onSnapshot 리스너 설정
+                    onSnapshot(keysCollectionRef, (snapshot) => {
+                        const firebaseKeys = [];
+                        let foundActiveKey = null;
+
+                        snapshot.docs.forEach(doc => {
+                            const data = doc.data();
+                            firebaseKeys.push({ id: doc.id, ...data });
+                            if (data.active) {
+                                foundActiveKey = { name: doc.id, value: data.value };
+                            }
+                        });
+
+                        renderApiKeyList(firebaseKeys);
+                        
+                        if (foundActiveKey) {
+                            currentApiKey = foundActiveKey.value;
+                            document.getElementById('activeApiKeyDisplay').value = `활성화: ${foundActiveKey.name}`;
+                        } else if (currentApiKey) {
+                            currentApiKey = '';
+                            document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+                        }
+                    }, (error) => {
+                        console.error("Error listening to Firebase API keys:", error);
+                        setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
+                    });
+                    return; // onSnapshot이 비동기적으로 실행되도록 함수 종료
                 }
-            }, (error) => {
-                console.error("Error listening to API keys:", error);
-                setStatus("오류: 저장된 키를 불러올 수 없습니다. Firestore 연결 상태를 확인하세요.", true);
-            });
+            }
+            
+            // 2. Local Storage 로드 (Fallback for GitHub/Local)
+            keysData = getLocalKeys();
+            activeKey = keysData.find(k => k.active);
+
+            renderApiKeyList(keysData);
+            
+            if (activeKey) {
+                currentApiKey = activeKey.value;
+                document.getElementById('activeApiKeyDisplay').value = `활성화: ${activeKey.name}`;
+            } else {
+                currentApiKey = '';
+                document.getElementById('activeApiKeyDisplay').value = '키를 선택해주세요.';
+            }
         }
         window.fetchApiKeys = fetchApiKeys; // FIX: 전역 등록
 
