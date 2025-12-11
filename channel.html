@@ -93,6 +93,10 @@
             ytCategoryFilter: '전체',
             isCategoryModalOpen: false,
             isApiModalOpen: false, // API 모달 상태 추가
+            
+            // API 키 편집 상태
+            editingApiKey: { name: null, key: null, originalName: null },
+            
             editingCategoryName: null,
             editingCategoryNewName: '',
             editingChannelMemoId: null,
@@ -396,27 +400,56 @@
             modal.classList.toggle('hidden', !window.state.isApiModalOpen);
             
             if (window.state.isApiModalOpen) {
-                 // API 키 목록 렌더링
+                 const { apiKeys, activeApiKeyName, editingApiKey } = window.state;
                  const list = document.getElementById('api-key-list-body');
-                 list.innerHTML = window.state.apiKeys.map(item => `
-                    <li class="flex justify-between items-center p-3 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 rounded-md transition duration-150 ${window.state.activeApiKeyName === item.name ? 'bg-indigo-900/50 border border-indigo-500' : ''}">
-                        <div class="flex items-center space-x-3">
-                            <input type="radio" name="active_key" value="${item.name}" 
-                                id="key-radio-${item.name}" 
-                                onchange="window.selectApiKey('${item.name}')"
-                                ${window.state.activeApiKeyName === item.name ? 'checked' : ''}
-                                class="form-radio h-4 w-4 text-indigo-500 bg-gray-600 border-gray-500 focus:ring-indigo-500 cursor-pointer">
-                            <label for="key-radio-${item.name}" class="font-medium cursor-pointer">
-                                ${item.name} 
-                                <span class="text-xs text-gray-400 ml-2">(${item.key.substring(0, 4)}...${item.key.substring(item.key.length - 4)})</span>
-                            </label>
-                            ${window.state.activeApiKeyName === item.name ? '<span class="text-xs text-indigo-400 border border-indigo-400 px-1 rounded-full">활성</span>' : ''}
-                        </div>
-                        <button onclick="window.deleteApiKey('${item.name}')" class="text-red-400 hover:text-red-500 transition" title="삭제">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </li>
-                 `).join('') || '<li class="p-3 text-center text-gray-400">저장된 API 키가 없습니다.</li>';
+
+                 list.innerHTML = apiKeys.map(item => {
+                    const isEditing = editingApiKey.originalName === item.name;
+                    const isActive = activeApiKeyName === item.name;
+
+                    if (isEditing) {
+                        return `
+                            <li class="p-3 border-b border-gray-700 bg-gray-700 rounded-lg mb-2">
+                                <div class="space-y-3">
+                                    <h5 class="text-sm font-semibold text-indigo-300">키 편집: ${item.name}</h5>
+                                    <input type="text" id="edit-api-name" value="${editingApiKey.name}" placeholder="새 키 이름"
+                                           class="w-full bg-gray-800 text-gray-100 border border-indigo-500 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    <textarea id="edit-api-key" rows="2" placeholder="새 API 키 값"
+                                              class="w-full bg-gray-800 text-gray-100 border border-indigo-500 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">${editingApiKey.key}</textarea>
+                                    <div class="flex justify-end space-x-2">
+                                        <button onclick="window.cancelEditApiKey()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition">취소</button>
+                                        <button onclick="window.saveEditApiKey()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg text-sm transition">저장</button>
+                                    </div>
+                                </div>
+                            </li>
+                        `;
+                    }
+                    
+                    return `
+                        <li class="flex justify-between items-center p-3 border-b border-gray-700 last:border-b-0 hover:bg-gray-700 rounded-md transition duration-150 ${isActive ? 'bg-indigo-900/50 border border-indigo-500' : ''}">
+                            <div class="flex items-center space-x-3">
+                                <input type="radio" name="active_key" value="${item.name}" 
+                                    id="key-radio-${item.name}" 
+                                    onchange="window.selectApiKey('${item.name}')"
+                                    ${isActive ? 'checked' : ''}
+                                    class="form-radio h-4 w-4 text-indigo-500 bg-gray-600 border-gray-500 focus:ring-indigo-500 cursor-pointer">
+                                <label for="key-radio-${item.name}" class="font-medium cursor-pointer" title="${item.key}">
+                                    ${item.name} 
+                                    <span class="text-xs text-gray-400 ml-2">(${item.key.substring(0, 4)}...${item.key.substring(item.key.length - 4)})</span>
+                                </label>
+                                ${isActive ? '<span class="text-xs text-indigo-400 border border-indigo-400 px-1 rounded-full">활성</span>' : ''}
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="window.startEditApiKey('${item.name}')" class="text-gray-400 hover:text-indigo-400 transition" title="편집">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="window.deleteApiKey('${item.name}')" class="text-red-400 hover:text-red-500 transition" title="삭제">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </li>
+                    `;
+                 }).join('') || '<li class="p-3 text-center text-gray-400">저장된 API 키가 없습니다.</li>';
                  lucide.createIcons();
             }
         };
@@ -518,9 +551,6 @@
                     });
                 });
 
-                // 데이터 저장 경로 표시를 제거 (요청 반영)
-                // document.getElementById('user-id-display').textContent = `데이터 저장 경로: /artifacts/${appId}/public/data/...`;
-                
                 // Firebase 설정 완료 메시지 제거 (요청 반영)
                 loadingElement.classList.add('hidden');
                 
@@ -779,6 +809,9 @@
         // API 설정 모달 열기/닫기
         window.toggleApiSettingsModal = (open) => {
             window.state.isApiModalOpen = open;
+            if (!open) {
+                window.state.editingApiKey = { name: null, key: null, originalName: null }; // 편집 상태 초기화
+            }
             render();
         };
 
@@ -814,34 +847,97 @@
             alertModal("성공", `API 키 "${name}"이(가) 저장되었습니다.`);
         };
 
-        // 활성 API 키 선택
+        // 활성 API 키 선택 (토글 방식)
         window.selectApiKey = (name) => {
-            if (window.state.activeApiKeyName === name) return;
+            let newActiveName = '';
+            // 현재 활성 키를 다시 클릭하면 비활성화
+            if (window.state.activeApiKeyName === name) {
+                newActiveName = ''; // Deactivate
+            } else {
+                newActiveName = name; // Activate the selected key
+            }
             
-            updateApiStorage(window.state.apiKeys, name);
-            alertModal("활성 키 변경", `활성 API 키가 "${name}"(으)로 변경되었습니다.`);
+            updateApiStorage(window.state.apiKeys, newActiveName);
+            alertModal("활성 키 변경", newActiveName ? `활성 API 키가 "${newActiveName}"(으)로 변경되었습니다.` : "활성 API 키가 해제되었습니다.");
+        };
+        
+        // API 키 편집 시작
+        window.startEditApiKey = (name) => {
+            const keyToEdit = window.state.apiKeys.find(k => k.name === name);
+            if (!keyToEdit) return;
+
+            window.state.editingApiKey = {
+                name: keyToEdit.name,
+                key: keyToEdit.key,
+                originalName: keyToEdit.name
+            };
+            render();
+        };
+
+        // API 키 편집 취소
+        window.cancelEditApiKey = () => {
+            window.state.editingApiKey = { name: null, key: null, originalName: null };
+            render();
+        };
+        
+        // API 키 편집 저장
+        window.saveEditApiKey = () => {
+            const originalName = window.state.editingApiKey.originalName;
+            const newName = document.getElementById('edit-api-name').value.trim();
+            const newKey = document.getElementById('edit-api-key').value.trim();
+
+            if (!newName || !newKey) {
+                alertModal("경고", "키 이름과 API 키를 모두 입력해주세요.");
+                return;
+            }
+            
+            // 이름 중복 검사 (이름이 변경된 경우에만)
+            if (newName !== originalName && window.state.apiKeys.some(k => k.name === newName)) {
+                alertModal("경고", `"${newName}" 이름의 키가 이미 존재합니다.`);
+                return;
+            }
+            
+            const newKeys = window.state.apiKeys.map(key => {
+                if (key.name === originalName) {
+                    return { name: newName, key: newKey };
+                }
+                return key;
+            });
+
+            let newActiveName = window.state.activeApiKeyName;
+            // 활성 키 이름이 변경된 경우 활성 키 이름도 업데이트
+            if (newActiveName === originalName) {
+                newActiveName = newName;
+            }
+
+            updateApiStorage(newKeys, newActiveName);
+            window.cancelEditApiKey(); // 편집 상태 초기화
+            alertModal("저장 완료", `API 키 "${newName}"이(가) 업데이트되었습니다.`);
         };
 
         // API 키 삭제
         window.deleteApiKey = async (name) => {
-            if (name === window.state.activeApiKeyName) {
-                alertModal("경고", "활성화된 API 키는 삭제할 수 없습니다. 다른 키를 선택한 후 삭제해주세요.");
-                return;
+            if (await customConfirm("API 키 삭제", `정말로 "${name}" 키를 삭제하시겠습니까?`)) {
+                
+                if (name === window.state.activeApiKeyName) {
+                    alertModal("경고", "활성화된 API 키는 삭제할 수 없습니다. 다른 키를 선택한 후 삭제해주세요.");
+                    return;
+                }
+                
+                const newKeys = window.state.apiKeys.filter(k => k.name !== name);
+                let newActiveName = window.state.activeApiKeyName;
+                
+                // 삭제 후 목록이 비어 있으면 활성 이름 초기화
+                if (newKeys.length === 0) {
+                     newActiveName = '';
+                } else if (!newKeys.some(k => k.name === newActiveName)) {
+                    // 현재 활성 이름이 삭제된 경우, 목록의 첫 번째 키를 활성화 (선택 사항)
+                    newActiveName = newKeys[0]?.name || '';
+                }
+                
+                await updateApiStorage(newKeys, newActiveName);
+                alertModal("삭제 완료", `API 키 "${name}"이(가) 삭제되었습니다.`);
             }
-            
-            const newKeys = window.state.apiKeys.filter(k => k.name !== name);
-            let newActiveName = window.state.activeApiKeyName;
-            
-            // 삭제 후 목록이 비어 있으면 활성 이름 초기화
-            if (newKeys.length === 0) {
-                 newActiveName = '';
-            } else if (!newKeys.some(k => k.name === newActiveName)) {
-                // 현재 활성 이름이 삭제된 경우, 목록의 첫 번째 키를 활성화 (선택 사항)
-                newActiveName = newKeys[0]?.name || '';
-            }
-            
-            await updateApiStorage(newKeys, newActiveName);
-            alertModal("삭제 완료", `API 키 "${name}"이(가) 삭제되었습니다.`);
         };
         
         // 채널 추가
