@@ -8,50 +8,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        window.db = db;
-        window.auth = auth;
-        window.appId = appId;
-        window.collection = collection;
-        window.doc = doc;
-        window.setDoc = setDoc;
-        window.getDoc = getDoc;
-        window.getDocs = getDocs;
-        window.deleteDoc = deleteDoc;
-        window.query = query;
-        window.orderBy = orderBy;
-        window.serverTimestamp = serverTimestamp;
-
-        // Auth Logic
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
-        initAuth();
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                console.log("Logged in as", user.uid);
-                window.currentUser = user;
-                window.dispatchEvent(new Event('auth-ready'));
-            }
-        });
-    </script>
-
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -284,6 +240,105 @@
 
     <script type="module">
         import { GoogleGenerativeAI } from "@google/generative-ai";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // === [중요] UI 함수를 먼저 전역에 등록하여 스크립트 에러 발생 시에도 버튼이 반응하도록 함 ===
+        
+        window.setMode = (mode) => {
+            ['link', 'channel', 'history'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const tab = document.getElementById(`tab-${t}`);
+                if (t === mode) {
+                    view.classList.remove('hidden');
+                    tab.className = "flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors border-b-2 border-brand-red text-brand-red bg-[#252525]";
+                } else {
+                    view.classList.add('hidden');
+                    tab.className = "flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors text-dark-muted hover:text-white border-b-2 border-transparent hover:bg-[#252525]";
+                }
+            });
+            if(mode === 'history') {
+                if(typeof window.filterHistory === 'function') window.filterHistory();
+                else console.warn("filterHistory function is not loaded yet.");
+            }
+        };
+
+        window.openApiModal = () => document.getElementById('apiModal').classList.add('active');
+        window.closeApiModal = () => document.getElementById('apiModal').classList.remove('active');
+
+        // 전역 변수 설정
+        let app, auth, db, appId;
+        
+        // === Firebase 초기화 및 앱 실행 ===
+        (async function initializeSystem() {
+            let firebaseConfig = null;
+            
+            try {
+                // 1. Canvas 환경 변수 확인
+                if (typeof __firebase_config !== 'undefined') {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                } 
+                // 2. 외부 환경(GitHub/Local): firebase_config.json 파일 로드 시도
+                else {
+                    console.log("Detecting external environment. Looking for firebase_config.json...");
+                    try {
+                        const response = await fetch('./firebase_config.json');
+                        if (response.ok) {
+                            const configData = await response.json();
+                            // json 파일 구조가 { "config": { ... }, "appId": "..." } 라고 가정
+                            // 만약 그냥 config 객체라면 firebaseConfig = configData 로 수정하세요.
+                            firebaseConfig = configData.config || configData; 
+                            appId = configData.appId || 'github-web-app';
+                            console.log("Config loaded from file.");
+                        } else {
+                            console.warn("firebase_config.json not found.");
+                        }
+                    } catch (e) {
+                        console.warn("Failed to fetch config json:", e);
+                    }
+                }
+
+                if (!firebaseConfig) {
+                    console.error("Firebase Configuration is missing.");
+                    const labelEl = document.getElementById('activeKeyLabel');
+                    if(labelEl) labelEl.innerHTML = '<span class="text-red-500 font-bold">설정 파일 없음 (firebase_config.json 필요)</span>';
+                    // 여기서 return하면 DB관련 기능만 안되고 UI는 작동해야 함
+                    return; 
+                }
+
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                // 전역 객체에 할당 (다른 함수에서 사용 가능하도록)
+                window.db = db;
+                window.auth = auth;
+                window.appId = appId;
+
+                // Auth 시작
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        console.log("Logged in as", user.uid);
+                        window.currentUser = user;
+                        window.dispatchEvent(new Event('auth-ready'));
+                        // 로그인 후 초기 데이터 로드 시도
+                        if(typeof window.loadApiConfig === 'function') await window.loadApiConfig();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Initialization Error:", error);
+                alert("시스템 초기화 중 오류가 발생했습니다. (Console 확인 필요)");
+            }
+        })();
 
         // Global State
         let currentMarkdownText = ""; 
@@ -294,31 +349,26 @@
         let channelVideosCache = []; 
         let selectedVideoIds = new Set(); 
         let selectedHistoryIds = new Set(); 
-        let currentChannelId = null;
-        let nextPageToken = null;
+        let currentChannelId = null; 
+        let nextPageToken = null; 
         let currentHistoryKeys = [];
         let lastBatchZipBlob = null; 
         let lastBatchFilename = "";
         
-        // API Management State (Separated)
+        // API Management State
         let youtubeKeys = [];
         let geminiKeys = [];
         let activeYtId = null;
         let activeGeminiId = null;
 
-        // --- Auth & Data Loading ---
-        window.addEventListener('auth-ready', async () => {
-            console.log("Auth ready, loading data...");
-            await loadApiConfig();
-            if(document.getElementById('view-history').classList.contains('hidden') === false) {
-               filterHistory(); 
-            }
-        });
-
-        async function loadApiConfig() {
+        // --- Data Loading Functions ---
+        window.loadApiConfig = async function() {
+            if(!window.db) return;
             try {
-                const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
-                const docSnap = await window.getDoc(docRef);
+                // Use imported 'doc' and 'getDoc' directly inside module scope is safer if window.doc fails
+                // But here we use window properties set in init.
+                const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
+                const docSnap = await getDoc(docRef);
                 
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -330,22 +380,25 @@
                 updateApiModalUI();
             } catch (e) {
                 console.error("Error loading API config:", e);
+                // alert("API 설정을 불러오지 못했습니다."); // 너무 자주 뜨면 불편하므로 console만
             }
         }
 
         async function saveApiConfig() {
+            if(!window.db) return alert("데이터베이스 연결이 되어있지 않습니다.");
             try {
-                const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
-                await window.setDoc(docRef, {
+                const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
+                await setDoc(docRef, {
                     youtubeKeys,
                     geminiKeys,
                     activeYtId,
                     activeGeminiId,
-                    updatedAt: window.serverTimestamp()
+                    updatedAt: serverTimestamp()
                 });
                 updateApiModalUI();
             } catch (e) {
                 alert("설정 저장 실패: " + e.message);
+                console.error(e);
             }
         }
 
@@ -363,11 +416,9 @@
 
             if (type === 'yt') {
                 if(editId) {
-                    // Update existing
                     const idx = youtubeKeys.findIndex(k => k.id === editId);
                     if(idx !== -1) youtubeKeys[idx] = { ...youtubeKeys[idx], alias, key };
                 } else {
-                    // Add new
                     const newId = 'yt_' + Date.now();
                     youtubeKeys.push({ id: newId, alias, key });
                     if(!activeYtId) activeYtId = newId;
@@ -387,16 +438,16 @@
             aliasEl.value = '';
             keyEl.value = '';
             editIdEl.value = '';
-            document.getElementById(`btnSave_${type}`).innerText = "추가하기";
-            document.getElementById(`btnSave_${type}`).classList.remove("bg-green-600", "hover:bg-green-700");
-            if(type==='yt') document.getElementById(`btnSave_${type}`).classList.add("bg-brand-red", "hover:bg-red-600");
-            else document.getElementById(`btnSave_${type}`).classList.add("bg-brand-blue", "hover:bg-blue-600");
+            const btn = document.getElementById(`btnSave_${type}`);
+            btn.innerText = "추가하기";
+            btn.classList.remove("bg-green-600", "hover:bg-green-700");
+            if(type==='yt') btn.classList.add("bg-brand-red", "hover:bg-red-600");
+            else btn.classList.add("bg-brand-blue", "hover:bg-blue-600");
 
             await saveApiConfig();
         };
 
         window.deleteKey = async function(type, id) {
-            // Delete confirmation added as requested
             if (!confirm("정말로 이 API 키를 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.")) return;
             
             if (type === 'yt') {
@@ -488,9 +539,6 @@
                 labelEl.innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i> 키 설정 필요</span>`;
             }
         }
-
-        window.openApiModal = () => document.getElementById('apiModal').classList.add('active');
-        window.closeApiModal = () => document.getElementById('apiModal').classList.remove('active');
 
         // --- Helpers ---
         function formatNumber(num) { return new Intl.NumberFormat('ko-KR').format(num); }
@@ -588,15 +636,16 @@
         async function saveAnalysis(videoId, videoData, analysisData) {
             const timestamp = Date.now();
             try {
-                const docRef = window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', videoId);
-                await window.setDoc(docRef, {
+                if(!window.db) throw new Error("DB not initialized");
+                const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', videoId);
+                await setDoc(docRef, {
                     timestamp: timestamp,
                     video: videoData,
                     analysis: analysisData
                 });
                 
                 if(document.getElementById('view-history').classList.contains('hidden') === false) {
-                    filterHistory(); 
+                    window.filterHistory(); 
                 }
             } catch(e) {
                 console.error("Save failed:", e);
@@ -608,17 +657,18 @@
         // --- History Management (Cloud) ---
         window.clearAllHistory = async function() {
             if(!confirm("모든 분석 기록을 클라우드에서 삭제하시겠습니까? 복구할 수 없습니다.")) return;
-            
+            if(!window.db) return alert("DB 연결 안됨");
+
             try {
-                const q = window.query(window.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'history'));
-                const snapshot = await window.getDocs(q);
+                const q = query(collection(window.db, 'artifacts', window.appId, 'public', 'data', 'history'));
+                const snapshot = await getDocs(q);
                 
                 snapshot.forEach(async (d) => {
-                    await window.deleteDoc(d.ref);
+                    await deleteDoc(d.ref);
                 });
                 
                 selectedHistoryIds.clear();
-                filterHistory();
+                window.filterHistory();
                 alert("삭제 완료되었습니다.");
             } catch(e) {
                 alert("삭제 중 오류: " + e.message);
@@ -628,24 +678,26 @@
         window.deleteHistoryItem = async function(e, id) {
             e.stopPropagation();
             if(!confirm("이 기록을 삭제하시겠습니까?")) return;
-            
+            if(!window.db) return alert("DB 연결 안됨");
+
             try {
-                await window.deleteDoc(window.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', id));
+                await deleteDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', id));
                 selectedHistoryIds.delete(id);
-                filterHistory();
+                window.filterHistory();
             } catch(e) {
                 alert("삭제 실패: " + e.message);
             }
         }
 
         async function fetchCloudHistory() {
+            if(!window.db) return {};
             document.getElementById('historyLoading').classList.remove('hidden');
             try {
-                const q = window.query(
-                    window.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'history'),
-                    window.orderBy('timestamp', 'desc')
+                const q = query(
+                    collection(window.db, 'artifacts', window.appId, 'public', 'data', 'history'),
+                    orderBy('timestamp', 'desc')
                 );
-                const snapshot = await window.getDocs(q);
+                const snapshot = await getDocs(q);
                 const history = {};
                 snapshot.forEach(doc => {
                     history[doc.id] = doc.data();
@@ -659,7 +711,7 @@
             }
         }
 
-        async function filterHistory() {
+        window.filterHistory = async function() {
             const history = await fetchCloudHistory();
             const query = document.getElementById('historySearch').value.toLowerCase();
             const keys = Object.keys(history).sort((a, b) => history[b].timestamp - history[a].timestamp);
@@ -743,7 +795,7 @@
         }
 
         // --- Core Functions ---
-        async function analyzeSingleVideo() {
+        window.analyzeSingleVideo = async function() {
             const k = getKeys(); if (!k) return;
             const url = document.getElementById('videoUrl').value;
             const id = extractVideoId(url);
@@ -899,7 +951,7 @@
             }
         }
 
-        async function searchChannelVideos() {
+        window.searchChannelVideos = async function() {
             const k = getKeys(); if (!k) return;
             let q = document.getElementById('channelHandle').value;
             if (!q) return alert("채널 정보를 입력해주세요.");
@@ -930,7 +982,7 @@
             } catch (e) { grid.innerHTML = `<div class="col-span-full text-center text-brand-red font-bold">${e.message}</div>`; }
         }
 
-        async function loadMoreChannelVideos() {
+        window.loadMoreChannelVideos = async function() {
             const k = getKeys(); if (!k) return;
             if (!currentChannelId) return;
             
@@ -986,7 +1038,7 @@
             sortChannelVideos(); 
         }
 
-        async function analyzeSelectedVideos() {
+        window.analyzeSelectedVideos = async function() {
             const k = getKeys(); if (!k) return;
             const ids = Array.from(selectedVideoIds);
             if (ids.length === 0) return;
@@ -1046,7 +1098,7 @@
         }
 
         // --- History Filter & Toggle ---
-        async function toggleHistorySelection(id) {
+        window.toggleHistorySelection = async function(id) {
             if (selectedHistoryIds.has(id)) selectedHistoryIds.delete(id);
             else selectedHistoryIds.add(id);
             
@@ -1058,7 +1110,7 @@
             updateHistoryBatchBtn();
         }
 
-        async function toggleAllHistorySelection() {
+        window.toggleAllHistorySelection = async function() {
             const allCheckbox = document.getElementById('selectAllHistory');
             const isChecked = allCheckbox.checked;
             
@@ -1069,19 +1121,11 @@
             
             // Need history data to re-render properly to show checkmarks
             // We can re-call filterHistory which is slightly expensive but correct
-            filterHistory(); 
+            window.filterHistory(); 
             updateHistoryBatchBtn();
         }
 
-        function updateHistoryBatchBtn() {
-            const btn = document.getElementById('btnHistoryBatchDown');
-            btn.disabled = selectedHistoryIds.size === 0;
-            btn.innerHTML = selectedHistoryIds.size > 0 ? 
-                `<i class="fas fa-download mr-1"></i> 선택 다운로드 (${selectedHistoryIds.size})` : 
-                `<i class="fas fa-download mr-1"></i> 선택 다운로드`;
-        }
-
-        async function downloadSelectedHistory() {
+        window.downloadSelectedHistory = async function() {
             const ids = Array.from(selectedHistoryIds);
             if (ids.length === 0) return alert("선택된 항목이 없습니다.");
             
@@ -1108,7 +1152,7 @@
             triggerDownloadBlob(content, zipFilename);
         }
 
-        async function loadSavedAnalysis(videoId) {
+        window.loadSavedAnalysis = async function(videoId) {
             const history = await fetchCloudHistory();
             const saved = history[videoId];
             
@@ -1131,7 +1175,7 @@
             }
         }
 
-        async function downloadSavedReport(e, videoId, filename) {
+        window.downloadSavedReport = async function(e, videoId, filename) {
             e.stopPropagation();
             const history = await fetchCloudHistory();
             const saved = history[videoId];
@@ -1140,223 +1184,7 @@
             triggerDownload(md, filename);
         }
 
-        // --- Other Helpers (Render, Fetch, etc) ---
-        function renderStats(data) {
-            const dashboard = document.getElementById('statsDashboard');
-            dashboard.classList.remove('hidden');
-            dashboard.innerHTML = [
-                { i: 'fa-eye', l: '조회수', v: formatNumber(data.viewCount), c: 'text-brand-blue' },
-                { i: 'fa-thumbs-up', l: '좋아요', v: formatNumber(data.likeCount), c: 'text-brand-red' },
-                { i: 'fa-comment-dots', l: '댓글', v: formatNumber(data.commentCount), c: 'text-green-400' },
-                { i: 'fa-calendar-alt', l: '게시일', v: formatDate(data.publishedAt), sub: timeSince(data.publishedAt), c: 'text-purple-400' }
-            ].map(x => `
-                <div class="bg-dark-card p-4 rounded-xl border border-dark-border shadow-md text-center hover-card">
-                    <div class="${x.c} text-2xl mb-2"><i class="fas ${x.i}"></i></div>
-                    <div class="text-xs text-dark-muted font-bold uppercase tracking-wide">${x.l}</div>
-                    <div class="text-xl font-bold text-white mt-1">${x.v}</div>
-                    ${x.sub ? `<div class="text-xs text-gray-500 mt-1">${x.sub}</div>` : ''}
-                </div>
-            `).join('');
-        }
-
-        function renderWebUI(data, videoId) {
-            document.getElementById('webReport').classList.remove('hidden');
-            const setHtml = (id, text) => { 
-                const el = document.getElementById(id);
-                if(el) el.innerHTML = parseBold(text);
-            };
-            
-            setHtml('ui-summary', data.summary);
-            
-            const d = document.getElementById('dynamicReportContent');
-            const v = data.viral_analysis;
-            const s = data.content_type_analysis;
-            const c = data.controversy_deep_analysis;
-            const fmt = (list) => (list||[]).map(e => `<div class="comment-quote"><span class="comment-author">${e.user}</span>"${e.text}"</div>`).join('');
-            
-            let html = '';
-
-            if (videoId) {
-                html += `
-                    <div class="aspect-video w-full rounded-xl overflow-hidden shadow-lg mb-8 border border-dark-border bg-black">
-                        <iframe class="w-full h-full" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                    </div>
-                `;
-            }
-
-            html += `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl hover-card">
-                        <h4 class="font-bold text-brand-red mb-4 flex items-center text-lg"><i class="fas fa-chart-line mr-2"></i> 바이럴 성장 분석</h4>
-                        <div class="space-y-4">
-                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">성장 추세</div><p class="text-sm text-gray-200">${parseBold(v.growth_trend)}</p></div>
-                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">시청자 참여도</div><p class="text-sm text-gray-200">${parseBold(v.engagement_rate)}</p></div>
-                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">알고리즘 적합성</div><p class="text-sm text-gray-200">${parseBold(v.subject_characteristics)}</p></div>
-                        </div>
-                    </div>
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl hover-card">
-                        <h4 class="font-bold text-green-500 mb-4 flex items-center text-lg"><i class="fas fa-compass mr-2"></i> 콘텐츠 유형 & 전략</h4>
-                        <div class="space-y-4">
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="type-badge ${s.type === 'Trend' ? 'type-trend' : s.type === 'Evergreen' ? 'type-evergreen' : 'type-seasonal'}">
-                                    ${s.type === 'Trend' ? '<i class="fas fa-bolt"></i> Trend' : s.type === 'Evergreen' ? '<i class="fas fa-tree"></i> Evergreen' : '<i class="fas fa-sun"></i> Seasonal'}
-                                </span>
-                                ${s.evergreen_type ? `<span class="text-xs text-gray-400 border border-gray-600 px-2 py-0.5 rounded">${s.evergreen_type}</span>` : ''}
-                            </div>
-                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">분류 근거</div><p class="text-sm text-gray-400">${s.reason}</p></div>
-                            <div class="bg-[#121212] p-3 rounded border border-dark-border mt-2"><div class="text-xs font-bold text-green-600 uppercase mb-1">전략 제안</div><p class="text-sm text-gray-200 highlight-text">${parseBold(s.strategy)}</p></div>
-                            <div class="mt-2"><span class="text-xs font-bold text-gray-500 mr-2">SEO 추천:</span><span class="text-xs text-blue-400">${(s.seo_keywords || []).join(', ')}</span></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="h-8"></div>
-            `;
-
-            html += `
-                <div>
-                    <h3 class="text-xl font-bold text-white mb-5 flex items-center"><i class="fas fa-comments text-brand-red mr-2"></i> 쟁점 및 반응</h3>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-brand-blue mb-3 border-b border-dark-border pb-3">👍 옹호</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.pros.title)}</p><div class="space-y-3">${fmt(c.pros.examples)}</div></div>
-                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-brand-red mb-3 border-b border-dark-border pb-3">👎 비판</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.cons.title)}</p><div class="space-y-3">${fmt(c.cons.examples)}</div></div>
-                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-dark-muted mb-3 border-b border-dark-border pb-3">⚖️ 중립</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.neutral.title)}</p><div class="space-y-3">${fmt(c.neutral.examples)}</div></div>
-                    </div>
-                </div>
-            `;
-
-            html += `
-                <div class="bg-[#121212] border border-dark-border p-6 rounded-xl mt-8">
-                    <h4 class="font-bold text-white mb-5 flex items-center text-lg"><i class="fas fa-quote-left text-brand-red mr-3"></i> 베스트 반응 (Top Pick)</h4>
-                    <div class="overflow-x-auto rounded-lg border border-dark-border">
-                        <table class="w-full text-left comment-table">
-                            <thead><tr><th class="w-1/4">유형</th><th class="w-3/4">내용</th></tr></thead>
-                            <tbody>${(data.best_comments_detailed||[]).map(x => `<tr><td class="font-bold text-brand-blue">${x.type}</td><td>"${x.text}"<span class="block text-xs text-gray-500 mt-1">@${x.author}</span></td></tr>`).join('')}</tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-
-            html += `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
-                        <h4 class="font-bold text-purple-400 mb-4 flex items-center text-lg"><i class="fas fa-brain mr-2"></i> 심리 분석</h4>
-                        <div class="space-y-5">
-                            <div><div class="text-xs font-bold text-purple-500 uppercase mb-2">Why They Like It</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.psychology_analysis.reason_for_enthusiasm)}</p></div>
-                            <div><div class="text-xs font-bold text-purple-500 uppercase mb-2">Why They Hate It</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.psychology_analysis.reason_for_criticism)}</p></div>
-                        </div>
-                    </div>
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
-                        <h4 class="font-bold text-yellow-500 mb-4 flex items-center text-lg"><i class="fas fa-lightbulb mr-2"></i> 성공 요인 & 니즈</h4>
-                        <div class="space-y-5">
-                            <div><div class="text-xs font-bold text-yellow-600 uppercase mb-2">Insight</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.insight_analysis)}</p></div>
-                            <div><div class="text-xs font-bold text-yellow-600 uppercase mb-2">Needs</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.viewer_needs)}</p></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            html += `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
-                        <h4 class="font-bold text-white mb-4">📊 감성 비율</h4>
-                        <div class="flex justify-between text-sm text-dark-muted mb-2"><span class="text-brand-blue">긍정 ${data.sentiment_pos_percent}%</span><span class="text-brand-red">부정 ${data.sentiment_neg_percent}%</span></div>
-                        <div class="w-full bg-[#121212] h-2 rounded-full overflow-hidden mb-4 border border-dark-border"><div class="h-full bg-gradient-to-r from-brand-blue to-brand-red" style="width:${data.sentiment_pos_percent}%"></div></div>
-                        <p class="text-sm text-gray-400 highlight-text">${parseBold(data.sentiment_analysis)}</p>
-                    </div>
-                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
-                        <h4 class="font-bold text-white mb-4">🔑 핵심 키워드</h4>
-                        <div class="flex flex-wrap gap-2">${(data.keywords_detailed||[]).map(k=>`<span class="px-3 py-1 bg-[#252525] text-gray-300 rounded-full text-xs border border-dark-border">${k}</span>`).join('')}</div>
-                    </div>
-                </div>
-            `;
-            
-            d.innerHTML = html;
-        }
-        
-        function renderMarkdown(md) {
-            document.getElementById('markdownContent').innerText = md;
-        }
-
-        const generateMarkdown = (data, video) => {
-            const v = data.viral_analysis, s = data.content_type_analysis, c = data.controversy_deep_analysis;
-            const fmt = (ex) => ex.map(e => `  - **${e.user}**: "${e.text}"`).join('\n');
-            const tbl = (data.best_comments_detailed||[]).map(x => `| ${x.type} | "${x.text}" (@${x.author}) |`).join('\n');
-
-            return `# 🎬 YouTube 심층 분석 리포트
-
-## 📺 영상 정보
-- 제목: ${video.title}
-- 채널: ${video.channelTitle}
-- 게시일: ${formatDate(video.publishedAt)}
-- 통계: 조회수 ${formatNumber(video.viewCount)} / 좋아요 ${formatNumber(video.likeCount)} / 댓글 ${formatNumber(video.commentCount)}
-
----
-## 📈 1. 바이럴 요인 및 성장 예측
-- **성장세**: ${v.growth_trend}
-- **참여율**: ${v.engagement_rate}
-- **알고리즘**: ${v.subject_characteristics}
-
-## 🧭 2. 콘텐츠 전략 진단
-- **유형**: ${s.type} ${s.evergreen_type || ''}
-- **전략**: ${s.strategy}
-- **SEO**: ${s.seo_keywords.join(', ')}
-
-## ⚔️ 3. 주요 논쟁 및 실제 반응
-### 👍 찬성 / 옹호
-**${c.pros.title}**
-${fmt(c.pros.examples)}
-
-### 👎 반대 / 비판
-**${c.cons.title}**
-${fmt(c.cons.examples)}
-
-### ⚖️ 중립 / 절충
-**${c.neutral.title}**
-${fmt(c.neutral.examples)}
-
-## 💡 4. 베스트 반응 요약
-| 유형 | 내용 |
-|---|---|
-${tbl}
-
-## 🧠 5. 시청자 심리 분석
-- **열광 이유**: ${data.psychology_analysis.reason_for_enthusiasm}
-- **비판 이유**: ${data.psychology_analysis.reason_for_criticism}
-
-## 📝 6. 상세 요약 & 인사이트
-**요약**: ${data.summary}
-**성공 요인**: ${data.insight_analysis}
-**시청자 니즈**: ${data.viewer_needs}
-
-## 📊 7. 감성 및 키워드
-- 긍정: ${data.sentiment_pos_percent}% / 부정: ${data.sentiment_neg_percent}%
-- 감성 분석: ${data.sentiment_analysis}
-- 키워드: ${data.keywords_detailed.join(', ')}
-
-*Generated by YouTube Insight Pro*`;
-        };
-
-        const downloadReport = () => {
-            if (!currentMarkdownText || !currentVideoInfo) return alert("다운로드할 내용이 없습니다.");
-            const filename = getReportFilename(currentVideoInfo, currentAnalysisTimestamp);
-            triggerDownload(currentMarkdownText, filename);
-        };
-
-        function setMode(mode) {
-            ['link', 'channel', 'history'].forEach(t => {
-                const view = document.getElementById(`view-${t}`);
-                const tab = document.getElementById(`tab-${t}`);
-                if (t === mode) {
-                    view.classList.remove('hidden');
-                    tab.className = "flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors border-b-2 border-brand-red text-brand-red bg-[#252525]";
-                } else {
-                    view.classList.add('hidden');
-                    tab.className = "flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors text-dark-muted hover:text-white border-b-2 border-transparent hover:bg-[#252525]";
-                }
-            });
-            if(mode === 'history') filterHistory();
-        }
-
-        function sortChannelVideos() {
+        window.sortChannelVideos = function() {
             const sortKey = document.getElementById('sortOption').value;
             const order = document.getElementById('orderOption').value;
             
@@ -1369,14 +1197,14 @@ ${tbl}
             renderChannelGrid();
         }
 
-        function toggleVideoSelection(id) {
+        window.toggleVideoSelection = function(id) {
             if (selectedVideoIds.has(id)) selectedVideoIds.delete(id);
             else selectedVideoIds.add(id);
             renderChannelGrid(); 
             updateBatchButton();
         }
 
-        function runSingleAnalysisFromGrid(e, id) {
+        window.runSingleAnalysisFromGrid = function(e, id) {
             e.stopPropagation();
             const keys = getKeys();
             if(!keys) return;
@@ -1391,134 +1219,11 @@ ${tbl}
             runAnalysis(id, keys);
         }
 
-        function renderChannelGrid() {
-            const grid = document.getElementById('videoGrid');
-            grid.innerHTML = '';
-            
-            channelVideosCache.forEach(v => {
-                const isSelected = selectedVideoIds.has(v.id);
-                const borderClass = isSelected ? 'border-brand-blue ring-2 ring-brand-blue' : 'border-dark-border';
-                
-                const d = document.createElement('div');
-                d.className = `bg-dark-card border ${borderClass} rounded-lg overflow-hidden cursor-pointer hover-card shadow-lg relative`;
-                
-                d.onclick = (e) => {
-                    if(e.target.closest('.analyze-btn')) return;
-                    toggleVideoSelection(v.id); 
-                };
-
-                d.innerHTML = `
-                    <div class="absolute top-2 left-2 z-10">
-                        <div class="custom-checkbox ${isSelected ? 'bg-brand-red border-brand-red' : 'bg-black/50 border-white/50'} w-6 h-6 rounded flex items-center justify-center text-white">
-                            ${isSelected ? '<i class="fas fa-check text-xs"></i>' : ''}
-                        </div>
-                    </div>
-                    <div class="relative aspect-video">
-                        <img src="${v.snippet.thumbnails.medium.url}" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition">
-                        <button onclick="runSingleAnalysisFromGrid(event, '${v.id}')" class="analyze-btn absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 hover:opacity-100 transition group">
-                            <span class="bg-brand-red text-white text-xs px-3 py-1.5 rounded font-bold transform translate-y-2 group-hover:translate-y-0 transition">단건 분석</span>
-                        </button>
-                    </div>
-                    <div class="p-3">
-                        <h4 class="font-bold text-sm text-gray-200 line-clamp-2 mb-2">${v.snippet.title}</h4>
-                        <div class="flex justify-between text-xs text-dark-muted">
-                            <span><i class="fas fa-eye mr-1"></i>${formatNumber(v.viewCount)}</span>
-                            <span><i class="fas fa-comment mr-1"></i>${formatNumber(v.commentCount)}</span>
-                        </div>
-                        <div class="mt-1 text-xs text-gray-500">${new Date(v.snippet.publishedAt).toLocaleDateString()}</div>
-                    </div>
-                `;
-                grid.appendChild(d);
-            });
-        }
-
-        async function fetchVideoDetails(videoId, apiKey) {
-            try {
-                const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`);
-                const data = await res.json();
-                
-                if (data.error) {
-                    if(data.error.code === 403) {
-                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
-                    }
-                    throw new Error(data.error.message);
-                }
-                
-                if (!data.items?.length) return null;
-                return {
-                    title: data.items[0].snippet.title,
-                    channelTitle: data.items[0].snippet.channelTitle,
-                    publishedAt: data.items[0].snippet.publishedAt,
-                    viewCount: data.items[0].statistics.viewCount,
-                    likeCount: data.items[0].statistics.likeCount,
-                    commentCount: data.items[0].statistics.commentCount,
-                    description: data.items[0].snippet.description
-                };
-            } catch(e) { throw e; }
-        }
-
-        async function fetchComments(videoId, apiKey) {
-            try {
-                const res = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=relevance&key=${apiKey}`);
-                const data = await res.json();
-                
-                if (data.error) {
-                    if(data.error.code === 403) {
-                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
-                    }
-                    throw new Error(data.error.message);
-                }
-
-                return data.items ? data.items.map(i => `- ${i.snippet.topLevelComment.snippet.authorDisplayName}: ${i.snippet.topLevelComment.snippet.textDisplay.replace(/<br>/g, ' ')}`).join("\n") : null;
-            } catch(e) { throw e; }
-        }
-
-        const extractVideoId = (url) => {
-            const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
-            return (match && match[2].length === 11) ? match[2] : null;
+        window.downloadReport = function() {
+            if (!currentMarkdownText || !currentVideoInfo) return alert("다운로드할 내용이 없습니다.");
+            const filename = getReportFilename(currentVideoInfo, currentAnalysisTimestamp);
+            triggerDownload(currentMarkdownText, filename);
         };
-
-        function triggerDownload(content, filename) {
-            const blob = new Blob([content], { type: "text/plain" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        function triggerDownloadBlob(blob, filename) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        window.analyzeSingleVideo = analyzeSingleVideo;
-        window.searchChannelVideos = searchChannelVideos;
-        window.sortChannelVideos = sortChannelVideos;
-        window.loadMoreChannelVideos = loadMoreChannelVideos;
-        window.analyzeSelectedVideos = analyzeSelectedVideos;
-        window.filterHistory = filterHistory;
-        window.toggleHistorySelection = toggleHistorySelection;
-        window.toggleAllHistorySelection = toggleAllHistorySelection;
-        window.downloadSelectedHistory = downloadSelectedHistory;
-        window.clearAllHistory = clearAllHistory;
-        window.downloadReport = downloadReport;
-        window.deleteHistoryItem = deleteHistoryItem;
-        window.loadSavedAnalysis = loadSavedAnalysis;
-        window.downloadSavedReport = downloadSavedReport;
-        window.setMode = setMode;
-        window.getKeys = getKeys;
-        window.toggleVideoSelection = toggleVideoSelection;
-        window.runSingleAnalysisFromGrid = runSingleAnalysisFromGrid;
 
     </script>
 </body>
