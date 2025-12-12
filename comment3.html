@@ -280,11 +280,11 @@
                     firebaseConfig = JSON.parse(__firebase_config);
                     appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 } 
-                // 2. 외부 환경(GitHub/Local): firebase_config.json 파일 로드 시도
+                // 2. 외부 환경(GitHub/Local): firebase-config.json 파일 로드 시도
                 else {
-                    console.log("Detecting external environment. Looking for firebase_config.json...");
+                    console.log("Detecting external environment. Looking for firebase-config.json...");
                     try {
-                        const response = await fetch('./firebase_config.json');
+                        const response = await fetch('./firebase-config.json');
                         if (response.ok) {
                             const configData = await response.json();
                             // json 파일 구조가 { "config": { ... }, "appId": "..." } 라고 가정
@@ -293,7 +293,7 @@
                             appId = configData.appId || 'github-web-app';
                             console.log("Config loaded from file.");
                         } else {
-                            console.warn("firebase_config.json not found.");
+                            console.warn("firebase-config.json not found.");
                         }
                     } catch (e) {
                         console.warn("Failed to fetch config json:", e);
@@ -303,7 +303,7 @@
                 if (!firebaseConfig) {
                     console.error("Firebase Configuration is missing.");
                     const labelEl = document.getElementById('activeKeyLabel');
-                    if(labelEl) labelEl.innerHTML = '<span class="text-red-500 font-bold">설정 파일 없음 (firebase_config.json 필요)</span>';
+                    if(labelEl) labelEl.innerHTML = '<span class="text-red-500 font-bold">설정 파일 없음 (firebase-config.json 필요)</span>';
                     // 여기서 return하면 DB관련 기능만 안되고 UI는 작동해야 함
                     return; 
                 }
@@ -1228,3 +1228,4 @@
     </script>
 </body>
 </html>
+
