@@ -287,8 +287,6 @@
                         const response = await fetch('./firebase-config.json');
                         if (response.ok) {
                             const configData = await response.json();
-                            // json 파일 구조가 { "config": { ... }, "appId": "..." } 라고 가정
-                            // 만약 그냥 config 객체라면 firebaseConfig = configData 로 수정하세요.
                             firebaseConfig = configData.config || configData; 
                             appId = configData.appId || 'github-web-app';
                             console.log("Config loaded from file.");
@@ -588,7 +586,7 @@
         }
 
         // Updated getKeys to use separate logic
-        function getKeys() {
+        window.getKeys = function() {
             if (!activeYtId || !activeGeminiId) {
                 alert("YouTube 또는 Gemini API 키가 활성화되지 않았습니다. [키 관리]에서 설정해주세요.");
                 window.openApiModal();
@@ -633,7 +631,7 @@
 
         // --- Cloud History Logic ---
         
-        async function saveAnalysis(videoId, videoData, analysisData) {
+        window.saveAnalysis = async function(videoId, videoData, analysisData) {
             const timestamp = Date.now();
             try {
                 if(!window.db) throw new Error("DB not initialized");
@@ -689,7 +687,7 @@
             }
         }
 
-        async function fetchCloudHistory() {
+        window.fetchCloudHistory = async function() {
             if(!window.db) return {};
             document.getElementById('historyLoading').classList.remove('hidden');
             try {
@@ -712,7 +710,7 @@
         }
 
         window.filterHistory = async function() {
-            const history = await fetchCloudHistory();
+            const history = await window.fetchCloudHistory();
             const query = document.getElementById('historySearch').value.toLowerCase();
             const keys = Object.keys(history).sort((a, b) => history[b].timestamp - history[a].timestamp);
             
@@ -796,23 +794,23 @@
 
         // --- Core Functions ---
         window.analyzeSingleVideo = async function() {
-            const k = getKeys(); if (!k) return;
+            const k = window.getKeys(); if (!k) return;
             const url = document.getElementById('videoUrl').value;
             const id = extractVideoId(url);
             if (!id) return alert("올바른 유튜브 링크가 아닙니다.");
-            await runAnalysis(id, k);
+            await window.runAnalysis(id, k);
         }
 
-        async function runAnalysis(id, k) {
+        window.runAnalysis = async function(id, k) {
             if(progressInterval) clearInterval(progressInterval);
 
             showLoading("데이터 수집 시작..."); 
             updateLoadingText(5, "데이터 수집 시작...");
 
             try {
-                const video = await fetchVideoDetails(id, k.ytKey);
+                const video = await window.fetchVideoDetails(id, k.ytKey);
                 updateLoadingText(20, "영상 정보 수집 완료");
-                const comments = await fetchComments(id, k.ytKey);
+                const comments = await window.fetchComments(id, k.ytKey);
                 updateLoadingText(40, "댓글 데이터 수집 완료");
 
                 if (!video || !comments) throw new Error("데이터 수집 실패. API 키나 영상 상태를 확인하세요.");
@@ -827,14 +825,14 @@
                     }
                 }, 500);
 
-                const data = await analyzeWithGemini(video, comments, k.geminiKey);
+                const data = await window.analyzeWithGemini(video, comments, k.geminiKey);
                 
                 clearInterval(progressInterval);
                 updateLoadingText(100, "분석 완료!");
 
                 currentVideoInfo = video;
                 currentVideoId = id; 
-                const ts = await saveAnalysis(id, video, data);
+                const ts = await window.saveAnalysis(id, video, data);
                 currentAnalysisTimestamp = ts; 
 
                 setTimeout(() => {
@@ -852,7 +850,7 @@
             }
         }
 
-        async function analyzeWithGemini(videoData, comments, apiKey) {
+        window.analyzeWithGemini = async function(videoData, comments, apiKey) {
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025", generationConfig: { responseMimeType: "application/json" } });
 
@@ -937,7 +935,7 @@
             
             countSpan.innerText = `${count}개 선택됨`;
             
-            btn.onclick = analyzeSelectedVideos;
+            btn.onclick = window.analyzeSelectedVideos;
             btn.classList.remove('bg-brand-green', 'hover:bg-emerald-600', 'bg-gray-500');
             btn.classList.add('bg-brand-blue', 'hover:bg-blue-600');
             btn.innerHTML = `<i class="fas fa-magic mr-1"></i> 선택 영상 일괄 분석`;
@@ -952,7 +950,7 @@
         }
 
         window.searchChannelVideos = async function() {
-            const k = getKeys(); if (!k) return;
+            const k = window.getKeys(); if (!k) return;
             let q = document.getElementById('channelHandle').value;
             if (!q) return alert("채널 정보를 입력해주세요.");
             
@@ -977,13 +975,13 @@
                     cid = s.items[0].id.channelId;
                 }
                 currentChannelId = cid;
-                await fetchChannelVideosPage(k.ytKey);
+                await window.fetchChannelVideosPage(k.ytKey);
 
             } catch (e) { grid.innerHTML = `<div class="col-span-full text-center text-brand-red font-bold">${e.message}</div>`; }
         }
 
         window.loadMoreChannelVideos = async function() {
-            const k = getKeys(); if (!k) return;
+            const k = window.getKeys(); if (!k) return;
             if (!currentChannelId) return;
             
             const btn = document.querySelector('#loadMoreContainer button');
@@ -992,7 +990,7 @@
             btn.disabled = true;
 
             try {
-                await fetchChannelVideosPage(k.ytKey);
+                await window.fetchChannelVideosPage(k.ytKey);
             } catch(e) {
                 alert("추가 영상을 불러오는데 실패했습니다.");
             } finally {
@@ -1001,7 +999,7 @@
             }
         }
 
-        async function fetchChannelVideosPage(apiKey) {
+        window.fetchChannelVideosPage = async function(apiKey) {
             const maxResults = 50; 
             let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${currentChannelId}&order=date&maxResults=${maxResults}&type=video&key=${apiKey}`;
             if (nextPageToken) url += `&pageToken=${nextPageToken}`;
@@ -1035,11 +1033,11 @@
 
             channelVideosCache = [...channelVideosCache, ...newItems];
             document.getElementById('channelControls').classList.remove('hidden');
-            sortChannelVideos(); 
+            window.sortChannelVideos(); 
         }
 
         window.analyzeSelectedVideos = async function() {
-            const k = getKeys(); if (!k) return;
+            const k = window.getKeys(); if (!k) return;
             const ids = Array.from(selectedVideoIds);
             if (ids.length === 0) return;
 
@@ -1060,13 +1058,13 @@
                 btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> 분석 중 (${i + 1}/${ids.length})...`;
 
                 try {
-                    const video = await fetchVideoDetails(vid, k.ytKey);
-                    const comments = await fetchComments(vid, k.ytKey);
+                    const video = await window.fetchVideoDetails(vid, k.ytKey);
+                    const comments = await window.fetchComments(vid, k.ytKey);
                     
                     if (video && comments) {
                         await new Promise(r => setTimeout(r, 1500)); 
-                        const analysis = await analyzeWithGemini(video, comments, k.geminiKey);
-                        const ts = await saveAnalysis(vid, video, analysis);
+                        const analysis = await window.analyzeWithGemini(video, comments, k.geminiKey);
+                        const ts = await window.saveAnalysis(vid, video, analysis);
                         const singleMd = generateMarkdown(analysis, video);
                         
                         const filename = getReportFilename(video, ts);
@@ -1094,7 +1092,7 @@
 
             alert(`${successCount}/${ids.length}개 영상 분석 완료. ZIP 파일이 다운로드되었습니다.`);
             selectedVideoIds.clear();
-            renderChannelGrid(); 
+            window.renderChannelGrid(); 
         }
 
         // --- History Filter & Toggle ---
@@ -1119,8 +1117,6 @@
                 else selectedHistoryIds.delete(key);
             });
             
-            // Need history data to re-render properly to show checkmarks
-            // We can re-call filterHistory which is slightly expensive but correct
             window.filterHistory(); 
             updateHistoryBatchBtn();
         }
@@ -1130,7 +1126,7 @@
             if (ids.length === 0) return alert("선택된 항목이 없습니다.");
             
             const zip = new JSZip();
-            const history = await fetchCloudHistory(); // Ensure fresh
+            const history = await window.fetchCloudHistory(); 
             const batchDate = getFormattedDate(new Date());
             let addedCount = 0;
             
@@ -1153,7 +1149,7 @@
         }
 
         window.loadSavedAnalysis = async function(videoId) {
-            const history = await fetchCloudHistory();
+            const history = await window.fetchCloudHistory();
             const saved = history[videoId];
             
             if(saved) {
@@ -1177,7 +1173,7 @@
 
         window.downloadSavedReport = async function(e, videoId, filename) {
             e.stopPropagation();
-            const history = await fetchCloudHistory();
+            const history = await window.fetchCloudHistory();
             const saved = history[videoId];
             if (!saved) return alert("데이터 없음");
             const md = generateMarkdown(saved.analysis, saved.video);
@@ -1194,19 +1190,19 @@
                 return order === 'asc' ? valA - valB : valB - valA;
             });
 
-            renderChannelGrid();
+            window.renderChannelGrid();
         }
 
         window.toggleVideoSelection = function(id) {
             if (selectedVideoIds.has(id)) selectedVideoIds.delete(id);
             else selectedVideoIds.add(id);
-            renderChannelGrid(); 
+            window.renderChannelGrid(); 
             updateBatchButton();
         }
 
         window.runSingleAnalysisFromGrid = function(e, id) {
             e.stopPropagation();
-            const keys = getKeys();
+            const keys = window.getKeys();
             if(!keys) return;
             
             const resultArea = document.getElementById('resultArea');
@@ -1216,7 +1212,7 @@
                 resultArea.scrollIntoView({ behavior: 'smooth' });
             }, 100);
 
-            runAnalysis(id, keys);
+            window.runAnalysis(id, keys);
         }
 
         window.downloadReport = function() {
@@ -1228,7 +1224,7 @@
         // --- Explicitly Assign renderChannelGrid to window ---
         window.renderChannelGrid = function() {
             const grid = document.getElementById('videoGrid');
-            if (!grid) return; // Guard clause
+            if (!grid) return; 
             grid.innerHTML = '';
             
             channelVideosCache.forEach(v => {
@@ -1240,7 +1236,7 @@
                 
                 d.onclick = (e) => {
                     if(e.target.closest('.analyze-btn')) return;
-                    toggleVideoSelection(v.id); 
+                    window.toggleVideoSelection(v.id); 
                 };
 
                 d.innerHTML = `
@@ -1251,7 +1247,7 @@
                     </div>
                     <div class="relative aspect-video">
                         <img src="${v.snippet.thumbnails.medium.url}" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition">
-                        <button onclick="runSingleAnalysisFromGrid(event, '${v.id}')" class="analyze-btn absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 hover:opacity-100 transition group">
+                        <button onclick="window.runSingleAnalysisFromGrid(event, '${v.id}')" class="analyze-btn absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 hover:opacity-100 transition group">
                             <span class="bg-brand-red text-white text-xs px-3 py-1.5 rounded font-bold transform translate-y-2 group-hover:translate-y-0 transition">단건 분석</span>
                         </button>
                     </div>
@@ -1266,6 +1262,75 @@
                 `;
                 grid.appendChild(d);
             });
+        }
+
+        window.fetchVideoDetails = async function(videoId, apiKey) {
+            try {
+                const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    if(data.error.code === 403) {
+                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
+                    }
+                    throw new Error(data.error.message);
+                }
+                
+                if (!data.items?.length) return null;
+                return {
+                    title: data.items[0].snippet.title,
+                    channelTitle: data.items[0].snippet.channelTitle,
+                    publishedAt: data.items[0].snippet.publishedAt,
+                    viewCount: data.items[0].statistics.viewCount,
+                    likeCount: data.items[0].statistics.likeCount,
+                    commentCount: data.items[0].statistics.commentCount,
+                    description: data.items[0].snippet.description
+                };
+            } catch(e) { throw e; }
+        }
+
+        window.fetchComments = async function(videoId, apiKey) {
+            try {
+                const res = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=relevance&key=${apiKey}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    if(data.error.code === 403) {
+                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
+                    }
+                    throw new Error(data.error.message);
+                }
+
+                return data.items ? data.items.map(i => `- ${i.snippet.topLevelComment.snippet.authorDisplayName}: ${i.snippet.topLevelComment.snippet.textDisplay.replace(/<br>/g, ' ')}`).join("\n") : null;
+            } catch(e) { throw e; }
+        }
+
+        const extractVideoId = (url) => {
+            const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+            return (match && match[2].length === 11) ? match[2] : null;
+        };
+
+        function triggerDownload(content, filename) {
+            const blob = new Blob([content], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function triggerDownloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
     </script>
