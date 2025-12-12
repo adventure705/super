@@ -280,7 +280,7 @@
                     firebaseConfig = JSON.parse(__firebase_config);
                     appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 } 
-                // 2. 외부 환경(GitHub/Local): firebase-config.json 파일 로드 시도
+                // 2. 외부 환경(GitHub/Local): firebase-config.json 파일 로드 시도 (이름 변경 반영)
                 else {
                     console.log("Detecting external environment. Looking for firebase-config.json...");
                     try {
@@ -815,7 +815,7 @@
 
                 if (!video || !comments) throw new Error("데이터 수집 실패. API 키나 영상 상태를 확인하세요.");
                 
-                renderStats(video); 
+                window.renderStats(video); 
                 
                 let currentP = 40;
                 progressInterval = setInterval(() => {
@@ -838,7 +838,7 @@
                 setTimeout(() => {
                      hideLoading();
                      renderWebUI(data, id); 
-                     const md = generateMarkdown(data, video);
+                     const md = window.generateMarkdown(data, video);
                      currentMarkdownText = md;
                      renderMarkdown(md);
                      document.getElementById('webReport').scrollIntoView({behavior: 'smooth'});
@@ -1065,7 +1065,7 @@
                         await new Promise(r => setTimeout(r, 1500)); 
                         const analysis = await window.analyzeWithGemini(video, comments, k.geminiKey);
                         const ts = await window.saveAnalysis(vid, video, analysis);
-                        const singleMd = generateMarkdown(analysis, video);
+                        const singleMd = window.generateMarkdown(analysis, video);
                         
                         const filename = getReportFilename(video, ts);
                         zip.file(filename, singleMd);
@@ -1133,7 +1133,7 @@
             ids.forEach((vid) => {
                 const item = history[vid];
                 if(item) {
-                    const md = generateMarkdown(item.analysis, item.video);
+                    const md = window.generateMarkdown(item.analysis, item.video);
                     const filename = getReportFilename(item.video, item.timestamp);
                     zip.file(filename, md);
                     addedCount++;
@@ -1162,9 +1162,9 @@
                 document.getElementById('markdownSection').classList.remove('hidden');
                 document.getElementById('statsDashboard').classList.remove('hidden');
                 document.getElementById('loading').classList.add('hidden');
-                renderStats(saved.video);
+                window.renderStats(saved.video);
                 renderWebUI(saved.analysis, videoId); 
-                const md = generateMarkdown(saved.analysis, saved.video);
+                const md = window.generateMarkdown(saved.analysis, saved.video);
                 currentMarkdownText = md;
                 renderMarkdown(md);
                 document.getElementById('resultArea').scrollIntoView({behavior: 'smooth'});
@@ -1176,7 +1176,7 @@
             const history = await window.fetchCloudHistory();
             const saved = history[videoId];
             if (!saved) return alert("데이터 없음");
-            const md = generateMarkdown(saved.analysis, saved.video);
+            const md = window.generateMarkdown(saved.analysis, saved.video);
             triggerDownload(md, filename);
         }
 
@@ -1332,6 +1332,83 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+
+        window.renderStats = function(data) {
+            const dashboard = document.getElementById('statsDashboard');
+            dashboard.classList.remove('hidden');
+            dashboard.innerHTML = [
+                { i: 'fa-eye', l: '조회수', v: formatNumber(data.viewCount), c: 'text-brand-blue' },
+                { i: 'fa-thumbs-up', l: '좋아요', v: formatNumber(data.likeCount), c: 'text-brand-red' },
+                { i: 'fa-comment-dots', l: '댓글', v: formatNumber(data.commentCount), c: 'text-green-400' },
+                { i: 'fa-calendar-alt', l: '게시일', v: formatDate(data.publishedAt), sub: timeSince(data.publishedAt), c: 'text-purple-400' }
+            ].map(x => `
+                <div class="bg-dark-card p-4 rounded-xl border border-dark-border shadow-md text-center hover-card">
+                    <div class="${x.c} text-2xl mb-2"><i class="fas ${x.i}"></i></div>
+                    <div class="text-xs text-dark-muted font-bold uppercase tracking-wide">${x.l}</div>
+                    <div class="text-xl font-bold text-white mt-1">${x.v}</div>
+                    ${x.sub ? `<div class="text-xs text-gray-500 mt-1">${x.sub}</div>` : ''}
+                </div>
+            `).join('');
+        };
+
+        window.generateMarkdown = (data, video) => {
+            const v = data.viral_analysis, s = data.content_type_analysis, c = data.controversy_deep_analysis;
+            const fmt = (ex) => ex.map(e => `  - **${e.user}**: "${e.text}"`).join('\n');
+            const tbl = (data.best_comments_detailed||[]).map(x => `| ${x.type} | "${x.text}" (@${x.author}) |`).join('\n');
+
+            return `# 🎬 YouTube 심층 분석 리포트
+
+## 📺 영상 정보
+- 제목: ${video.title}
+- 채널: ${video.channelTitle}
+- 게시일: ${formatDate(video.publishedAt)}
+- 통계: 조회수 ${formatNumber(video.viewCount)} / 좋아요 ${formatNumber(video.likeCount)} / 댓글 ${formatNumber(video.commentCount)}
+
+---
+## 📈 1. 바이럴 요인 및 성장 예측
+- **성장세**: ${v.growth_trend}
+- **참여율**: ${v.engagement_rate}
+- **알고리즘**: ${v.subject_characteristics}
+
+## 🧭 2. 콘텐츠 전략 진단
+- **유형**: ${s.type} ${s.evergreen_type || ''}
+- **전략**: ${s.strategy}
+- **SEO**: ${s.seo_keywords.join(', ')}
+
+## ⚔️ 3. 주요 논쟁 및 실제 반응
+### 👍 찬성 / 옹호
+**${c.pros.title}**
+${fmt(c.pros.examples)}
+
+### 👎 반대 / 비판
+**${c.cons.title}**
+${fmt(c.cons.examples)}
+
+### ⚖️ 중립 / 절충
+**${c.neutral.title}**
+${fmt(c.neutral.examples)}
+
+## 💡 4. 베스트 반응 요약
+| 유형 | 내용 |
+|---|---|
+${tbl}
+
+## 🧠 5. 시청자 심리 분석
+- **열광 이유**: ${data.psychology_analysis.reason_for_enthusiasm}
+- **비판 이유**: ${data.psychology_analysis.reason_for_criticism}
+
+## 📝 6. 상세 요약 & 인사이트
+**요약**: ${data.summary}
+**성공 요인**: ${data.insight_analysis}
+**시청자 니즈**: ${data.viewer_needs}
+
+## 📊 7. 감성 및 키워드
+- 긍정: ${data.sentiment_pos_percent}% / 부정: ${data.sentiment_neg_percent}%
+- 감성 분석: ${data.sentiment_analysis}
+- 키워드: ${data.keywords_detailed.join(', ')}
+
+*Generated by YouTube Insight Pro*`;
+        };
 
     </script>
 </body>
