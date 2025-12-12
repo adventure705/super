@@ -732,7 +732,7 @@
             if (keys.length === 0) {
                 container.classList.add('hidden');
                 noMsg.classList.remove('hidden');
-                updateHistoryBatchBtn();
+                window.updateHistoryBatchBtn(); // Fixed: window.updateHistoryBatchBtn()
                 return;
             }
             
@@ -789,8 +789,18 @@
             if(allCheckbox && keys.length > 0) {
                 allCheckbox.checked = keys.every(k => selectedHistoryIds.has(k));
             }
-            updateHistoryBatchBtn();
+            window.updateHistoryBatchBtn(); // Fixed: window.updateHistoryBatchBtn()
         }
+
+        // --- Added Missing Function ---
+        window.updateHistoryBatchBtn = function() {
+            const btn = document.getElementById('btnHistoryBatchDown');
+            if (!btn) return;
+            btn.disabled = selectedHistoryIds.size === 0;
+            btn.innerHTML = selectedHistoryIds.size > 0 ? 
+                `<i class="fas fa-download mr-1"></i> 선택 다운로드 (${selectedHistoryIds.size})` : 
+                `<i class="fas fa-download mr-1"></i> 선택 다운로드`;
+        };
 
         // --- Core Functions ---
         window.analyzeSingleVideo = async function() {
@@ -837,7 +847,7 @@
 
                 setTimeout(() => {
                      hideLoading();
-                     renderWebUI(data, id); 
+                     window.renderWebUI(data, id); 
                      const md = window.generateMarkdown(data, video);
                      currentMarkdownText = md;
                      renderMarkdown(md);
@@ -1105,7 +1115,7 @@
                 const allSelected = currentHistoryKeys.length > 0 && currentHistoryKeys.every(k => selectedHistoryIds.has(k));
                 allCheckbox.checked = allSelected;
             }
-            updateHistoryBatchBtn();
+            window.updateHistoryBatchBtn();
         }
 
         window.toggleAllHistorySelection = async function() {
@@ -1118,7 +1128,7 @@
             });
             
             window.filterHistory(); 
-            updateHistoryBatchBtn();
+            window.updateHistoryBatchBtn();
         }
 
         window.downloadSelectedHistory = async function() {
@@ -1163,7 +1173,7 @@
                 document.getElementById('statsDashboard').classList.remove('hidden');
                 document.getElementById('loading').classList.add('hidden');
                 window.renderStats(saved.video);
-                renderWebUI(saved.analysis, videoId); 
+                window.renderWebUI(saved.analysis, videoId); 
                 const md = window.generateMarkdown(saved.analysis, saved.video);
                 currentMarkdownText = md;
                 renderMarkdown(md);
@@ -1349,6 +1359,119 @@
                     ${x.sub ? `<div class="text-xs text-gray-500 mt-1">${x.sub}</div>` : ''}
                 </div>
             `).join('');
+        };
+
+        window.renderWebUI = function(data, videoId) {
+            document.getElementById('webReport').classList.remove('hidden');
+            const setHtml = (id, text) => { 
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = parseBold(text);
+            };
+            
+            setHtml('ui-summary', data.summary);
+            
+            const d = document.getElementById('dynamicReportContent');
+            const v = data.viral_analysis;
+            const s = data.content_type_analysis;
+            const c = data.controversy_deep_analysis;
+            const fmt = (list) => (list||[]).map(e => `<div class="comment-quote"><span class="comment-author">${e.user}</span>"${e.text}"</div>`).join('');
+            
+            let html = '';
+
+            if (videoId) {
+                html += `
+                    <div class="aspect-video w-full rounded-xl overflow-hidden shadow-lg mb-8 border border-dark-border bg-black">
+                        <iframe class="w-full h-full" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl hover-card">
+                        <h4 class="font-bold text-brand-red mb-4 flex items-center text-lg"><i class="fas fa-chart-line mr-2"></i> 바이럴 성장 분석</h4>
+                        <div class="space-y-4">
+                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">성장 추세</div><p class="text-sm text-gray-200">${parseBold(v.growth_trend)}</p></div>
+                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">시청자 참여도</div><p class="text-sm text-gray-200">${parseBold(v.engagement_rate)}</p></div>
+                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">알고리즘 적합성</div><p class="text-sm text-gray-200">${parseBold(v.subject_characteristics)}</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl hover-card">
+                        <h4 class="font-bold text-green-500 mb-4 flex items-center text-lg"><i class="fas fa-compass mr-2"></i> 콘텐츠 유형 & 전략</h4>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="type-badge ${s.type === 'Trend' ? 'type-trend' : s.type === 'Evergreen' ? 'type-evergreen' : 'type-seasonal'}">
+                                    ${s.type === 'Trend' ? '<i class="fas fa-bolt"></i> Trend' : s.type === 'Evergreen' ? '<i class="fas fa-tree"></i> Evergreen' : '<i class="fas fa-sun"></i> Seasonal'}
+                                </span>
+                                ${s.evergreen_type ? `<span class="text-xs text-gray-400 border border-gray-600 px-2 py-0.5 rounded">${s.evergreen_type}</span>` : ''}
+                            </div>
+                            <div><div class="text-xs font-bold text-gray-500 uppercase mb-1">분류 근거</div><p class="text-sm text-gray-400">${s.reason}</p></div>
+                            <div class="bg-[#121212] p-3 rounded border border-dark-border mt-2"><div class="text-xs font-bold text-green-600 uppercase mb-1">전략 제안</div><p class="text-sm text-gray-200 highlight-text">${parseBold(s.strategy)}</p></div>
+                            <div class="mt-2"><span class="text-xs font-bold text-gray-500 mr-2">SEO 추천:</span><span class="text-xs text-blue-400">${(s.seo_keywords || []).join(', ')}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="h-8"></div>
+            `;
+
+            html += `
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-5 flex items-center"><i class="fas fa-comments text-brand-red mr-2"></i> 쟁점 및 반응</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-brand-blue mb-3 border-b border-dark-border pb-3">👍 옹호</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.pros.title)}</p><div class="space-y-3">${fmt(c.pros.examples)}</div></div>
+                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-brand-red mb-3 border-b border-dark-border pb-3">👎 비판</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.cons.title)}</p><div class="space-y-3">${fmt(c.cons.examples)}</div></div>
+                        <div class="bg-dark-card border border-dark-border rounded-xl p-5 hover-card"><h4 class="font-bold text-dark-muted mb-3 border-b border-dark-border pb-3">⚖️ 중립</h4><p class="text-sm font-bold text-white mb-4">${parseBold(c.neutral.title)}</p><div class="space-y-3">${fmt(c.neutral.examples)}</div></div>
+                    </div>
+                </div>
+            `;
+
+            html += `
+                <div class="bg-[#121212] border border-dark-border p-6 rounded-xl mt-8">
+                    <h4 class="font-bold text-white mb-5 flex items-center text-lg"><i class="fas fa-quote-left text-brand-red mr-3"></i> 베스트 반응 (Top Pick)</h4>
+                    <div class="overflow-x-auto rounded-lg border border-dark-border">
+                        <table class="w-full text-left comment-table">
+                            <thead><tr><th class="w-1/4">유형</th><th class="w-3/4">내용</th></tr></thead>
+                            <tbody>${(data.best_comments_detailed||[]).map(x => `<tr><td class="font-bold text-brand-blue">${x.type}</td><td>"${x.text}"<span class="block text-xs text-gray-500 mt-1">@${x.author}</span></td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            html += `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
+                        <h4 class="font-bold text-purple-400 mb-4 flex items-center text-lg"><i class="fas fa-brain mr-2"></i> 심리 분석</h4>
+                        <div class="space-y-5">
+                            <div><div class="text-xs font-bold text-purple-500 uppercase mb-2">Why They Like It</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.psychology_analysis.reason_for_enthusiasm)}</p></div>
+                            <div><div class="text-xs font-bold text-purple-500 uppercase mb-2">Why They Hate It</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.psychology_analysis.reason_for_criticism)}</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
+                        <h4 class="font-bold text-yellow-500 mb-4 flex items-center text-lg"><i class="fas fa-lightbulb mr-2"></i> 성공 요인 & 니즈</h4>
+                        <div class="space-y-5">
+                            <div><div class="text-xs font-bold text-yellow-600 uppercase mb-2">Insight</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.insight_analysis)}</p></div>
+                            <div><div class="text-xs font-bold text-yellow-600 uppercase mb-2">Needs</div><p class="text-sm text-gray-300 bg-[#121212] p-4 rounded border border-dark-border highlight-text">${parseBold(data.viewer_needs)}</p></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            html += `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
+                        <h4 class="font-bold text-white mb-4">📊 감성 비율</h4>
+                        <div class="flex justify-between text-sm text-dark-muted mb-2"><span class="text-brand-blue">긍정 ${data.sentiment_pos_percent}%</span><span class="text-brand-red">부정 ${data.sentiment_neg_percent}%</span></div>
+                        <div class="w-full bg-[#121212] h-2 rounded-full overflow-hidden mb-4 border border-dark-border"><div class="h-full bg-gradient-to-r from-brand-blue to-brand-red" style="width:${data.sentiment_pos_percent}%"></div></div>
+                        <p class="text-sm text-gray-400 highlight-text">${parseBold(data.sentiment_analysis)}</p>
+                    </div>
+                    <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
+                        <h4 class="font-bold text-white mb-4">🔑 핵심 키워드</h4>
+                        <div class="flex flex-wrap gap-2">${(data.keywords_detailed||[]).map(k=>`<span class="px-3 py-1 bg-[#252525] text-gray-300 rounded-full text-xs border border-dark-border">${k}</span>`).join('')}</div>
+                    </div>
+                </div>
+            `;
+            
+            d.innerHTML = html;
         };
 
         window.generateMarkdown = (data, video) => {
