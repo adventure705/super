@@ -168,13 +168,7 @@
                         </div>
                         <div id="dynamicReportContent"></div>
                     </div>
-                    <div id="markdownSection" class="hidden mt-12 border-t border-dark-border pt-8">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-bold text-white flex items-center"><i class="fas fa-file-code text-dark-muted mr-2"></i> Raw Data</h3>
-                            <button onclick="downloadReport()" class="bg-[#252525] hover:bg-[#333] text-white px-4 py-2 rounded-lg text-xs font-bold transition border border-dark-border flex items-center"><i class="fas fa-download mr-2"></i> 현재 리포트 다운로드</button>
-                        </div>
-                        <div id="markdownContent" class="markdown-raw"></div>
-                    </div>
+                    <!-- Raw Data Section Removed as requested -->
                 </div>
             </div>
         </div>
@@ -615,7 +609,6 @@
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('statsDashboard').classList.add('hidden');
             document.getElementById('webReport').classList.add('hidden');
-            document.getElementById('markdownSection').classList.add('hidden');
             updateLoadingText(0, text);
         }
 
@@ -746,8 +739,9 @@
                             <th class="w-10 text-center">
                                 <input type="checkbox" id="selectAllHistory" onchange="toggleAllHistorySelection()" class="custom-checkbox">
                             </th>
-                            <th>영상 제목</th>
-                            <th>채널</th>
+                            <th>영상 정보</th>
+                            <th>통계</th>
+                            <th>게시일</th>
                             <th>분석 일시</th>
                             <th class="text-right">관리</th>
                         </tr>
@@ -769,10 +763,18 @@
                                 <input type="checkbox" onchange="toggleHistorySelection('${id}')" ${isSelected ? 'checked' : ''} class="custom-checkbox">
                             </div>
                         </td>
-                        <td class="font-bold text-white max-w-md truncate pr-4">
-                            ${item.video.title}
+                        <td>
+                            <div class="font-bold text-white max-w-md truncate">${item.video.title}</div>
+                            <div class="text-xs text-gray-400">${item.video.channelTitle}</div>
                         </td>
-                        <td class="text-gray-400 text-sm">${item.video.channelTitle}</td>
+                        <td>
+                            <div class="flex gap-3 text-xs text-gray-400">
+                                <span title="조회수"><i class="fas fa-eye mr-1"></i>${formatNumber(item.video.viewCount)}</span>
+                                <span title="좋아요"><i class="fas fa-thumbs-up mr-1"></i>${formatNumber(item.video.likeCount)}</span>
+                                <span title="댓글"><i class="fas fa-comment mr-1"></i>${formatNumber(item.video.commentCount)}</span>
+                            </div>
+                        </td>
+                        <td class="text-xs text-gray-400">${formatDate(item.video.publishedAt)}</td>
                         <td class="text-gray-500 text-xs">${new Date(item.timestamp).toLocaleString()}</td>
                         <td class="text-right">
                             <button onclick="downloadSavedReport(event, '${id}', '${filename}')" class="text-brand-blue hover:text-blue-400 mr-3" title="다운로드"><i class="fas fa-download"></i></button>
@@ -850,7 +852,7 @@
                      window.renderWebUI(data, id); 
                      const md = window.generateMarkdown(data, video);
                      currentMarkdownText = md;
-                     renderMarkdown(md);
+                     // Raw Data rendering removed as requested
                      document.getElementById('webReport').scrollIntoView({behavior: 'smooth'});
                 }, 500);
 
@@ -1169,14 +1171,14 @@
 
                 document.getElementById('resultArea').classList.remove('hidden');
                 document.getElementById('webReport').classList.remove('hidden');
-                document.getElementById('markdownSection').classList.remove('hidden');
+                // Removed Raw Data section display
                 document.getElementById('statsDashboard').classList.remove('hidden');
                 document.getElementById('loading').classList.add('hidden');
                 window.renderStats(saved.video);
                 window.renderWebUI(saved.analysis, videoId); 
                 const md = window.generateMarkdown(saved.analysis, saved.video);
                 currentMarkdownText = md;
-                renderMarkdown(md);
+                // Removed Raw Data rendering
                 document.getElementById('resultArea').scrollIntoView({behavior: 'smooth'});
             }
         }
