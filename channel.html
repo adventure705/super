@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 📺 YouTube 채널 관리 대시보드</title>
+    <title>YouTube 채널 관리 대시보드</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
@@ -579,15 +579,15 @@
                 });
 
                 // Firebase 설정 완료 메시지 제거 (요청 반영)
-                loadingElement.classList.add('hidden');
+                if (loadingElement) loadingElement.classList.add('hidden'); // Fix: Check if element exists before accessing classList
                 
                 // Firestore 리스너 설정
                 setupListeners();
 
             } catch (error) {
                 console.error("Firebase 초기화 또는 인증 오류:", error);
-                loadingElement.textContent = `초기화 오류: ${error.message}`;
-                loadingElement.classList.remove('hidden');
+                if (loadingElement) loadingElement.textContent = `초기화 오류: ${error.message}`; // Fix: Check if element exists before accessing textContent
+                if (loadingElement) loadingElement.classList.remove('hidden');
             }
         };
 
@@ -772,22 +772,23 @@
                 const queryTerm = identifier.value;
                 
                 // search API를 사용하여 정확도를 높이고, 채널 제목이나 설명에 핸들 이름이 포함된 결과를 가져옵니다.
-                // maxResults=1로 설정하여 쿼터 소모를 최소화하되, 정확한 매칭을 우선시하는 로직을 적용합니다.
+                // maxResults를 5개로 늘려 더 많은 결과를 검토할 기회를 만듭니다.
                 const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${encodeURIComponent(queryTerm)}&type=channel&part=snippet&maxResults=5`; 
                 const searchData = await fetchWithBackoff(searchUrl);
-                
-                const inputNameLower = queryTerm.toLowerCase();
                 
                 let bestMatchItem = null;
                 
                 if (searchData.items && searchData.items.length > 0) {
-                     // 1. 핸들 입력인 경우, "가장 정확히 일치"하거나 "제목이 핸들로 시작"하는 채널을 우선 선택
+                     const decodedQueryTerm = decodeURIComponent(queryTerm).toLowerCase();
+
+                     // 1. 핸들 입력인 경우, 제목과 쿼리(핸들) 이름이 정확히 일치하는 채널을 찾습니다.
                      bestMatchItem = searchData.items.find(item => {
-                         const titleLower = item.snippet.title.toLowerCase();
-                         return titleLower === inputNameLower || titleLower.startsWith(inputNameLower);
+                        const titleLower = item.snippet.title.toLowerCase();
+                        // 정확히 일치하거나, 핸들로 시작하는지 확인
+                        return titleLower === decodedQueryTerm || titleLower.startsWith(decodedQueryTerm);
                      });
                      
-                     // 2. 정확한 일치 항목이 없으면, 구독자 수나 활동성을 알 수 없으므로, 그냥 API가 랭킹한 첫 번째 결과를 사용합니다.
+                     // 2. 정확한 일치 항목이 없으면, API가 랭킹한 첫 번째 결과를 사용합니다. (이 경우에도 최신 채널을 보장하기 어려움)
                      if (!bestMatchItem) {
                          bestMatchItem = searchData.items[0];
                      }
@@ -1448,4 +1449,256 @@
              <!-- 유튜브 아이콘 추가 -->
              <div class="flex items-center space-x-3">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12.0121 2.5C11.9796 2.5 11.9472 2.5 11.9147 2.50024C6.27315 2.5638 2.5 6.00282 2.5 11.9147C2.5 17.6534 6.27315 21.5003 11.9147 21.5C17.5843 21.5 21.5 17.6534 21.5 11.9147C21.5
+                    <path d="M12.0121 2.5C11.9796 2.5 11.9472 2.5 11.9147 2.50024C6.27315 2.5638 2.5 6.00282 2.5 11.9147C2.5 17.6534 6.27315 21.5003 11.9147 21.5C17.5843 21.5 21.5 17.6534 21.5 11.9147C21.5 6.00282 17.7554 2.5638 12.0121 2.5Z" fill="#FF0000" stroke="#FF0000" stroke-width="0.5"/>
+                    <path d="M16.5 12.0003L10.5 8.00027V16.0003L16.5 12.0003Z" fill="#F3F4F6"/>
+                </svg>
+                <h1 class="text-3xl font-extrabold text-white">YouTube 채널 관리 대시보드</h1>
+             </div>
+             <!-- API 설정 버튼 (우측 상단) -->
+             <button id="api-settings-button" onclick="window.toggleApiSettingsModal(true)" 
+                     class="bg-gray-700 hover:bg-gray-600 text-indigo-300 font-bold py-2 px-4 rounded-lg transition duration-200 whitespace-nowrap flex items-center shadow-md">
+                 <i data-lucide="key" class="w-5 h-5 mr-1"></i> API 설정
+             </button>
+        </div>
+
+        <div id="initial-loading" class="text-center p-8 text-indigo-400 font-medium hidden">
+             <i data-lucide="loader" class="w-6 h-6 animate-spin inline-block mr-2"></i> 로딩 중...
+        </div>
+        
+        <!-- 데이터 저장 경로 표시 업데이트 (요청에 따라 제거됨) -->
+        <div class="text-sm text-gray-500 mb-4 hidden" id="user-id-display"></div>
+
+        <!-- 상단 컨트롤 섹션 (UI 재구성) -->
+        <div class="flex flex-col space-y-4 mb-8">
+            
+            <!-- Row 1: 유튜브 링크 입력 및 추가 (단독 한 줄) -->
+            <form id="add-channel-form" onsubmit="window.handleAddChannel(event)" class="flex space-x-2">
+                <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 또는 @핸들 입력" required
+                       class="flex-grow bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
+                <button type="submit" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md flex-shrink-0 text-lg">
+                    추가
+                </button>
+            </form>
+
+            <!-- Row 2: 검색 바 (단독 한 줄) -->
+            <div class="flex items-center space-x-2">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+                <input type="text" id="search-input" oninput="window.handleSearchChange(event)" placeholder="채널명, 메모, 국가, 카테고리 등 전체 리스트 검색"
+                       class="w-full bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
+            </div>
+            
+            <!-- Row 3: 카테고리 필터 및 관리 (PC에서 오른쪽 정렬) -->
+            <div id="filter-container" class="flex flex-wrap gap-4 items-center justify-start md:justify-end">
+                
+                <!-- 사용자 정의 카테고리 필터 -->
+                <div class="flex items-center space-x-2">
+                    <label for="category-filter-select" class="text-gray-300 whitespace-nowrap text-sm">카테고리 필터:</label>
+                    <select id="category-filter-select" onchange="window.handleFilterChange('custom', this.value)"
+                            class="bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 min-w-[120px]">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                
+                <!-- 카테고리 편집 버튼 -->
+                <button onclick="window.toggleCategoryModal(true)" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-3 rounded-lg transition duration-200 whitespace-nowrap text-sm flex items-center">
+                    <i data-lucide="settings" class="w-4 h-4 inline-block mr-1"></i> 카테고리 편집
+                </button>
+            </div>
+        </div>
+
+        <!-- 채널 목록 테이블 -->
+        <div class="bg-gray-800 rounded-xl shadow-lg mt-8 p-4">
+            <div class="scrollable-table">
+                <table class="min-w-full divide-y divide-gray-700 text-sm">
+                    <thead class="bg-gray-700 sticky top-0 z-10">
+                        <tr>
+                            <!-- 1. 프로필 아이콘 (새로 분리) -->
+                            <th class="header-cell p-2">프로필</th>
+                            <!-- 2. 채널명 -->
+                            <th class="header-cell" onclick="window.handleSort('channelName')">채널명</th>
+                            <!-- 3. 채널링크 복사 버튼 (정렬 불가) -->
+                            <th class="header-cell p-2">링크</th>
+                            <!-- 4. 카테고리 (사용자 정의) -->
+                            <th class="header-cell" onclick="window.handleSort('customCategory')">카테고리</th>
+                            <!-- 5. 국가 -->
+                            <th class="header-cell" onclick="window.handleSort('country')">국가</th>
+                            <!-- 6. 비고(메모) -->
+                            <th class="header-cell" onclick="window.handleSort('note')">비고(메모)</th>
+                            <!-- 7. 구독자 수 -->
+                            <th class="header-cell" onclick="window.handleSort('subscribers')">구독자 수</th>
+                            <!-- 8. 총 조회수 -->
+                            <th class="header-cell" onclick="window.handleSort('totalViews')">총 조회수</th>
+                            <!-- 9. 총 영상수 -->
+                            <th class="header-cell" onclick="window.handleSort('totalVideos')">총 영상수</th>
+                            <!-- 10. 채널 생성일 -->
+                            <th class="header-cell" onclick="window.handleSort('channelCreationDate')">채널 생성일</th>
+                            <!-- 11. 채널 경과 시간 (새로 추가) -->
+                            <th class="header-cell">경과 시간</th>
+                            <!-- 12. 평균 업로드 주기 -->
+                            <th class="header-cell" onclick="window.handleSort('avgUploadFreqDays')">평균 업로드 주기</th>
+                            <!-- 13. 90일 평균 조회수 -->
+                            <th class="header-cell" onclick="window.handleSort('avgViews90d')">90일 평균 조회수</th>
+                            <!-- 14. 90일 평균 좋아요 수 -->
+                            <th class="header-cell" onclick="window.handleSort('avgLikes90d')">90일 평균 좋아요</th>
+                            <!-- 15. 90일 평균 댓글 수 -->
+                            <th class="header-cell" onclick="window.handleSort('avgComments90d')">90일 평균 댓글 수</th>
+                            <!-- 16. 삭제 버튼 (정렬 불가) -->
+                            <th class="header-cell p-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="channel-list" class="divide-y divide-gray-800">
+                        <!-- 채널 데이터는 JS에서 렌더링됩니다. -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 모달: API 설정 (멀티 키 관리) -->
+    <div id="api-settings-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <h3 class="text-xl font-bold text-white">YouTube API 키 관리</h3>
+                <button onclick="window.toggleApiSettingsModal(false)" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <p class="text-sm text-gray-400 mb-4">
+                YouTube Data API 키를 등록하고 사용할 키를 선택하세요.
+                현재 활성 키: <span class="font-bold text-indigo-400">${window.state.activeApiKeyName || '선택 안됨'}</span>
+            </p>
+
+            <!-- 새 키 추가 섹션 -->
+            <div class="mb-6 p-4 bg-gray-700/50 rounded-lg">
+                 <h4 class="text-lg font-semibold mb-3 border-b border-gray-600 pb-2">새 API 키 등록</h4>
+                <div class="flex flex-col space-y-3">
+                    <input type="text" id="new-api-name-input" placeholder="API 키 이름 (예: 개인 키, 백업 키)" 
+                           class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <input type="text" id="new-api-key-input" placeholder="YouTube Data API Key" 
+                           class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <div class="flex justify-end">
+                        <button onclick="window.addApiKey()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">키 추가 및 저장</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 저장된 키 목록 섹션 -->
+            <h4 class="text-lg font-semibold mb-3 mt-6 border-b border-gray-700 pb-2">저장된 키 목록 (활성 키 선택)</h4>
+            <ul id="api-key-list-body" class="max-h-64 overflow-y-auto divide-y divide-gray-700">
+                <!-- API 키 목록은 JS에서 렌더링됩니다. -->
+            </ul>
+
+            <div class="flex justify-end space-x-3 mt-4">
+                <button onclick="window.toggleApiSettingsModal(false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 채널 카테고리 선택 (새로 추가) -->
+    <div id="channel-category-selection-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <h3 id="channel-category-title" class="text-xl font-bold text-white">채널 카테고리 변경</h3>
+                <button onclick="window.cancelChannelCategorySelection()" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <ul id="channel-category-list" class="max-h-64 overflow-y-auto divide-y divide-gray-700 pr-2">
+                <!-- 카테고리 목록은 JS에서 렌더링됩니다. -->
+            </ul>
+            
+            <div class="flex justify-end space-x-3 mt-4 border-t border-gray-700 pt-3">
+                <button onclick="window.cancelChannelCategorySelection()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
+                <button onclick="window.saveChannelCategorySelection()" id="save-category-selection-btn" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 카테고리 편집 -->
+    <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <h3 class="text-xl font-bold text-white">카테고리 편집</h3>
+                <button onclick="window.toggleCategoryModal(false)" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <h4 class="text-lg font-semibold mb-2">새 카테고리 추가</h4>
+                <div class="flex space-x-2">
+                    <input type="text" id="new-category-input" placeholder="새 카테고리 이름" 
+                           class="flex-grow bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <button onclick="window.addCategory()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">추가</button>
+                </div>
+            </div>
+
+            <h4 class="text-lg font-semibold mb-2 mt-6 border-t border-gray-700 pt-4">기존 카테고리 목록</h4>
+            <ul id="category-list-body" class="max-h-64 overflow-y-auto divide-y divide-gray-700 pr-2">
+                <!-- 카테고리 목록은 JS에서 렌더링됩니다. -->
+            </ul>
+        </div>
+    </div>
+    
+    <!-- 모달: 비고(메모) 편집 -->
+    <div id="memo-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-lg">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <h3 class="text-xl font-bold text-white">비고(메모) 편집</h3>
+                <button onclick="window.cancelMemoEdit()" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <textarea id="memo-input" rows="4" placeholder="메모를 입력하세요..." 
+                      class="w-full bg-gray-900 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+            
+            <div class="flex justify-end space-x-3 mt-4">
+                <button onclick="window.cancelMemoEdit()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
+                <button onclick="window.saveMemoEdit()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">저장</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 모달: 채널 추가 로딩 -->
+    <div id="add-channel-loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 flex items-center space-x-3">
+            <i data-lucide="loader" class="w-6 h-6 animate-spin text-indigo-400"></i>
+            <span class="text-white font-medium">채널 정보를 불러오는 중...</span>
+        </div>
+    </div>
+
+    <!-- 모달: Alert (경고/성공 메시지) -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
+            <h3 id="alert-title" class="text-xl font-bold text-white border-b border-gray-700 pb-2 mb-3"></h3>
+            <p id="alert-message" class="text-gray-300 mb-4"></p>
+            <div class="flex justify-end">
+                <button id="alert-close-btn" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition">확인</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 모달: Confirm (확인/취소 메시지) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-11/12 max-w-sm">
+            <h3 id="confirm-title" class="text-xl font-bold text-white border-b border-gray-700 pb-2 mb-3"></h3>
+            <p id="confirm-message" class="text-gray-300 mb-4"></p>
+            <div class="flex justify-end space-x-3">
+                <button id="confirm-no-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">취소</button>
+                <button id="confirm-yes-btn" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 페이지 로드 시 initial-loading 요소 보이기
+        document.addEventListener('DOMContentLoaded', () => {
+             // Firebase 초기화 전에 로딩 표시
+             document.getElementById('initial-loading').classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
