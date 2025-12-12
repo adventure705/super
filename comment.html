@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 댓글 심층 분석기 (Pro - Cloud Sync)</title>
+    <title>YouTube 댓글 심층 분석기 </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -47,7 +47,7 @@
         .comment-table th { background-color: #252525; color: #bbb; font-weight: 600; padding: 1rem; text-align: left; border-bottom: 1px solid #333; }
         .comment-table td { padding: 1rem; border-bottom: 1px solid #333; color: #ddd; vertical-align: top; }
         .comment-table tr:hover td { background-color: #2a2a2a; }
-        .history-table th { background-color: #252525; color: #9ca3af; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 1rem; text-align: left; white-space: nowrap; }
+        .history-table th { background-color: #252525; color: #9ca3af; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 1rem; text-align: left; white-space: nowrap; user-select: none; }
         .history-table td { padding: 1rem; border-top: 1px solid #333; vertical-align: middle; color: #e5e7eb; }
         .history-table tr:hover { background-color: #1a1a1a; }
         input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active{ -webkit-box-shadow: 0 0 0 30px #1E1E1E inset !important; -webkit-text-fill-color: white !important; }
@@ -352,6 +352,9 @@
         let geminiKeys = [];
         let activeYtId = null;
         let activeGeminiId = null;
+
+        // History Sort State
+        let historySortState = { key: 'timestamp', order: 'desc' };
 
         // --- Data Loading Functions ---
         window.loadApiConfig = async function() {
@@ -702,20 +705,66 @@
             }
         }
 
+        // Sort Helper Function
+        window.sortHistory = function(key) {
+            if (historySortState.key === key) {
+                // Toggle order
+                historySortState.order = historySortState.order === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New key, default to desc
+                historySortState.key = key;
+                historySortState.order = 'desc';
+            }
+            window.filterHistory(); // Re-filter and sort
+        };
+
         window.filterHistory = async function() {
             const history = await window.fetchCloudHistory();
             const query = document.getElementById('historySearch').value.toLowerCase();
-            const keys = Object.keys(history).sort((a, b) => history[b].timestamp - history[a].timestamp);
+            let keys = Object.keys(history);
             
-            const filteredKeys = keys.filter(k => {
+            // 1. Filter
+            keys = keys.filter(k => {
                 const item = history[k];
                 if (!item || !item.video) return false;
                 return item.video.title.toLowerCase().includes(query) || 
                        item.video.channelTitle.toLowerCase().includes(query);
             });
 
-            currentHistoryKeys = filteredKeys;
-            renderHistoryTable(filteredKeys, history);
+            // 2. Sort
+            keys.sort((a, b) => {
+                const itemA = history[a];
+                const itemB = history[b];
+                
+                let valA, valB;
+
+                switch(historySortState.key) {
+                    case 'title':
+                        valA = itemA.video.title;
+                        valB = itemB.video.title;
+                        return historySortState.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    case 'viewCount':
+                        valA = parseInt(itemA.video.viewCount || 0);
+                        valB = parseInt(itemB.video.viewCount || 0);
+                        break;
+                    case 'publishedAt':
+                        valA = new Date(itemA.video.publishedAt).getTime();
+                        valB = new Date(itemB.video.publishedAt).getTime();
+                        break;
+                    case 'timestamp':
+                    default:
+                        valA = itemA.timestamp;
+                        valB = itemB.timestamp;
+                        break;
+                }
+
+                if (valA < valB) return historySortState.order === 'asc' ? -1 : 1;
+                if (valA > valB) return historySortState.order === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            currentHistoryKeys = keys;
+            renderHistoryTable(keys, history);
         }
 
         function renderHistoryTable(keys, history) {
@@ -725,12 +774,20 @@
             if (keys.length === 0) {
                 container.classList.add('hidden');
                 noMsg.classList.remove('hidden');
-                window.updateHistoryBatchBtn(); // Fixed: window.updateHistoryBatchBtn()
+                window.updateHistoryBatchBtn(); 
                 return;
             }
             
             container.classList.remove('hidden');
             noMsg.classList.add('hidden');
+
+            // Helper to get sort icon class
+            const getSortIcon = (key) => {
+                if (historySortState.key !== key) return '<i class="fas fa-sort text-gray-600 ml-1"></i>';
+                return historySortState.order === 'asc' 
+                    ? '<i class="fas fa-sort-up text-brand-blue ml-1"></i>' 
+                    : '<i class="fas fa-sort-down text-brand-blue ml-1"></i>';
+            };
 
             let html = `
                 <table class="w-full text-left history-table">
@@ -739,10 +796,18 @@
                             <th class="w-10 text-center">
                                 <input type="checkbox" id="selectAllHistory" onchange="toggleAllHistorySelection()" class="custom-checkbox">
                             </th>
-                            <th>영상 정보</th>
-                            <th>통계</th>
-                            <th>게시일</th>
-                            <th>분석 일시</th>
+                            <th class="cursor-pointer hover:text-white transition-colors" onclick="sortHistory('title')">
+                                영상 정보 ${getSortIcon('title')}
+                            </th>
+                            <th class="cursor-pointer hover:text-white transition-colors" onclick="sortHistory('viewCount')">
+                                통계 ${getSortIcon('viewCount')}
+                            </th>
+                            <th class="cursor-pointer hover:text-white transition-colors" onclick="sortHistory('publishedAt')">
+                                게시일 ${getSortIcon('publishedAt')}
+                            </th>
+                            <th class="cursor-pointer hover:text-white transition-colors" onclick="sortHistory('timestamp')">
+                                분석 일시 ${getSortIcon('timestamp')}
+                            </th>
                             <th class="text-right">관리</th>
                         </tr>
                     </thead>
