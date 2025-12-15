@@ -572,15 +572,24 @@
 
         async function startAnalysis(isRefresh = false) {
             const input = document.getElementById('channelId').value.trim();
-            if (!currentApiKey) return setStatus('API 키 필요', true);
-            if (!input) return setStatus('ID 입력 필요', true);
+            
+            // [FIX] API Key and Input Validation with Alerts
+            if (!currentApiKey) {
+                alert('API 키가 설정되지 않았습니다. [API 설정] 메뉴에서 키를 추가하고 활성화해주세요.');
+                return setStatus('API 키 필요', true);
+            }
+            if (!input) {
+                alert('채널 ID나 주소를 입력해주세요.');
+                return setStatus('ID 입력 필요', true);
+            }
 
             setStatus('데이터 수집 중...', false);
             document.getElementById('analyzeButton').disabled = true;
+            document.getElementById('buttonText').textContent = '분석 중...';
 
             try {
                 const chData = await fetchChannelData(input);
-                // chData could be undefined if error thrown in fetchChannelData
+                
                 if (!chData || !chData.items || !chData.items.length) {
                     throw new Error('채널 정보를 찾을 수 없습니다.');
                 }
@@ -629,6 +638,7 @@
                 setStatus(`오류: ${e.message}`, true);
             } finally {
                 document.getElementById('analyzeButton').disabled = false;
+                document.getElementById('buttonText').textContent = '분석 시작';
             }
         }
         window.startAnalysis = startAnalysis;
@@ -888,6 +898,194 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
         window.copyToClipboard = copyToClipboard;
+
+        // --- Logic Helpers ---
+
+        // [FIX] Improved Channel Data Fetching (Supports ID, Handle, URL, etc.)
+        async function fetchChannelData(query) {
+            let id = query.trim();
+            
+            // 1. Direct Channel ID (UC...)
+            if (id.startsWith('UC') && id.length === 24) {
+                return await fetchChannelInfoById(id);
+            }
+            
+            // 2. YouTube URL Parsing
+            if (id.includes('youtube.com') || id.includes('youtu.be')) {
+                // 2-1. Video URL -> Get Channel ID from Video
+                const vMatch = id.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
+                if (vMatch) {
+                    const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vMatch[1]}&key=${currentApiKey}`);
+                    const vData = await checkResponse(vRes);
+                    if (!vData.items?.length) throw new Error('비디오 정보를 찾을 수 없습니다.');
+                    return await fetchChannelInfoById(vData.items[0].snippet.channelId);
+                }
+                
+                // 2-2. Channel URL (/channel/UC...)
+                const cMatch = id.match(/channel\/(UC[\w-]{22})/);
+                if (cMatch) {
+                    return await fetchChannelInfoById(cMatch[1]);
+                }
+
+                // 2-3. Handle URL (/@handle)
+                const hMatch = id.match(/@([\w-\.]+)/);
+                if (hMatch) {
+                    return await fetchChannelInfoByHandle('@' + hMatch[1]);
+                }
+                
+                throw new Error('올바른 채널/영상 URL 형식이 아닙니다.');
+            }
+            
+            // 3. Handle (starts with @)
+            if (id.startsWith('@')) {
+                return await fetchChannelInfoByHandle(id);
+            }
+
+            // 4. Default: Assume Handle if not ID (try adding @)
+            return await fetchChannelInfoByHandle('@' + id);
+        }
+
+        async function fetchChannelInfoById(id) {
+            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&id=${id}&key=${currentApiKey}`);
+            const data = await checkResponse(res);
+            if (!data.items?.length) throw new Error('ID로 채널을 찾을 수 없습니다.');
+            return data;
+        }
+
+        async function fetchChannelInfoByHandle(handle) {
+            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&forHandle=${handle}&key=${currentApiKey}`);
+            const data = await checkResponse(res);
+            if (!data.items?.length) throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
+            return data;
+        }
+
+        async function fetchAllVideos(playlistId, videos = [], token = '') {
+            const res = await fetch(`${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&pageToken=${token}&key=${currentApiKey}`);
+            const data = await res.json();
+            if (!data.items) return videos;
+            data.items.forEach(i => {
+                if (i.snippet.title !== 'Deleted video') {
+                    videos.push({
+                        videoId: i.contentDetails.videoId,
+                        title: i.snippet.title,
+                        publishedAt: i.snippet.publishedAt
+                    });
+                }
+            });
+            if (data.nextPageToken) return fetchAllVideos(playlistId, videos, data.nextPageToken);
+            return videos;
+        }
+
+        async function fetchVideoStats(ids) {
+            const stats = [];
+            while (ids.length) {
+                const batch = ids.splice(0, 50);
+                const res = await fetch(`${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${batch.join(',')}&key=${currentApiKey}`);
+                const data = await res.json();
+                if (data.items) stats.push(...data.items);
+            }
+            return stats;
+        }
+
+        function mergeVideoData(videos, statsList) {
+            const map = new Map(statsList.map(s => [s.id, s]));
+            return videos.map(v => {
+                const s = map.get(v.videoId);
+                if (!s) return v;
+                const dur = parseDuration(s.contentDetails.duration);
+                const views = parseInt(s.statistics.viewCount || 0);
+                const likes = parseInt(s.statistics.likeCount || 0);
+                const comments = parseInt(s.statistics.commentCount || 0);
+                return {
+                    ...v,
+                    viewCount: views, likeCount: likes, commentCount: comments,
+                    durationSeconds: dur,
+                    durationCategory: dur <= 60 ? 'Short' : (dur < 180 ? 'Mid' : 'Long'),
+                    tags: s.snippet.tags || [],
+                    description: s.snippet.description,
+                    likeRatio: views ? (likes/views)*100 : 0,
+                    commentRatio: views ? (comments/views)*100 : 0,
+                    likeRating: 1,
+                    commentRating: 1
+                };
+            });
+        }
+
+        function calculateEngagementRatings(videos) {
+            if (!videos.length) return;
+            const assignStars = (list, keyRatio, keyRating) => {
+                const sorted = list.map(v => v[keyRatio]).sort((a, b) => a - b);
+                const len = sorted.length;
+                if (len === 0) return;
+                const p20 = sorted[Math.floor(len * 0.2)];
+                const p40 = sorted[Math.floor(len * 0.4)];
+                const p60 = sorted[Math.floor(len * 0.6)];
+                const p80 = sorted[Math.floor(len * 0.8)];
+                list.forEach(v => {
+                    const val = v[keyRatio];
+                    if (val >= p80) v[keyRating] = 5;
+                    else if (val >= p60) v[keyRating] = 4;
+                    else if (val >= p40) v[keyRating] = 3;
+                    else if (val >= p20) v[keyRating] = 2;
+                    else v[keyRating] = 1;
+                });
+            };
+            assignStars(videos, 'likeRatio', 'likeRating');
+            assignStars(videos, 'commentRatio', 'commentRating');
+        }
+
+        function calc90DayStats(videos) {
+            const d = new Date(); d.setDate(d.getDate()-90);
+            const recent = videos.filter(v => new Date(v.publishedAt) >= d);
+            if (!recent.length) return { avgViews:0, avgLikes:0, avgComments:0 };
+            const sum = k => recent.reduce((a,b) => a + (b[k]||0), 0);
+            return {
+                avgViews: Math.round(sum('viewCount')/recent.length),
+                avgLikes: Math.round(sum('likeCount')/recent.length),
+                avgComments: Math.round(sum('commentCount')/recent.length)
+            };
+        }
+
+        function generateCalendarData(videos) {
+            const data = {};
+            videos.forEach(v => {
+                const m = v.publishedAt.slice(0, 7);
+                if (!data[m]) data[m] = new Map();
+                const date = v.publishedAt.slice(0, 10);
+                data[m].set(date, (data[m].get(date)||0)+1);
+            });
+            availableMonths = Object.keys(data).sort().reverse();
+            return data;
+        }
+
+        function formatNumber(num) { return new Intl.NumberFormat('ko-KR').format(num); }
+        function parseDuration(pt) {
+            const m = pt.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const h = parseInt(m[1])||0, min = parseInt(m[2])||0, sec = parseInt(m[3])||0;
+            return h*3600 + min*60 + sec;
+        }
+        function formatTime(sec) {
+            const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+            return h>0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+        }
+        function setStatus(msg, err) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = msg;
+            el.className = `mt-4 text-center text-sm font-medium ${err ? 'text-primary-accent' : 'text-success-status'}`;
+        }
+        function getColorForCategory(cat) {
+            if (cat === 'Short') return 'text-primary-accent'; 
+            if (cat === 'Mid') return 'text-text-light/80';    
+            if (cat === 'Long') return 'text-success-status';  
+            return '';
+        }
+        function renderStars(rating) {
+            let html = '';
+            for(let i=0; i<5; i++) {
+                html += i < rating ? '<span class="star-filled">★</span>' : '<span class="star-empty">☆</span>';
+            }
+            return html;
+        }
 
         // --- CSV Export ---
         window.exportToCSV = () => {
