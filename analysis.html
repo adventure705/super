@@ -119,6 +119,15 @@
     <div id="apiSettingsModal" class="modal hidden">
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
+            
+            <!-- Firebase Config Manual Input (Fallback) -->
+            <div id="firebaseConfigSection" class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg border border-red-500/30 hidden">
+                <h3 class="text-sm font-semibold mb-2 text-red-400">⚠️ Firebase 설정 로드 실패</h3>
+                <p class="text-xs text-text-light/70 mb-2">firebase_config.json 파일을 찾을 수 없습니다. 아래에 설정을 직접 붙여넣고 [설정 적용]을 눌러주세요.</p>
+                <textarea id="manualConfigInput" placeholder='{"apiKey": "...", "authDomain": "...", ...}' class="w-full p-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs font-mono h-24 mb-2"></textarea>
+                <button onclick="applyManualConfig()" class="w-full py-2 bg-primary-accent text-white font-bold rounded hover:bg-primary-accent/80 transition text-sm">설정 적용 및 재시도</button>
+            </div>
+
             <div class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg">
                 <h3 class="text-sm font-semibold mb-2 text-text-light/70">새 키 추가 / 편집</h3>
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
@@ -348,9 +357,51 @@
 
         // Firebase Setup
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // [FIX] __firebase_config might be missing in standalone mode
         const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // [NEW] Manual Config Application
+        window.applyManualConfig = async () => {
+            const input = document.getElementById('manualConfigInput').value;
+            try {
+                const config = JSON.parse(input);
+                await initFirebase(config);
+                document.getElementById('firebaseConfigSection').classList.add('hidden');
+                setStatus('Firebase 설정이 수동으로 적용되었습니다.', false);
+            } catch (e) {
+                alert('JSON 형식이 올바르지 않거나 초기화에 실패했습니다.');
+                console.error(e);
+            }
+        };
+
+        async function initFirebase(config) {
+            try {
+                const app = initializeApp(config);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // [CRITICAL] 기기 간 데이터 공유를 위해 고정 ID 사용
+                        masterUserId = 'master_user_shared'; 
+                        fetchApiKeys();
+                        subscribeToSavedChannels();
+                        setStatus('Firebase 연결 및 인증 성공.', false);
+                    } else {
+                        try {
+                            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                            else await signInAnonymously(auth);
+                        } catch(e) {
+                            console.error("Sign-in failed:", e);
+                            setStatus('Firebase 인증 실패. 네트워크를 확인하세요.', true);
+                        }
+                    }
+                });
+            } catch(e) {
+                console.error("Firebase Init Error:", e);
+                throw e;
+            }
+        }
 
         window.addEventListener('DOMContentLoaded', async () => {
             // Scroll to Top Logic
@@ -373,11 +424,12 @@
                 });
             }
 
-            // [FIX] Initialize Firebase: Check global var OR fetch config file
+            // Firebase Config Loading
             let firebaseConfig = initialConfig;
             if (!firebaseConfig) {
                 try {
-                    const res = await fetch('./firebase_config.json');
+                    // [FIX] Cache busting to ensure fresh fetch
+                    const res = await fetch('./firebase_config.json?t=' + new Date().getTime());
                     if (res.ok) {
                         firebaseConfig = await res.json();
                         console.log("Loaded firebase_config.json");
@@ -390,35 +442,13 @@
             }
 
             if (firebaseConfig) {
-                try {
-                    const app = initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    onAuthStateChanged(auth, async (user) => {
-                        if (user) {
-                            // [FIX] Use shared master user ID for persistence across devices
-                            masterUserId = 'master_user_shared'; 
-                            
-                            // [FIX] 인증 완료 후 Firestore 리스너 호출
-                            fetchApiKeys();
-                            subscribeToSavedChannels();
-                        } else {
-                            try {
-                                if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-                                else await signInAnonymously(auth);
-                            } catch(e) {
-                                console.error("Sign-in failed:", e);
-                                setStatus('Firebase 인증 실패. 저장 기능 불가.', true);
-                            }
-                        }
-                    });
-                } catch(e) {
-                    console.error("Firebase init failed:", e);
-                    setStatus('Firebase 초기화 오류.', true);
-                }
+                await initFirebase(firebaseConfig);
             } else {
-                // [FIX] Don't disable inputs, just warn
-                setStatus('Firebase 설정(firebase_config.json)을 찾을 수 없습니다. 저장 기능이 제한됩니다.', true);
+                // [FIX] 설정 실패 시 입력창 비활성화 하지 않음. 대신 수동 입력창 표시
+                setStatus('⚠️ firebase_config.json 로드 실패. API 설정에서 구성을 직접 입력해주세요.', true);
+                document.getElementById('firebaseConfigSection').classList.remove('hidden');
+                // 모달을 자동으로 띄워주면 인지가 빠름 (선택사항)
+                // document.getElementById('apiSettingsModal').classList.remove('hidden'); 
             }
         });
 
