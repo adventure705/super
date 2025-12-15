@@ -124,8 +124,17 @@
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
             
+            <!-- Firebase 상태 메시지 표시 영역 추가 -->
             <div id="firebaseStatusMsg" class="mb-4 text-xs text-text-light/50 bg-bg-dark p-2 rounded">
                 Firebase 상태: 연결 확인 중...
+            </div>
+
+            <!-- Firebase Config Manual Input (Fallback) -->
+            <div id="firebaseConfigSection" class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg border border-red-500/30 hidden">
+                <h3 class="text-sm font-semibold mb-2 text-red-400">⚠️ Firebase 설정 로드 실패</h3>
+                <p class="text-xs text-text-light/70 mb-2">firebase-config.json 파일을 찾을 수 없습니다. 아래에 설정을 직접 붙여넣고 [설정 적용]을 눌러주세요.</p>
+                <textarea id="manualConfigInput" placeholder='{"apiKey": "...", "authDomain": "...", ...}' class="w-full p-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs font-mono h-24 mb-2"></textarea>
+                <button onclick="applyManualConfig()" class="w-full py-2 bg-primary-accent text-white font-bold rounded hover:bg-primary-accent/80 transition text-sm">설정 적용 및 재시도</button>
             </div>
 
             <div class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg">
@@ -133,8 +142,8 @@
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+                    <button id="saveKeyBtn" onclick="saveApiKey()" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
+                    <button id="cancelEditBtn" onclick="resetEditMode()" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
                 </div>
             </div>
             
@@ -168,6 +177,7 @@
             <!-- 입력 패널 -->
             <section class="bg-card-bg p-4 md:p-6 rounded-xl shadow-2xl mb-8">
                 <div class="flex flex-col md:flex-row gap-3">
+                    <!-- 엔터키 이벤트 리스너는 JS에서 추가 -->
                     <input type="text" id="channelId" placeholder="채널 ID, 핸들(@), 또는 영상 링크" class="flex-grow p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent text-text-light outline-none transition placeholder-text-light/30">
                     <button id="analyzeButton" onclick="startAnalysis()" class="w-full md:w-auto py-3 px-6 bg-primary-accent text-white font-bold rounded-lg hover:bg-primary-accent/80 transition shadow-lg whitespace-nowrap flex justify-center items-center">
                         <span id="buttonText">분석 시작</span>
@@ -242,7 +252,7 @@
                     <div id="calendarBody" class="grid grid-cols-7 gap-1 min-w-[300px]"></div>
                 </div>
 
-                <!-- Shorts 미리보기 -->
+                <!-- Shorts 미리보기 (버튼 위치 및 색상 수정됨) -->
                 <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 flex flex-col sm:flex-row justify-between items-center gap-2">
                     <span>🔥 최신 Shorts (1분 이하)</span>
                     <div class="flex gap-2 text-sm items-center">
@@ -258,8 +268,12 @@
                     </div>
                 </h3>
                 <div id="shortsContainer" class="shorts-scroll-container group relative py-4 px-10 bg-card-bg rounded-xl shadow-inner mb-10 hidden">
+                    <!-- 왼쪽 버튼 -->
                     <button class="scroll-button left-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="left: 0.5rem;" onclick="scrollShorts(-300)">◀</button>
+                    
                     <div id="shortsContent" class="shorts-content flex space-x-4 px-1 overflow-x-auto scrollbar-hide"></div>
+                    
+                    <!-- 오른쪽 버튼 (위치 및 색상 명시적 수정) -->
                     <button class="scroll-button right-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="right: 0.5rem; left: auto;" onclick="scrollShorts(300)">▶</button>
                 </div>
 
@@ -309,6 +323,7 @@
                         <thead class="bg-bg-dark">
                             <tr>
                                 <th class="px-2 py-3 text-left text-xs font-medium text-text-light/70 uppercase w-12">No</th>
+                                <!-- 제목 열 너비 확장 -->
                                 <th class="px-2 py-3 text-left text-xs font-medium text-text-light/70 uppercase w-64 md:w-80 lg:w-96 sortable-header" onclick="setVideoSort('title')">제목 ↕</th>
                                 <th class="px-2 py-3 text-right text-xs font-medium text-text-light/70 uppercase w-24 sortable-header" onclick="setVideoSort('publishedAt')">게시일 ↕</th>
                                 <th class="px-2 py-3 text-right text-xs font-medium text-text-light/70 uppercase w-20 sortable-header" onclick="setVideoSort('viewCount')">조회수 ↕</th>
@@ -364,6 +379,16 @@
         let editingKeyName = null; 
         const LOCAL_STORAGE_KEY_API = 'youtube_manager_api_keys';
         
+        // Helper to set Status from module
+        function setStatus(msg, isError) {
+            const el = document.getElementById('statusMessage');
+            if (el) {
+                el.textContent = msg;
+                el.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            }
+        }
+        window.setStatus = setStatus;
+
         let allVideosData = [];
         let channelMetadata = null;
         let savedChannelsData = [];
@@ -407,8 +432,11 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         masterUserId = 'master_user_shared'; 
-                        document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
-                        document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
+                        const msgEl = document.getElementById('firebaseStatusMsg');
+                        if(msgEl) {
+                            msgEl.textContent = 'Firebase 상태: 연결됨 (Online)';
+                            msgEl.className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
+                        }
                         fetchApiKeys();
                         subscribeToSavedChannels();
                         setStatus('Firebase 연결 및 인증 성공.', false);
@@ -418,7 +446,8 @@
                             else await signInAnonymously(auth);
                         } catch(e) {
                             console.error("Sign-in failed:", e);
-                            document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
+                            const msgEl = document.getElementById('firebaseStatusMsg');
+                            if(msgEl) msgEl.textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
                             setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
                             fetchApiKeys(); // 로컬 모드 실행
                         }
@@ -426,7 +455,8 @@
                 });
             } catch(e) {
                 console.error("Firebase Init Error:", e);
-                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
+                const msgEl = document.getElementById('firebaseStatusMsg');
+                if(msgEl) msgEl.textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
                 fetchApiKeys(); // 로컬 모드 실행
             }
         }
@@ -474,7 +504,8 @@
             } else {
                 setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
                 document.getElementById('firebaseConfigSection').classList.remove('hidden');
-                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
+                const msgEl = document.getElementById('firebaseStatusMsg');
+                if(msgEl) msgEl.textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
                 fetchApiKeys(); // 로컬 모드 실행
             }
         });
@@ -494,14 +525,13 @@
         function subscribeToSavedChannels() {
             // Firebase 모드
             if (db && masterUserId) {
-                onSnapshot(collection(db, 'artifacts', appId, 'users', masterUserId, 'channels'), (snap) => {
+                // Public data collection
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), (snap) => {
                     savedChannelsData = [];
                     snap.forEach(doc => savedChannelsData.push(doc.data()));
                     renderSavedChannelsList();
                 });
             } 
-            // LocalStorage 모드 (채널 데이터는 용량이 커서 로컬 저장은 권장하지 않으나 필요시 구현 가능)
-            // 여기서는 API 키 관리 위주로 로컬 지원하므로 채널 저장은 생략하거나 추후 구현
         }
 
         function setSavedSort(key) {
@@ -585,7 +615,8 @@
         async function deleteSavedChannel(id) {
             if(!confirm('삭제하시겠습니까?')) return;
             if (db && masterUserId) {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', id));
+                // Public data path
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channels', id));
             }
         }
         window.deleteSavedChannel = deleteSavedChannel;
@@ -648,7 +679,8 @@
                 const stats90 = calc90DayStats(videos);
                 
                 if (db && masterUserId) {
-                    const saveRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', meta.id);
+                    // Public data path
+                    const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
                     await setDoc(saveRef, {
                         metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
                     });
@@ -1017,7 +1049,9 @@
         }
 
         async function fetchChannelInfoByHandle(handle) {
-            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&forHandle=${handle}&key=${currentApiKey}`);
+            // [FIX] Encode handle to support Korean characters
+            const encodedHandle = encodeURIComponent(handle); 
+            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&forHandle=${encodedHandle}&key=${currentApiKey}`);
             const data = await checkResponse(res);
             if (!data.items?.length) throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
             return data;
