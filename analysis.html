@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YOUTUBE 채널 심층 분석기</title>
+    <title> 🔎 YOUTUBE 채널 심층 분석기</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -49,7 +49,7 @@
         }
         @media (min-width: 768px) { .scroll-button { display: flex; } }
 
-        /* 탭 스타일 (CSS 직접 정의로 호환성 확보) */
+        /* 탭 스타일 */
         .tab-btn { 
             flex: 1;
             padding: 1rem;
@@ -58,7 +58,7 @@
             color: rgba(248, 248, 248, 0.4);
             transition: all 0.3s;
             border-radius: 0.75rem 0.75rem 0 0;
-            background-color: #10101a; /* 비활성 배경 */
+            background-color: #10101a; 
             border-bottom: 4px solid transparent;
             font-size: 0.875rem;
             cursor: pointer;
@@ -70,10 +70,9 @@
             background-color: #1f1f2e;
             color: rgba(248, 248, 248, 0.8);
         }
-        /* 활성 탭 강조 스타일 */
         .tab-btn.active { 
             color: #ffffff !important;
-            background-color: #e94560 !important; /* Red Accent */
+            background-color: #e94560 !important; 
             border-bottom-color: #e94560 !important;
             box-shadow: 0 -4px 15px -3px rgba(233, 69, 96, 0.4);
         }
@@ -87,6 +86,37 @@
         /* 별점 색상 */
         .star-filled { color: #fbbf24; }
         .star-empty { color: #4b5563; }
+
+        /* 입력 필드 스타일 */
+        .note-input {
+            width: 100%;
+            background-color: #1a1a2e;
+            border: 1px solid #383b6e;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            color: #f8f8f8;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+            margin-bottom: 0.5rem;
+        }
+        .note-input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        .note-label {
+            display: block;
+            font-size: 0.75rem;
+            color: rgba(248, 248, 248, 0.6);
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        .note-section-title {
+            color: #e94560;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+            padding-bottom: 0.25rem;
+        }
 
         /* 모달 */
         .modal {
@@ -169,20 +199,37 @@
                 <button onclick="applyManualConfig()" class="w-full py-2 bg-primary-accent text-white font-bold rounded hover:bg-primary-accent/80 transition text-sm">설정 적용 및 재시도</button>
             </div>
 
-            <div class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg">
-                <h3 class="text-sm font-semibold mb-2 text-text-light/70">새 키 추가 / 편집</h3>
-                <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
-                <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
-                <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- YouTube API Key Section -->
+                <div>
+                    <div class="bg-card-bg p-4 rounded-lg mb-4 shadow-lg border border-primary-accent/20">
+                        <h3 class="text-sm font-bold mb-2 text-primary-accent">📺 YouTube Data API Key</h3>
+                        <input type="text" id="newYoutubeKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-2 mb-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs focus:border-primary-accent outline-none">
+                        <input type="password" id="newYoutubeKeyValue" placeholder="AIza..." class="w-full p-2 mb-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs focus:border-primary-accent outline-none">
+                        <div class="flex gap-2">
+                            <button id="saveYoutubeKeyBtn" onclick="saveKey('youtube')" type="button" class="flex-1 py-1.5 bg-success-status text-bg-dark font-bold rounded text-xs hover:bg-success-status/80 transition">저장</button>
+                            <button id="cancelYoutubeEditBtn" onclick="resetEditMode('youtube')" type="button" class="flex-1 py-1.5 bg-gray-600 text-white font-bold rounded text-xs hover:bg-gray-500 transition hidden">취소</button>
+                        </div>
+                    </div>
+                    <div id="youtubeKeyList" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- Gemini API Key Section -->
+                <div>
+                    <div class="bg-card-bg p-4 rounded-lg mb-4 shadow-lg border border-blue-400/20">
+                        <h3 class="text-sm font-bold mb-2 text-blue-400">✨ Gemini API Key</h3>
+                        <input type="text" id="newGeminiKeyName" placeholder="키 이름 (예: 분석용)" class="w-full p-2 mb-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs focus:border-blue-400 outline-none">
+                        <input type="password" id="newGeminiKeyValue" placeholder="AIza..." class="w-full p-2 mb-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs focus:border-blue-400 outline-none">
+                        <div class="flex gap-2">
+                            <button id="saveGeminiKeyBtn" onclick="saveKey('gemini')" type="button" class="flex-1 py-1.5 bg-blue-500 text-white font-bold rounded text-xs hover:bg-blue-600 transition">저장</button>
+                            <button id="cancelGeminiEditBtn" onclick="resetEditMode('gemini')" type="button" class="flex-1 py-1.5 bg-gray-600 text-white font-bold rounded text-xs hover:bg-gray-500 transition hidden">취소</button>
+                        </div>
+                    </div>
+                    <div id="geminiKeyList" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
                 </div>
             </div>
             
-            <h3 class="text-sm font-semibold mb-2 text-text-light/70">저장된 키 목록</h3>
-            <div id="apiKeyList" class="space-y-3 mb-4 max-h-60 overflow-y-auto pr-1"></div>
-            
-            <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden')" class="w-full py-3 bg-card-bg border border-text-light/10 rounded-lg text-text-light hover:bg-card-bg/80 transition font-medium">닫기</button>
+            <button onclick="document.getElementById('apiSettingsModal').classList.add('hidden')" class="w-full mt-4 py-3 bg-card-bg border border-text-light/10 rounded-lg text-text-light hover:bg-card-bg/80 transition font-medium">닫기</button>
         </div>
     </div>
 
@@ -209,8 +256,7 @@
             <!-- 입력 패널 -->
             <section class="bg-card-bg p-4 md:p-6 rounded-xl shadow-2xl mb-8">
                 <div class="flex flex-col md:flex-row gap-3">
-                    <!-- 엔터키 이벤트 리스너는 JS에서 추가 -->
-                    <input type="text" id="channelId" placeholder="채널 ID, 핸들(@), 또는 영상 링크" class="flex-grow p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent text-text-light outline-none transition placeholder-text-light/30">
+                    <input type="text" id="channelId" placeholder="채널 ID, 핸들(@), 또는 채널명 (예: @Google, MrBeast)" class="flex-grow p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent text-text-light outline-none transition placeholder-text-light/30">
                     <button id="analyzeButton" onclick="startAnalysis()" class="w-full md:w-auto py-3 px-6 bg-primary-accent text-white font-bold rounded-lg hover:bg-primary-accent/80 transition shadow-lg whitespace-nowrap flex justify-center items-center">
                         <span id="buttonText">분석 시작</span>
                     </button>
@@ -240,36 +286,98 @@
 
                 <!-- 벤치마킹 가이드 -->
                 <div class="bg-card-bg p-4 md:p-6 rounded-xl shadow-xl mb-10">
-                    <h2 class="text-xl md:text-2xl font-bold mb-4 text-primary-accent">🛠️ 심층 벤치마킹 가이드 (직접 분석 필요)</h2>
-                    <p class="text-xs md:text-sm text-text-light/80 mb-6">아래 항목들은 API로 제공되지 않는 <b>성공 전략 핵심 영역</b>입니다. 상단의 정량적 데이터와 함께 채널을 직접 관찰하며 분석해 보세요.</p>
+                    <h2 class="text-xl md:text-2xl font-bold mb-4 text-primary-accent">🛠️ 심층 벤치마킹 가이드</h2>
+                    <p class="text-xs md:text-sm text-text-light/80 mb-6">성공적인 채널 운영을 위한 핵심 체크리스트입니다.</p>
+                    <div class="grid md:grid-cols-2 gap-6 text-sm text-text-light/80">
+                         <div class="bg-bg-dark/50 p-4 rounded shadow-inner">
+                            <h3 class="font-bold text-success-status mb-2">💡 콘텐츠 기획력</h3>
+                            <ul class="list-disc ml-4 space-y-1"><li>킬러 콘텐츠 식별</li><li>포맷 및 길이 최적화</li><li>영상 구조(기승전결)</li><li>차별화 포인트</li></ul>
+                         </div>
+                         <div class="bg-bg-dark/50 p-4 rounded shadow-inner">
+                            <h3 class="font-bold text-success-status mb-2">🎬 시각/편집 스타일</h3>
+                            <ul class="list-disc ml-4 space-y-1"><li>썸네일 전략(색상/문구)</li><li>편집 호흡 및 컷 전환</li><li>사운드 및 호스트 톤앤매너</li></ul>
+                         </div>
+                    </div>
+                </div>
 
+                <!-- [NEW] 채널 심층 분석 노트 -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-xl mb-10 border border-primary-accent/20 relative">
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                        <h2 class="text-2xl font-bold text-primary-accent">📝 채널 심층 분석 노트</h2>
+                        <div class="flex gap-2">
+                            <button onclick="analyzeChannelWithGemini()" id="geminiAnalyzeBtn" class="py-2 px-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition text-sm flex items-center gap-2">
+                                <span>🤖 Gemini로 자동 분석</span>
+                            </button>
+                            <button onclick="saveChannelNote()" class="py-2 px-4 bg-success-status text-bg-dark font-bold rounded-lg hover:bg-success-status/80 transition text-sm">💾 노트 저장</button>
+                        </div>
+                    </div>
+                    
                     <div class="grid md:grid-cols-2 gap-6">
-                        <div class="bg-bg-dark/50 p-4 rounded-lg shadow-inner">
-                            <h3 class="text-lg font-bold text-success-status mb-3">💡 2단계: 콘텐츠 기획력 분석</h3>
-                            <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
-                                <li><b>킬러 콘텐츠:</b> 영상들을 주제별로 분류하여 채널의 주력 콘텐츠(가장 성과 좋은)를 식별합니다.</li>
-                                <li><b>포맷 및 길이:</b> 성공적인 영상의 평균 길이와 포맷 유형(Vlog, 튜토리얼 등)을 기록합니다.</li>
-                                <li><b>영상 구조:</b> 기승전결 등 영상 내부의 일관된 구조를 분석합니다.</li>
-                                <li><b>전달 방식:</b> 감정 유발, 정보 전달 등 핵심 전달 요소를 정의합니다.</li>
-                                <li><b>차별화:</b> 이 채널만이 가진 고유한 관점이나 정보 전달 방식을 정의합니다.</li>
-                            </ul>
+                        <!-- 1. 채널 종합 의견 -->
+                        <div>
+                            <h3 class="note-section-title"># 채널 종합 의견</h3>
+                            <label class="note-label">종합 요약</label>
+                            <textarea id="note_summary" class="note-input h-20" placeholder="채널의 핵심 특징 요약"></textarea>
+                            <label class="note-label">추천 포인트</label>
+                            <input type="text" id="note_pros" class="note-input" placeholder="강점, 배울 점">
+                            <label class="note-label">우려 포인트</label>
+                            <input type="text" id="note_cons" class="note-input" placeholder="약점, 개선 필요 점">
                         </div>
-                        <div class="bg-bg-dark/50 p-4 rounded-lg shadow-inner">
-                            <h3 class="text-lg font-bold text-success-status mb-3">🎬 3단계: 시각/편집 스타일 분석</h3>
-                            <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
-                                <li><b>썸네일 전략:</b> 주된 색상, 폰트, 궁금증을 유발하는 문구 스타일을 파악합니다.</li>
-                                <li><b>편집 속도:</b> 컷 전환 속도, 화면 분할, 지루함을 줄이는 편집 기법을 분석합니다.</li>
-                                <li><b>🗣️ 사운드/호스트:</b> BGM 선택 기준, 효과음 사용의 적절성, 호스트의 톤앤매너를 분석합니다.</li>
-                            </ul>
+
+                        <!-- 2. 콘텐츠 -->
+                        <div>
+                            <h3 class="note-section-title"># 콘텐츠</h3>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="note-label">장르/카테고리</label>
+                                    <input type="text" id="note_genre" class="note-input" placeholder="예: 뷰티, 예능">
+                                </div>
+                                <div>
+                                    <label class="note-label">톤앤매너</label>
+                                    <input type="text" id="note_tone" class="note-input" placeholder="예: 차분함, 텐션높음">
+                                </div>
+                            </div>
+                            <label class="note-label">연출 및 편집 스타일</label>
+                            <textarea id="note_style" class="note-input h-12" placeholder="자막 스타일, 컷 편집 특징 등"></textarea>
+                            <label class="note-label">주제 및 소재</label>
+                            <input type="text" id="note_topic" class="note-input" placeholder="주로 다루는 소재">
                         </div>
-                        <div class="bg-bg-dark/50 p-4 rounded-lg shadow-inner md:col-span-2">
-                            <h3 class="text-lg font-bold text-success-status mb-3">🔎 4 & 5단계: 참여, 커뮤니티 및 SEO 분석</h3>
-                            <ul class="list-disc ml-5 text-sm space-y-2 text-text-light/80">
-                                <li><b>참여율 추정:</b> 아래 데이터(조회수, 좋아요, 댓글)를 기반으로 참여율을 추정합니다.</li>
-                                <li><b>댓글 반응:</b> 시청자들이 주로 남기는 핵심 내용(질문, 칭찬)을 파악하여 니즈를 정의합니다.</li>
-                                <li><b>SEO 핵심:</b> 제목과 설명란의 키워드 배치 전략 및 플레이리스트 구성을 분석합니다.</li>
-                                <li><b>커뮤니티 활용:</b> 커뮤니티 탭 활용 방식(투표, Q&A)을 직접 확인하고 벤치마킹합니다.</li>
-                            </ul>
+
+                        <!-- 3. 팬덤 및 브랜드 -->
+                        <div>
+                            <h3 class="note-section-title"># 팬덤 및 브랜드 안정성</h3>
+                            <label class="note-label">주요 시청자 (추정)</label>
+                            <input type="text" id="note_audience" class="note-input" placeholder="예: 2030 직장인 여성">
+                            <label class="note-label">채널 신뢰도</label>
+                            <textarea id="note_trust" class="note-input h-16" placeholder="광고 진행 시 안정성, 논란 여부 등"></textarea>
+                        </div>
+
+                        <!-- 4. 광고 전략 -->
+                        <div>
+                            <h3 class="note-section-title"># 광고 전략</h3>
+                            <label class="note-label">적합 광고 도메인</label>
+                            <input type="text" id="note_ad_domain" class="note-input" placeholder="예: 화장품, 패션 앱">
+                            <label class="note-label">추천 캠페인 유형</label>
+                            <input type="text" id="note_ad_type" class="note-input" placeholder="예: 브랜디드, 단순 PPL">
+                        </div>
+
+                        <!-- 5. 퍼포먼스 (자동 + 수동) -->
+                        <div class="md:col-span-2 bg-bg-dark/30 p-4 rounded-lg">
+                            <h3 class="note-section-title"># 퍼포먼스</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3 text-sm">
+                                <div class="bg-bg-dark p-2 rounded border border-card-bg">
+                                    <span class="text-text-light/50 block text-xs">평균 조회수 (90일)</span>
+                                    <span id="note_auto_views" class="font-bold text-success-status">-</span>
+                                </div>
+                                <div class="bg-bg-dark p-2 rounded border border-card-bg">
+                                    <span class="text-text-light/50 block text-xs">참여도 (댓글/조회수)</span>
+                                    <span id="note_auto_engagement" class="font-bold text-primary-accent">-</span>
+                                </div>
+                            </div>
+                            <label class="note-label">광고 영상 성과 (직접 분석)</label>
+                            <input type="text" id="note_ad_perf" class="note-input" placeholder="기존 광고 영상들의 조회수 추이 등">
+                            <label class="note-label">시청자 참여도 상세 메모</label>
+                            <textarea id="note_engagement_memo" class="note-input h-12" placeholder="댓글 분위기, 반응 등"></textarea>
                         </div>
                     </div>
                 </div>
@@ -284,7 +392,7 @@
                     <div id="calendarBody" class="grid grid-cols-7 gap-1 min-w-[300px]"></div>
                 </div>
 
-                <!-- Shorts 미리보기 (버튼 위치 및 색상 수정됨) -->
+                <!-- Shorts 미리보기 -->
                 <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 flex flex-col sm:flex-row justify-between items-center gap-2">
                     <span>🔥 최신 Shorts (1분 이하)</span>
                     <div class="flex gap-2 text-sm items-center">
@@ -305,7 +413,7 @@
                     
                     <div id="shortsContent" class="shorts-content flex space-x-4 px-1 overflow-x-auto scrollbar-hide"></div>
                     
-                    <!-- 오른쪽 버튼 (위치 및 색상 명시적 수정) -->
+                    <!-- 오른쪽 버튼 -->
                     <button class="scroll-button right-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="right: 0.5rem; left: auto;" onclick="scrollShorts(300)">▶</button>
                 </div>
 
@@ -408,10 +516,12 @@
         // --- Global Vars ---
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
         let db, auth, masterUserId, currentApiKey = '';
+        let geminiKey = '';
         let editingKeyName = null; 
-        const LOCAL_STORAGE_KEY_API = 'youtube_manager_api_keys';
+        let editingKeyType = null;
+        const LOCAL_STORAGE_KEY_YOUTUBE = 'youtube_manager_api_keys';
+        const LOCAL_STORAGE_KEY_GEMINI = 'youtube_manager_gemini_keys'; // Changed to store array
         
-        // Helper to set Status from module
         function setStatus(msg, isError) {
             const el = document.getElementById('statusMessage');
             if (el) {
@@ -436,8 +546,7 @@
         let availableMonths = [];
         let expandedRowId = null;
 
-        // --- Utilities (Defined first to prevent reference errors) ---
-        
+        // --- Utilities ---
         function formatNumber(num) { 
             return num ? new Intl.NumberFormat('ko-KR').format(num) : '0'; 
         }
@@ -472,8 +581,125 @@
             return html;
         }
 
-        // --- Core Logic Functions (Restored) ---
+        // --- Key Management Functions (Assigned to window) ---
+        window.loadKeys = (type) => {
+            const storageKey = type === 'youtube' ? LOCAL_STORAGE_KEY_YOUTUBE : LOCAL_STORAGE_KEY_GEMINI;
+            const containerId = type === 'youtube' ? 'youtubeKeyList' : 'geminiKeyList';
+            
+            const keys = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            keys.forEach(k => {
+                if (k.active) {
+                    if (type === 'youtube') currentApiKey = k.value;
+                    if (type === 'gemini') geminiKey = k.value;
+                }
+                
+                const div = document.createElement('div');
+                div.className = `flex justify-between items-center p-2 rounded text-xs text-text-light border ${k.active ? 'border-primary-accent bg-bg-dark' : 'border-transparent bg-bg-dark/30'}`;
+                div.innerHTML = `
+                    <div class="flex flex-col overflow-hidden mr-2">
+                        <span class="font-bold truncate text-primary-accent">${k.name}</span>
+                        <span class="text-[10px] text-text-light/50 truncate">${k.active ? '사용 중' : '비활성'}</span>
+                    </div>
+                    <div class="flex gap-1 flex-shrink-0">
+                        ${!k.active ? `<button onclick="activateKey('${type}', '${k.name}')" class="px-2 py-1 bg-card-bg border border-text-light/20 rounded hover:text-white">선택</button>` : ''}
+                        <button onclick="editKey('${type}', '${k.name}', '${k.value}')" class="px-2 py-1 text-text-light/50 hover:text-primary-accent">✏️</button>
+                        <button onclick="deleteKey('${type}', '${k.name}')" class="px-2 py-1 text-text-light/50 hover:text-red-500">🗑️</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        };
 
+        window.saveKey = (type) => {
+            const nameInput = type === 'youtube' ? 'newYoutubeKeyName' : 'newGeminiKeyName';
+            const valInput = type === 'youtube' ? 'newYoutubeKeyValue' : 'newGeminiKeyValue';
+            const storageKey = type === 'youtube' ? LOCAL_STORAGE_KEY_YOUTUBE : LOCAL_STORAGE_KEY_GEMINI;
+
+            const name = document.getElementById(nameInput).value.trim();
+            const val = document.getElementById(valInput).value.trim();
+
+            if (!name || !val) return alert('이름과 키 값을 모두 입력해주세요.');
+
+            let keys = JSON.parse(localStorage.getItem(storageKey) || '[]');
+
+            if (editingKeyName && editingKeyType === type) {
+                // Edit mode
+                const idx = keys.findIndex(k => k.name === editingKeyName);
+                if (idx !== -1) keys[idx].value = val;
+                resetEditMode(type);
+            } else {
+                // New mode
+                if (keys.some(k => k.name === name)) return alert('이미 존재하는 이름입니다.');
+                keys.push({ name, value: val, active: keys.length === 0 });
+            }
+
+            localStorage.setItem(storageKey, JSON.stringify(keys));
+            window.loadKeys(type);
+            
+            // Clear inputs
+            document.getElementById(nameInput).value = '';
+            document.getElementById(valInput).value = '';
+        };
+
+        window.activateKey = (type, name) => {
+            const storageKey = type === 'youtube' ? LOCAL_STORAGE_KEY_YOUTUBE : LOCAL_STORAGE_KEY_GEMINI;
+            let keys = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            keys.forEach(k => k.active = (k.name === name));
+            localStorage.setItem(storageKey, JSON.stringify(keys));
+            window.loadKeys(type);
+        };
+
+        window.deleteKey = (type, name) => {
+            if (!confirm('삭제하시겠습니까?')) return;
+            const storageKey = type === 'youtube' ? LOCAL_STORAGE_KEY_YOUTUBE : LOCAL_STORAGE_KEY_GEMINI;
+            let keys = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            keys = keys.filter(k => k.name !== name);
+            localStorage.setItem(storageKey, JSON.stringify(keys));
+            window.loadKeys(type);
+        };
+
+        window.editKey = (type, name, val) => {
+            const nameInput = type === 'youtube' ? 'newYoutubeKeyName' : 'newGeminiKeyName';
+            const valInput = type === 'youtube' ? 'newYoutubeKeyValue' : 'newGeminiKeyValue';
+            const saveBtn = type === 'youtube' ? 'saveYoutubeKeyBtn' : 'saveGeminiKeyBtn';
+            const cancelBtn = type === 'youtube' ? 'cancelYoutubeEditBtn' : 'cancelGeminiEditBtn';
+
+            document.getElementById(nameInput).value = name;
+            document.getElementById(valInput).value = val;
+            document.getElementById(nameInput).disabled = true;
+
+            editingKeyName = name;
+            editingKeyType = type;
+
+            document.getElementById(saveBtn).textContent = "수정";
+            document.getElementById(cancelBtn).classList.remove('hidden');
+        };
+
+        window.resetEditMode = (type) => {
+            const nameInput = type === 'youtube' ? 'newYoutubeKeyName' : 'newGeminiKeyName';
+            const valInput = type === 'youtube' ? 'newYoutubeKeyValue' : 'newGeminiKeyValue';
+            const saveBtn = type === 'youtube' ? 'saveYoutubeKeyBtn' : 'saveGeminiKeyBtn';
+            const cancelBtn = type === 'youtube' ? 'cancelYoutubeEditBtn' : 'cancelGeminiEditBtn';
+
+            editingKeyName = null;
+            editingKeyType = null;
+
+            document.getElementById(nameInput).value = '';
+            document.getElementById(valInput).value = '';
+            document.getElementById(nameInput).disabled = false;
+            document.getElementById(saveBtn).textContent = "저장";
+            document.getElementById(cancelBtn).classList.add('hidden');
+        };
+
+        window.fetchApiKeys = function() {
+             window.loadKeys('youtube');
+             window.loadKeys('gemini');
+        };
+
+        // --- Core Logic Functions (Restored) ---
         function calculateEngagementRatings(videos) {
             if (!videos.length) return;
             const assignStars = (list, keyRatio, keyRating) => {
@@ -521,12 +747,163 @@
             return data;
         }
 
+        // --- API Helpers (Added) ---
+        async function fetchChannelData(query) {
+            // 1. Try as direct Channel ID (starts with UC)
+            if (query.startsWith('UC') && query.length > 20) {
+                 const url = `${API_BASE_URL}channels?part=snippet,contentDetails,statistics,brandingSettings&id=${query}&key=${currentApiKey}`;
+                 const res = await checkResponse(await fetch(url));
+                 if (res.items && res.items.length > 0) return res;
+            }
+
+            // 2. Try as Handle (starts with @) or standard username
+            let handle = query;
+            if (!handle.startsWith('@') && !handle.startsWith('UC')) {
+                // If user typed "MrBeast", treat as "@MrBeast" first for efficiency
+                handle = '@' + handle; 
+            }
+
+            if (handle.startsWith('@')) {
+                // Use forHandle endpoint (Quota cost: 1)
+                const url = `${API_BASE_URL}channels?part=snippet,contentDetails,statistics,brandingSettings&forHandle=${encodeURIComponent(handle)}&key=${currentApiKey}`;
+                const res = await checkResponse(await fetch(url));
+                if (res.items && res.items.length > 0) return res;
+            }
+
+            // 3. If ID and Handle lookup failed, fallback to Search (Quota cost: 100 - Expensive!)
+            // Only do this if it didn't look like a standard ID
+            if (!query.startsWith('UC')) {
+                const searchUrl = `${API_BASE_URL}search?part=snippet&type=channel&q=${encodeURIComponent(query)}&key=${currentApiKey}`;
+                const searchRes = await checkResponse(await fetch(searchUrl));
+                
+                if (searchRes.items && searchRes.items.length > 0) {
+                    const channelId = searchRes.items[0].snippet.channelId;
+                    const url = `${API_BASE_URL}channels?part=snippet,contentDetails,statistics,brandingSettings&id=${channelId}&key=${currentApiKey}`;
+                    return checkResponse(await fetch(url));
+                }
+            }
+
+            // If all fails, return empty structure to trigger the error in caller
+            return { items: [] }; 
+        }
+
+        async function fetchAllVideos(uploadsId) {
+            let videos = [];
+            let nextPageToken = '';
+            // Limit to reasonable amount to prevent quota drain, e.g., 500 videos or until done
+            let maxPages = 10; 
+            
+            do {
+                const url = `${API_BASE_URL}playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50&pageToken=${nextPageToken}&key=${currentApiKey}`;
+                const data = await checkResponse(await fetch(url));
+                
+                const items = data.items.map(item => ({
+                    videoId: item.snippet.resourceId.videoId,
+                    title: item.snippet.title,
+                    description: item.snippet.description,
+                    publishedAt: item.snippet.publishedAt,
+                    thumbnail: item.snippet.thumbnails.default?.url
+                }));
+                videos = videos.concat(items);
+                
+                nextPageToken = data.nextPageToken;
+                maxPages--;
+            } while (nextPageToken && maxPages > 0);
+            
+            return videos;
+        }
+
+        async function fetchVideoStats(videoIds) {
+            let statsMap = {};
+            // Chunk into 50s
+            for (let i = 0; i < videoIds.length; i += 50) {
+                const chunk = videoIds.slice(i, i + 50).join(',');
+                const url = `${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${chunk}&key=${currentApiKey}`;
+                const data = await checkResponse(await fetch(url));
+                
+                if (data.items) {
+                    data.items.forEach(item => {
+                        statsMap[item.id] = {
+                            viewCount: parseInt(item.statistics.viewCount || 0),
+                            likeCount: parseInt(item.statistics.likeCount || 0),
+                            commentCount: parseInt(item.statistics.commentCount || 0),
+                            duration: item.contentDetails.duration,
+                            tags: item.snippet.tags || []
+                        };
+                    });
+                }
+            }
+            return statsMap;
+        }
+
+        function mergeVideoData(videos, statsMap) {
+            return videos.map(v => {
+                const stat = statsMap[v.videoId] || { viewCount: 0, likeCount: 0, commentCount: 0, duration: 'PT0S', tags: [] };
+                const durationSec = parseDuration(stat.duration);
+                
+                let durCat = 'Mid';
+                if (durationSec <= 60) durCat = 'Short';
+                else if (durationSec >= 180) durCat = 'Long';
+
+                const likeRatio = stat.viewCount > 0 ? (stat.likeCount / stat.viewCount) * 100 : 0;
+                const commentRatio = stat.viewCount > 0 ? (stat.commentCount / stat.viewCount) * 100 : 0;
+
+                return {
+                    ...v,
+                    ...stat,
+                    durationSeconds: durationSec,
+                    durationCategory: durCat,
+                    likeRatio,
+                    commentRatio
+                };
+            });
+        }
+        
+        // Export CSV
+        window.exportToCSV = () => {
+             if (!allVideosData.length) return alert('데이터가 없습니다.');
+             let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM
+             csvContent += "Title,Published,Views,Likes,Comments,Duration(Sec),Type,Link\n";
+             
+             allVideosData.forEach(v => {
+                 const title = v.title.replace(/,/g, " "); // simple escape
+                 csvContent += `${title},${v.publishedAt},${v.viewCount},${v.likeCount},${v.commentCount},${v.durationSeconds},${v.durationCategory},https://youtu.be/${v.videoId}\n`;
+             });
+             
+             const encodedUri = encodeURI(csvContent);
+             const link = document.createElement("a");
+             link.setAttribute("href", encodedUri);
+             link.setAttribute("download", `channel_analysis_${channelMetadata.id}.csv`);
+             document.body.appendChild(link);
+             link.click();
+             document.body.removeChild(link);
+        }
+
+        // Saved Channel Actions
+        window.refreshChannel = (id) => {
+            document.getElementById('channelId').value = id;
+            startAnalysis(true);
+        };
+
+        window.deleteSavedChannel = async (id) => {
+            if(!confirm('정말 삭제하시겠습니까?')) return;
+            if (db && masterUserId) {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channels', id));
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', id));
+                    alert('삭제되었습니다.');
+                } catch(e) {
+                    console.error(e);
+                    alert('삭제 실패');
+                }
+            }
+        };
+
         // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // [NEW] Manual Config Application
         window.applyManualConfig = async () => {
             const input = document.getElementById('manualConfigInput').value;
             try {
@@ -551,7 +928,7 @@
                         masterUserId = 'master_user_shared'; 
                         document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
                         document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
-                        fetchApiKeys();
+                        window.fetchApiKeys();
                         subscribeToSavedChannels();
                         setStatus('Firebase 연결 및 인증 성공.', false);
                     } else {
@@ -562,19 +939,18 @@
                             console.error("Sign-in failed:", e);
                             document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
                             setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
-                            fetchApiKeys(); 
+                            window.fetchApiKeys(); 
                         }
                     }
                 });
             } catch(e) {
                 console.error("Firebase Init Error:", e);
                 document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
-                fetchApiKeys(); 
+                window.fetchApiKeys(); 
             }
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            // Scroll to Top Logic
             const scrollBtn = document.getElementById('scrollToTopBtn');
             window.addEventListener('scroll', () => {
                 if (window.scrollY > 300) {
@@ -584,18 +960,16 @@
                 }
             });
 
-            // 엔터키 리스너
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter' && !e.isComposing) {
+                    if (e.key === 'Enter') {
                         e.preventDefault(); 
                         startAnalysis();
                     }
                 });
             }
 
-            // Firebase Config Loading
             let firebaseConfig = initialConfig;
             if (!firebaseConfig) {
                 try {
@@ -617,7 +991,7 @@
                 setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
                 document.getElementById('firebaseConfigSection').classList.remove('hidden');
                 document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
-                fetchApiKeys(); 
+                window.fetchApiKeys(); 
             }
         });
 
@@ -634,9 +1008,7 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
-            // Firebase 모드 - 채널 목록(요약본) 구독
             if (db && masterUserId) {
-                // Public data collection for list
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channel_list'), (snap) => {
                     savedChannelsData = [];
                     snap.forEach(doc => savedChannelsData.push(doc.data()));
@@ -672,7 +1044,6 @@
                 let valA, valB;
                 const key = savedSortState.key;
                 
-                // metadata 안에 있는 속성 접근 처리
                 if (key === 'title') { 
                     valA = a.metadata.title; valB = b.metadata.title; 
                 } else if (key === 'subscribers') { 
@@ -714,7 +1085,6 @@
         }
 
         async function loadChannelFromCache(id) {
-            // 상세 데이터 로드 (전체 비디오 포함)
             if (db) {
                 setStatus('상세 데이터 로딩 중...', false);
                 try {
@@ -725,12 +1095,11 @@
                         allVideosData = data.videos || [];
                         channelMetadata = data.metadata;
                         const stats90 = data.stats90 || { avgViews: 0, avgLikes: 0, avgComments: 0 };
-
+                        loadNoteData(data.analysisNote || {});
                         renderAnalysisUI(stats90);
                         switchTab('analyze');
                         setStatus(`📂 불러오기 완료: ${channelMetadata.title}`, false);
                     } else {
-                        // 만약 상세 데이터가 없다면 목록용 데이터라도 사용 시도 (fallback)
                         const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', id);
                         const listSnap = await getDoc(listRef);
                         if(listSnap.exists()) {
@@ -747,25 +1116,138 @@
             }
         }
 
-        async function refreshChannel(id) {
-            document.getElementById('channelId').value = id;
-            switchTab('analyze');
-            await startAnalysis(true);
+        // --- Note Functions & Gemini ---
+        function loadNoteData(note) {
+            document.getElementById('note_summary').value = note.summary || '';
+            document.getElementById('note_pros').value = note.pros || '';
+            document.getElementById('note_cons').value = note.cons || '';
+            document.getElementById('note_genre').value = note.genre || '';
+            document.getElementById('note_tone').value = note.tone || '';
+            document.getElementById('note_style').value = note.style || '';
+            document.getElementById('note_topic').value = note.topic || '';
+            document.getElementById('note_audience').value = note.audience || '';
+            document.getElementById('note_trust').value = note.trust || '';
+            document.getElementById('note_ad_domain').value = note.ad_domain || '';
+            document.getElementById('note_ad_type').value = note.ad_type || '';
+            document.getElementById('note_ad_perf').value = note.ad_perf || '';
+            document.getElementById('note_engagement_memo').value = note.engagement_memo || '';
         }
-        window.refreshChannel = refreshChannel;
 
-        async function deleteSavedChannel(id) {
-            if(!confirm('삭제하시겠습니까?')) return;
-            if (db && masterUserId) {
-                // 두 컬렉션 모두 삭제
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channels', id));
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', id));
+        window.saveChannelNote = async () => {
+            if (!db || !masterUserId || !channelMetadata) {
+                alert('분석된 채널이 없거나 저장 권한이 없습니다.');
+                return;
             }
-        }
-        window.deleteSavedChannel = deleteSavedChannel;
+            const noteData = {
+                summary: document.getElementById('note_summary').value,
+                pros: document.getElementById('note_pros').value,
+                cons: document.getElementById('note_cons').value,
+                genre: document.getElementById('note_genre').value,
+                tone: document.getElementById('note_tone').value,
+                style: document.getElementById('note_style').value,
+                topic: document.getElementById('note_topic').value,
+                audience: document.getElementById('note_audience').value,
+                trust: document.getElementById('note_trust').value,
+                ad_domain: document.getElementById('note_ad_domain').value,
+                ad_type: document.getElementById('note_ad_type').value,
+                ad_perf: document.getElementById('note_ad_perf').value,
+                engagement_memo: document.getElementById('note_engagement_memo').value
+            };
+            try {
+                const channelRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', channelMetadata.id);
+                await setDoc(channelRef, { analysisNote: noteData }, { merge: true });
+                alert('노트가 저장되었습니다.');
+            } catch (e) {
+                console.error(e);
+                alert('노트 저장 실패');
+            }
+        };
 
-        // --- Main Analysis & Rendering ---
+        // --- Gemini Integration ---
+        window.analyzeChannelWithGemini = async (isAuto = false) => {
+            if (!geminiKey) {
+                if (!isAuto) alert('Gemini API Key가 설정되지 않았습니다.');
+                return;
+            }
+            if (!channelMetadata) {
+                if (!isAuto) alert('먼저 채널을 분석해주세요.');
+                return;
+            }
 
+            const btn = document.getElementById('geminiAnalyzeBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span>🤖 분석 중...</span>';
+            btn.disabled = true;
+
+            try {
+                const topVideos = allVideosData
+                    .sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount))
+                    .slice(0, 10)
+                    .map(v => `${v.title} (조회수: ${v.viewCount}, 좋아요: ${v.likeCount})`);
+                
+                const recentVideos = allVideosData
+                    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+                    .slice(0, 5)
+                    .map(v => v.title);
+
+                const prompt = `
+                    You are a professional YouTube Marketing Analyst. Analyze this channel based on the provided data.
+                    
+                    Channel: ${channelMetadata.title}
+                    Description: ${channelMetadata.description}
+                    Subscribers: ${channelMetadata.subscribers}
+                    
+                    Top 10 Videos by Views:
+                    ${topVideos.join('\n')}
+                    
+                    Recent 5 Videos:
+                    ${recentVideos.join('\n')}
+                    
+                    Please provide a JSON response with the following keys (values in Korean):
+                    {
+                        "summary": "Comprehensive summary of the channel's identity and performance",
+                        "pros": "Key strengths (comma separated)",
+                        "cons": "Potential weaknesses or risks (comma separated)",
+                        "genre": "Main genre/category",
+                        "tone": "Tone and manner",
+                        "style": "Editing and directing style",
+                        "topic": "Main topics covered",
+                        "audience": "Estimated target audience demographics",
+                        "trust": "Channel credibility",
+                        "ad_domain": "Suitable industries for advertising",
+                        "ad_type": "Recommended ad campaign types",
+                        "ad_perf": "Estimated ad performance",
+                        "engagement_memo": "Analysis of viewer engagement"
+                    }
+                    Return ONLY the JSON.
+                `;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+                
+                let text = data.candidates[0].content.parts[0].text;
+                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                const result = JSON.parse(text);
+                loadNoteData(result);
+                if (!isAuto) alert('Gemini 분석이 완료되었습니다.');
+
+            } catch (e) {
+                console.error(e);
+                if (!isAuto) alert(`Gemini 분석 실패: ${e.message}`);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+
+        // --- Standard Functions ---
         async function checkResponse(response) {
             if (!response.ok) {
                 const errorBody = await response.json();
@@ -795,7 +1277,7 @@
                 const chData = await fetchChannelData(input);
                 
                 if (!chData || !chData.items || !chData.items.length) {
-                    throw new Error('채널 정보를 찾을 수 없습니다.');
+                    throw new Error('채널 정보를 찾을 수 없습니다. (ID 또는 Handle 확인 필요)');
                 }
 
                 const chItem = chData.items[0];
@@ -828,7 +1310,7 @@
                     try {
                         await setDoc(saveRef, {
                             metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
-                        });
+                        }, { merge: true }); 
                         
                         // 2. 목록용 요약 데이터 저장 (channel_list) - 비디오 리스트 제외
                         const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
@@ -838,7 +1320,6 @@
                         
                     } catch (saveError) {
                         console.warn("전체 데이터 저장 실패, 요약본만 저장 시도:", saveError);
-                        // 실패 시 요약본이라도 저장
                          const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
                         await setDoc(listRef, {
                             metadata: meta, stats90: stats90, lastUpdated: new Date().toISOString()
@@ -851,6 +1332,21 @@
                 channelMetadata = meta;
                 allVideosData = videos;
                 renderAnalysisUI(stats90);
+                
+                // [NEW] Gemini Auto Analyze
+                if (geminiKey) {
+                    analyzeChannelWithGemini(true);
+                }
+
+                if (isRefresh) {
+                    try {
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
+                        const docSnap = await getDoc(docRef);
+                        if(docSnap.exists()) loadNoteData(docSnap.data().analysisNote || {});
+                    } catch(e){}
+                } else {
+                    loadNoteData({});
+                }
                 setStatus('분석 완료', false);
 
             } catch (e) {
@@ -885,6 +1381,11 @@
             document.getElementById('avgViews90Days').textContent = formatNumber(stats90.avgViews);
             document.getElementById('avgLikes90Days').textContent = formatNumber(stats90.avgLikes);
             document.getElementById('avgComments90Days').textContent = formatNumber(stats90.avgComments);
+
+            // Auto-fill performance note
+            document.getElementById('note_auto_views').textContent = formatNumber(stats90.avgViews);
+            const engagement = stats90.avgViews > 0 ? ((stats90.avgLikes + stats90.avgComments) / stats90.avgViews * 100).toFixed(2) + '%' : '0%';
+            document.getElementById('note_auto_engagement').textContent = engagement;
 
             monthlyCalendarData = generateCalendarData(allVideosData);
             currentCalendarDate = availableMonths[0];
@@ -949,6 +1450,7 @@
                 container.appendChild(cell);
             }
         }
+        window.renderCalendar = renderCalendar;
 
         function renderShorts() {
             const container = document.getElementById('shortsContent');
@@ -999,6 +1501,7 @@
                 container.appendChild(el);
             });
         }
+        window.renderShorts = renderShorts;
 
         function renderVideoList() {
             const tbody = document.getElementById('videoListTableBody');
@@ -1094,10 +1597,7 @@
                 tbody.appendChild(trDetail);
             });
         }
-        
         window.renderVideoList = renderVideoList;
-        window.renderCalendar = renderCalendar;
-        window.renderShorts = renderShorts;
 
         function setVideoSort(key) {
             if (videoSortState.key === key) {
@@ -1158,217 +1658,7 @@
         }
         window.copyToClipboard = copyToClipboard;
 
-        // --- Logic Helpers ---
-
-        async function fetchChannelData(query) {
-            let id = decodeURIComponent(query).trim();
-            
-            if (id.startsWith('UC') && id.length === 24) {
-                return await fetchChannelInfoById(id);
-            }
-            
-            if (id.includes('youtube.com') || id.includes('youtu.be')) {
-                const vMatch = id.match(/(?:v=|shorts\/|\/)([\w-]{11})(?:\?|&|\/|$)/);
-                if (vMatch && !id.includes('@')) { 
-                    try {
-                        const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vMatch[1]}&key=${currentApiKey}`);
-                        const vData = await checkResponse(vRes);
-                        if (vData.items && vData.items.length > 0) {
-                             return await fetchChannelInfoById(vData.items[0].snippet.channelId);
-                        }
-                    } catch (e) {
-                        console.warn("Video ID lookup failed, trying handle...", e);
-                    }
-                }
-                const cMatch = id.match(/channel\/(UC[\w-]{22})/);
-                if (cMatch) return await fetchChannelInfoById(cMatch[1]);
-
-                const hMatch = id.match(/@([^/?]+)/);
-                if (hMatch) return await fetchChannelInfoByHandle('@' + hMatch[1]);
-                
-                throw new Error('올바른 채널/영상 URL 형식이 아닙니다.');
-            }
-            
-            if (id.startsWith('@')) {
-                const cleanHandle = id.split('/')[0];
-                return await fetchChannelInfoByHandle(cleanHandle);
-            }
-
-            if (!id.includes('/')) {
-                 return await fetchChannelInfoByHandle('@' + id);
-            }
-
-            throw new Error('채널을 찾을 수 없습니다. 정확한 ID나 URL을 입력해주세요.');
-        }
-
-        async function fetchChannelInfoById(id) {
-            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&id=${id}&key=${currentApiKey}`);
-            const data = await checkResponse(res);
-            if (!data.items?.length) throw new Error('ID로 채널을 찾을 수 없습니다.');
-            return data;
-        }
-
-        async function fetchChannelInfoByHandle(handle) {
-            // [FIX] Encode handle to support Korean characters
-            const encodedHandle = encodeURIComponent(handle); 
-            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&forHandle=${encodedHandle}&key=${currentApiKey}`);
-            const data = await checkResponse(res);
-            if (!data.items?.length) throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
-            return data;
-        }
-        
-        async function fetchAllVideos(playlistId, videos = [], token = '') {
-            const res = await fetch(`${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&pageToken=${token}&key=${currentApiKey}`);
-            const data = await res.json();
-            if (!data.items) return videos;
-            data.items.forEach(i => {
-                if (i.snippet.title !== 'Deleted video') {
-                    videos.push({
-                        videoId: i.contentDetails.videoId,
-                        title: i.snippet.title,
-                        publishedAt: i.snippet.publishedAt
-                    });
-                }
-            });
-            if (data.nextPageToken) return fetchAllVideos(playlistId, videos, data.nextPageToken);
-            return videos;
-        }
-
-        async function fetchVideoStats(ids) {
-            const stats = [];
-            while (ids.length) {
-                const batch = ids.splice(0, 50);
-                const res = await fetch(`${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${batch.join(',')}&key=${currentApiKey}`);
-                const data = await res.json();
-                if (data.items) stats.push(...data.items);
-            }
-            return stats;
-        }
-
-        function mergeVideoData(videos, statsList) {
-            const map = new Map(statsList.map(s => [s.id, s]));
-            return videos.map(v => {
-                const s = map.get(v.videoId);
-                if (!s) return v;
-                const dur = parseDuration(s.contentDetails.duration);
-                const views = parseInt(s.statistics.viewCount || 0);
-                const likes = parseInt(s.statistics.likeCount || 0);
-                const comments = parseInt(s.statistics.commentCount || 0);
-                return {
-                    ...v,
-                    viewCount: views, likeCount: likes, commentCount: comments,
-                    durationSeconds: dur,
-                    durationCategory: dur <= 60 ? 'Short' : (dur < 180 ? 'Mid' : 'Long'),
-                    tags: s.snippet.tags || [],
-                    description: s.snippet.description,
-                    likeRatio: views ? (likes/views)*100 : 0,
-                    commentRatio: views ? (comments/views)*100 : 0,
-                    likeRating: 1,
-                    commentRating: 1
-                };
-            });
-        }
-
-        // --- API Keys Management ---
-        window.fetchApiKeys = () => {
-             // Local Storage First/Fallback Logic
-             const loadKeys = (fromDB) => {
-                 let keys = [];
-                 if (fromDB && savedChannelsData) {
-                     // Not implemented for keys in Firestore in this snippet for brevity, 
-                     // relying on LocalStorage for keys to ensure offline capability as requested.
-                 }
-                 const local = localStorage.getItem(LOCAL_STORAGE_KEY_API);
-                 if (local) keys = JSON.parse(local);
-                 
-                 const el = document.getElementById('apiKeyList');
-                 el.innerHTML = '';
-                 keys.forEach(d => {
-                     if(d.active) currentApiKey = d.value;
-                     const div = document.createElement('div');
-                     div.className = `flex justify-between items-center p-3 rounded text-sm text-text-light border transition-all duration-300 ${d.active ? 'border-primary-accent bg-bg-dark shadow-[0_0_10px_rgba(233,69,96,0.3)]' : 'border-transparent bg-bg-dark/30 opacity-70'}`;
-                     div.innerHTML = `
-                        <div class="flex flex-col overflow-hidden mr-2">
-                            <span class="font-bold truncate ${d.active ? 'text-primary-accent' : 'text-text-light/70'}">${d.name}</span>
-                            <span class="text-xs ${d.active ? 'text-text-light' : 'text-text-light/30'} truncate">${d.active ? '✅ 사용 중' : '비활성'}</span>
-                        </div>
-                        <div class="flex gap-2 flex-shrink-0">
-                            ${!d.active ? `<button onclick="activateApiKey('${d.name}')" class="px-2 py-1 bg-card-bg border border-text-light/20 rounded hover:bg-success-status hover:text-bg-dark transition text-xs">활성</button>` : ''}
-                            <button onclick="editApiKey('${d.name}', '${d.value}')" class="px-2 py-1 text-text-light/50 hover:text-primary-accent transition text-xs">✏️</button>
-                            <button onclick="deleteApiKey('${d.name}')" class="px-2 py-1 text-text-light/50 hover:text-red-500 transition text-xs">🗑️</button>
-                        </div>
-                     `;
-                     el.appendChild(div);
-                 });
-             };
-             
-             // Always load from local for reliability in this demo
-             loadKeys(false);
-        };
-
-        window.saveApiKey = async () => {
-            const name = document.getElementById('newKeyName').value.trim();
-            const val = document.getElementById('newKeyValue').value.trim();
-            if(!name || !val) return alert('이름과 값을 모두 입력해주세요.');
-
-            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
-            
-            if (editingKeyName) {
-                const idx = keys.findIndex(k => k.name === editingKeyName);
-                if(idx !== -1) keys[idx].value = val;
-                resetEditMode();
-            } else {
-                if(keys.some(k => k.name === name)) return alert('이미 존재하는 이름입니다.');
-                keys.push({ name, value: val, active: keys.length === 0 });
-            }
-            
-            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
-            fetchApiKeys();
-            document.getElementById('newKeyName').value = '';
-            document.getElementById('newKeyValue').value = '';
-            
-            // Sync with Firebase if available (Optional enhancement)
-            if (db && masterUserId) {
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', name), { value: val, active: true }, { merge: true });
-                } catch(e) { console.log("Firebase sync failed, local only"); }
-            }
-        };
-
-        window.activateApiKey = (name) => {
-            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
-            keys.forEach(k => k.active = (k.name === name));
-            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
-            fetchApiKeys();
-        };
-
-        window.deleteApiKey = (name) => {
-            if(!confirm('삭제하시겠습니까?')) return;
-            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
-            keys = keys.filter(k => k.name !== name);
-            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
-            fetchApiKeys();
-        };
-
-        window.editApiKey = (name, val) => {
-            document.getElementById('newKeyName').value = name;
-            document.getElementById('newKeyValue').value = val;
-            document.getElementById('newKeyName').disabled = true;
-            editingKeyName = name;
-            document.getElementById('saveKeyBtn').textContent = "수정";
-            document.getElementById('cancelEditBtn').classList.remove('hidden');
-        };
-
-        window.resetEditMode = () => {
-            editingKeyName = null;
-            document.getElementById('newKeyName').value = '';
-            document.getElementById('newKeyValue').value = '';
-            document.getElementById('newKeyName').disabled = false;
-            document.getElementById('saveKeyBtn').textContent = "저장";
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-        };
-        
-        // Expose functions globally
+        // Expose applyManualConfig
         window.applyManualConfig = window.applyManualConfig; 
     </script>
 </body>
