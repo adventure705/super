@@ -981,71 +981,71 @@
 
         // --- Logic Helpers ---
 
+        // [FIX] Improved Channel Data Fetching (Supports ID, Handle, URL, etc.)
         async function fetchChannelData(query) {
-            let id = query;
-            if (query.includes('youtu')) {
-                const vid = query.match(/v=([\w-]+)/) || query.match(/\/([\w-]+)$/);
-                if (vid) {
-                    const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vid[1]}&key=${currentApiKey}`);
-                    const vData = await checkResponse(vRes);
-                    id = vData.items[0].snippet.channelId;
-                }
-            } else if (!query.startsWith('UC')) {
-                const handle = query.startsWith('@') ? query : '@' + query;
-                const hRes = await fetch(`${API_BASE_URL}channels?part=id&forHandle=${handle}&key=${currentApiKey}`);
-                const hData = await checkResponse(hRes);
-                id = hData.items[0].id;
+            // 1. 입력값 디코딩 (한글 핸들 등 처리) 및 공백 제거
+            let id = decodeURIComponent(query).trim();
+            
+            // 2. Direct Channel ID (UC...)
+            if (id.startsWith('UC') && id.length === 24) {
+                return await fetchChannelInfoById(id);
             }
-            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&id=${id}&key=${currentApiKey}`);
-            const data = await checkResponse(res);
-            if (!data.items?.length) throw new Error('채널을 찾을 수 없습니다.');
-            return data;
-        }
-
-        async function fetchAllVideos(playlistId, videos = [], token = '') {
-            const res = await fetch(`${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&pageToken=${token}&key=${currentApiKey}`);
-            const data = await res.json();
-            if (!data.items) return videos;
-            data.items.forEach(i => {
-                if (i.snippet.title !== 'Deleted video') {
-                    videos.push({
-                        videoId: i.contentDetails.videoId,
-                        title: i.snippet.title,
-                        publishedAt: i.snippet.publishedAt
-                    });
+            
+            // 3. YouTube URL Parsing
+            if (id.includes('youtube.com') || id.includes('youtu.be')) {
+                // 3-1. Video URL -> Get Channel ID from Video
+                // v=VIDEO_ID 또는 /VIDEO_ID (shorts 포함)
+                const vMatch = id.match(/(?:v=|shorts\/|\/)([\w-]{11})(?:\?|&|\/|$)/);
+                // 주의: 핸들(@)이 있는 경우는 비디오 ID로 오인하지 않도록 우선순위 조정 필요하나, 
+                // 보통 영상 링크엔 @가 없음. 단, @handle/shorts/VIDEO_ID 패턴일 수 있음.
+                // 만약 /shorts/VIDEO_ID 형태라면 비디오 ID로 먼저 시도.
+                
+                if (vMatch && !id.includes('@')) { 
+                    try {
+                        const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vMatch[1]}&key=${currentApiKey}`);
+                        const vData = await checkResponse(vRes);
+                        if (vData.items && vData.items.length > 0) {
+                             return await fetchChannelInfoById(vData.items[0].snippet.channelId);
+                        }
+                    } catch (e) {
+                        // 비디오 ID로 찾기 실패 시 핸들 파싱으로 넘어감
+                        console.warn("Video ID lookup failed, trying handle...", e);
+                    }
                 }
-            });
-            if (data.nextPageToken) return fetchAllVideos(playlistId, videos, data.nextPageToken);
-            return videos;
-        }
+                
+                // 3-2. Channel URL (/channel/UC...)
+                const cMatch = id.match(/channel\/(UC[\w-]{22})/);
+                if (cMatch) {
+                    return await fetchChannelInfoById(cMatch[1]);
+                }
 
-        async function fetchVideoStats(ids) {
-            const stats = [];
-            while (ids.length) {
-                const batch = ids.splice(0, 50);
-                const res = await fetch(`${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${batch.join(',')}&key=${currentApiKey}`);
-                const data = await res.json();
-                if (data.items) stats.push(...data.items);
+                // 3-3. Handle URL (/@handle...)
+                // /shorts, /videos, /featured 등 서브 경로가 있어도 @handle 부분만 추출
+                const hMatch = id.match(/@([^/?]+)/);
+                if (hMatch) {
+                    return await fetchChannelInfoByHandle('@' + hMatch[1]);
+                }
+                
+                throw new Error('올바른 채널/영상 URL 형식이 아닙니다.');
             }
-            return stats;
+            
+            // 4. Handle (starts with @)
+            if (id.startsWith('@')) {
+                // /shorts 등 뒤에 붙은 경로 제거
+                const cleanHandle = id.split('/')[0];
+                return await fetchChannelInfoByHandle(cleanHandle);
+            }
+
+            // 5. Default: Assume Handle if not ID (try adding @)
+            // 공백이나 특수문자가 없는 경우만 시도
+            if (!id.includes('/')) {
+                 return await fetchChannelInfoByHandle('@' + id);
+            }
+
+            throw new Error('채널을 찾을 수 없습니다. 정확한 ID나 URL을 입력해주세요.');
         }
 
-        function mergeVideoData(videos, statsList) {
-            const map = new Map(statsList.map(s => [s.id, s]));
-            return videos.map(v => {
-                const s = map.get(v.videoId);
-                if (!s) return v;
-                const dur = parseDuration(s.contentDetails.duration);
-                const views = parseInt(s.statistics.viewCount || 0);
-                const likes = parseInt(s.statistics.likeCount || 0);
-                const comments = parseInt(s.statistics.commentCount || 0);
-                return {
-                    ...v,
-                    viewCount: views, likeCount: likes, commentCount: comments,
-                    durationSeconds: dur,
-                    durationCategory: dur <= 60 ? 'Short' : (dur < 180 ? 'Mid' : 'Long'),
-                    tags: s.snippet.tags || [],
-                    description: s.snippet.description,
+        async function fetchChannelInfoById(id) {
                     likeRatio: views ? (likes/views)*100 : 0,
                     commentRatio: views ? (comments/views)*100 : 0,
                     likeRating: 1,
