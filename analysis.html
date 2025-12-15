@@ -411,6 +411,16 @@
         let editingKeyName = null; 
         const LOCAL_STORAGE_KEY_API = 'youtube_manager_api_keys';
         
+        // Helper to set Status from module
+        function setStatus(msg, isError) {
+            const el = document.getElementById('statusMessage');
+            if (el) {
+                el.textContent = msg;
+                el.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            }
+        }
+        window.setStatus = setStatus;
+
         let allVideosData = [];
         let channelMetadata = null;
         let savedChannelsData = [];
@@ -428,15 +438,6 @@
 
         // --- Utilities (Defined first to prevent reference errors) ---
         
-        function setStatus(msg, isError) {
-            const el = document.getElementById('statusMessage');
-            if (el) {
-                el.textContent = msg;
-                el.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
-            }
-        }
-        window.setStatus = setStatus;
-
         function formatNumber(num) { 
             return num ? new Intl.NumberFormat('ko-KR').format(num) : '0'; 
         }
@@ -633,11 +634,15 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
+            // Firebase 모드
             if (db && masterUserId) {
+                // Public data collection
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), (snap) => {
                     savedChannelsData = [];
                     snap.forEach(doc => savedChannelsData.push(doc.data()));
                     renderSavedChannelsList();
+                }, (error) => {
+                    console.error("저장된 채널 구독 오류:", error);
                 });
             } 
         }
@@ -786,12 +791,35 @@
                 
                 const stats90 = calc90DayStats(videos);
                 
+                // 데이터 저장 로직 개선
                 if (db && masterUserId) {
-                    // Public data path
                     const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
-                    await setDoc(saveRef, {
-                        metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
-                    });
+                    try {
+                        // 1차 시도: 전체 데이터 저장
+                        await setDoc(saveRef, {
+                            metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
+                        });
+                    } catch (saveError) {
+                        console.warn("전체 데이터 저장 실패 (용량 초과 가능성), 요약본 저장 시도:", saveError);
+                        try {
+                            // 2차 시도: 비디오 설명/태그 제외하고 저장 (용량 줄이기)
+                            const simpleVideos = videos.map(v => ({
+                                videoId: v.videoId, title: v.title, publishedAt: v.publishedAt,
+                                viewCount: v.viewCount, likeCount: v.likeCount, commentCount: v.commentCount,
+                                durationSeconds: v.durationSeconds, durationCategory: v.durationCategory,
+                                likeRatio: v.likeRatio, commentRatio: v.commentRatio,
+                                likeRating: v.likeRating, commentRating: v.commentRating
+                                // description, tags 제외
+                            }));
+                            await setDoc(saveRef, {
+                                metadata: meta, videos: simpleVideos, stats90: stats90, lastUpdated: new Date().toISOString()
+                            });
+                            setStatus('분석 완료 (일부 상세 데이터 제외하고 저장됨)', false);
+                        } catch (retryError) {
+                            console.error("요약본 저장 실패:", retryError);
+                            setStatus('분석 완료되었으나 저장에 실패했습니다. (데이터 크기 초과)', true);
+                        }
+                    }
                 } else {
                     setStatus('분석 완료 (로컬 모드 - 저장 안됨)', false);
                 }
