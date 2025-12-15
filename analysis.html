@@ -124,6 +124,7 @@
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
             
+            <!-- Firebase 상태 메시지 표시 영역 추가 -->
             <div id="firebaseStatusMsg" class="mb-4 text-xs text-text-light/50 bg-bg-dark p-2 rounded">
                 Firebase 상태: 연결 확인 중...
             </div>
@@ -141,8 +142,8 @@
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+                    <button id="saveKeyBtn" onclick="saveApiKey()" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
+                    <button id="cancelEditBtn" onclick="resetEditMode()" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
                 </div>
             </div>
             
@@ -466,7 +467,7 @@
                 }
             });
 
-            // 엔터키 리스너 추가
+            // 엔터키 리스너 추가 (명시적 - keydown으로 변경)
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keydown', function (e) {
@@ -1048,6 +1049,58 @@
             const data = await checkResponse(res);
             if (!data.items?.length) throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
             return data;
+        }
+        
+        async function fetchAllVideos(playlistId, videos = [], token = '') {
+            const res = await fetch(`${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&pageToken=${token}&key=${currentApiKey}`);
+            const data = await res.json();
+            if (!data.items) return videos;
+            data.items.forEach(i => {
+                if (i.snippet.title !== 'Deleted video') {
+                    videos.push({
+                        videoId: i.contentDetails.videoId,
+                        title: i.snippet.title,
+                        publishedAt: i.snippet.publishedAt
+                    });
+                }
+            });
+            if (data.nextPageToken) return fetchAllVideos(playlistId, videos, data.nextPageToken);
+            return videos;
+        }
+
+        async function fetchVideoStats(ids) {
+            const stats = [];
+            while (ids.length) {
+                const batch = ids.splice(0, 50);
+                const res = await fetch(`${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${batch.join(',')}&key=${currentApiKey}`);
+                const data = await res.json();
+                if (data.items) stats.push(...data.items);
+            }
+            return stats;
+        }
+
+        function mergeVideoData(videos, statsList) {
+            const map = new Map(statsList.map(s => [s.id, s]));
+            return videos.map(v => {
+                const s = map.get(v.videoId);
+                if (!s) return v;
+                const dur = parseDuration(s.contentDetails.duration);
+                const views = parseInt(s.statistics.viewCount || 0);
+                const likes = parseInt(s.statistics.likeCount || 0);
+                const comments = parseInt(s.statistics.commentCount || 0);
+                return {
+                    ...v,
+                    viewCount: views, likeCount: likes, commentCount: comments,
+                    durationSeconds: dur,
+                    durationCategory: dur <= 60 ? 'Short' : (dur < 180 ? 'Mid' : 'Long'),
+                    tags: s.snippet.tags || [],
+                    description: s.snippet.description,
+                    likeRatio: views ? (likes/views)*100 : 0,
+                    commentRatio: views ? (comments/views)*100 : 0,
+                    likeRating: 1,
+                    commentRating: 1
+                };
+            });
         }
 
         // --- API Keys Management ---
