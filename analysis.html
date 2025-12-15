@@ -124,7 +124,6 @@
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
             
-            <!-- Firebase 상태 메시지 표시 영역 추가 -->
             <div id="firebaseStatusMsg" class="mb-4 text-xs text-text-light/50 bg-bg-dark p-2 rounded">
                 Firebase 상태: 연결 확인 중...
             </div>
@@ -142,8 +141,8 @@
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
+                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
                 </div>
             </div>
             
@@ -373,22 +372,12 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Vars
+        // --- Global Vars ---
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
         let db, auth, masterUserId, currentApiKey = '';
         let editingKeyName = null; 
         const LOCAL_STORAGE_KEY_API = 'youtube_manager_api_keys';
         
-        // Helper to set Status from module
-        function setStatus(msg, isError) {
-            const el = document.getElementById('statusMessage');
-            if (el) {
-                el.textContent = msg;
-                el.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
-            }
-        }
-        window.setStatus = setStatus;
-
         let allVideosData = [];
         let channelMetadata = null;
         let savedChannelsData = [];
@@ -404,7 +393,52 @@
         let availableMonths = [];
         let expandedRowId = null;
 
-        // Firebase Setup
+        // --- Utilities (Defined first to prevent reference errors) ---
+        
+        function setStatus(msg, isError) {
+            const el = document.getElementById('statusMessage');
+            if (el) {
+                el.textContent = msg;
+                el.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-primary-accent' : 'text-success-status'}`;
+            }
+        }
+        window.setStatus = setStatus;
+
+        function formatNumber(num) { 
+            return num ? new Intl.NumberFormat('ko-KR').format(num) : '0'; 
+        }
+
+        function parseDuration(pt) {
+            if (!pt) return 0;
+            const match = pt.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return 0;
+            const h = (parseInt(match[1]) || 0);
+            const m = (parseInt(match[2]) || 0);
+            const s = (parseInt(match[3]) || 0);
+            return h * 3600 + m * 60 + s;
+        }
+
+        function formatTime(sec) {
+            const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+            return h>0 ? `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}` : `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function getColorForCategory(cat) {
+            if (cat === 'Short') return 'text-primary-accent'; 
+            if (cat === 'Mid') return 'text-text-light/80';    
+            if (cat === 'Long') return 'text-success-status';  
+            return '';
+        }
+
+        function renderStars(rating) {
+            let html = '';
+            for(let i=0; i<5; i++) {
+                html += i < rating ? '<span class="star-filled">★</span>' : '<span class="star-empty">☆</span>';
+            }
+            return html;
+        }
+
+        // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -445,14 +479,14 @@
                             console.error("Sign-in failed:", e);
                             document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
                             setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
-                            fetchApiKeys(); // 로컬 모드 실행
+                            fetchApiKeys(); 
                         }
                     }
                 });
             } catch(e) {
                 console.error("Firebase Init Error:", e);
                 document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
-                fetchApiKeys(); // 로컬 모드 실행
+                fetchApiKeys(); 
             }
         }
 
@@ -467,7 +501,7 @@
                 }
             });
 
-            // 엔터키 리스너 추가 (명시적 - keydown으로 변경)
+            // 엔터키 리스너
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keydown', function (e) {
@@ -500,7 +534,7 @@
                 setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
                 document.getElementById('firebaseConfigSection').classList.remove('hidden');
                 document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
-                fetchApiKeys(); // 로컬 모드 실행
+                fetchApiKeys(); 
             }
         });
 
@@ -517,9 +551,7 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
-            // Firebase 모드
             if (db && masterUserId) {
-                // Public data collection
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), (snap) => {
                     savedChannelsData = [];
                     snap.forEach(doc => savedChannelsData.push(doc.data()));
@@ -673,7 +705,6 @@
                 const stats90 = calc90DayStats(videos);
                 
                 if (db && masterUserId) {
-                    // Public data path
                     const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
                     await setDoc(saveRef, {
                         metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
