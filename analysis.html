@@ -124,7 +124,6 @@
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
             
-            <!-- Firebase 상태 메시지 표시 영역 추가 -->
             <div id="firebaseStatusMsg" class="mb-4 text-xs text-text-light/50 bg-bg-dark p-2 rounded">
                 Firebase 상태: 연결 확인 중...
             </div>
@@ -142,8 +141,8 @@
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
+                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
                 </div>
             </div>
             
@@ -432,11 +431,8 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         masterUserId = 'master_user_shared'; 
-                        const msgEl = document.getElementById('firebaseStatusMsg');
-                        if(msgEl) {
-                            msgEl.textContent = 'Firebase 상태: 연결됨 (Online)';
-                            msgEl.className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
-                        }
+                        document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
+                        document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
                         fetchApiKeys();
                         subscribeToSavedChannels();
                         setStatus('Firebase 연결 및 인증 성공.', false);
@@ -446,8 +442,7 @@
                             else await signInAnonymously(auth);
                         } catch(e) {
                             console.error("Sign-in failed:", e);
-                            const msgEl = document.getElementById('firebaseStatusMsg');
-                            if(msgEl) msgEl.textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
+                            document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
                             setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
                             fetchApiKeys(); // 로컬 모드 실행
                         }
@@ -455,8 +450,7 @@
                 });
             } catch(e) {
                 console.error("Firebase Init Error:", e);
-                const msgEl = document.getElementById('firebaseStatusMsg');
-                if(msgEl) msgEl.textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
+                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
                 fetchApiKeys(); // 로컬 모드 실행
             }
         }
@@ -504,8 +498,7 @@
             } else {
                 setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
                 document.getElementById('firebaseConfigSection').classList.remove('hidden');
-                const msgEl = document.getElementById('firebaseStatusMsg');
-                if(msgEl) msgEl.textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
+                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
                 fetchApiKeys(); // 로컬 모드 실행
             }
         });
