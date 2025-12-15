@@ -124,12 +124,8 @@
         <div class="modal-content w-full md:w-2/3 lg:w-1/2">
             <h2 class="text-2xl font-bold mb-4 text-primary-accent border-b border-primary-accent/50 pb-2">API 키 설정</h2>
             
-            <!-- Firebase Config Manual Input (Fallback) -->
-            <div id="firebaseConfigSection" class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg border border-red-500/30 hidden">
-                <h3 class="text-sm font-semibold mb-2 text-red-400">⚠️ Firebase 설정 로드 실패</h3>
-                <p class="text-xs text-text-light/70 mb-2">firebase-config.json 파일을 찾을 수 없습니다. 아래에 설정을 직접 붙여넣고 [설정 적용]을 눌러주세요.</p>
-                <textarea id="manualConfigInput" placeholder='{"apiKey": "...", "authDomain": "...", ...}' class="w-full p-2 rounded bg-bg-dark border border-card-bg text-text-light text-xs font-mono h-24 mb-2"></textarea>
-                <button onclick="applyManualConfig()" class="w-full py-2 bg-primary-accent text-white font-bold rounded hover:bg-primary-accent/80 transition text-sm">설정 적용 및 재시도</button>
+            <div id="firebaseStatusMsg" class="mb-4 text-xs text-text-light/50 bg-bg-dark p-2 rounded">
+                Firebase 상태: 연결 확인 중...
             </div>
 
             <div class="bg-card-bg p-4 rounded-lg mb-6 shadow-lg">
@@ -137,8 +133,8 @@
                 <input type="text" id="newKeyName" placeholder="키 이름 (예: 기본 키)" class="w-full p-3 mb-2 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <input type="password" id="newKeyValue" placeholder="YouTube Data API Key" class="w-full p-3 mb-3 rounded bg-bg-dark border border-card-bg text-text-light focus:border-primary-accent outline-none transition">
                 <div class="flex gap-2">
-                    <button id="saveKeyBtn" onclick="saveApiKey()" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
-                    <button id="cancelEditBtn" onclick="resetEditMode()" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
+                    <button id="saveKeyBtn" onclick="saveApiKey()" type="button" class="flex-1 py-2 bg-success-status text-bg-dark font-bold rounded hover:bg-success-status/80 transition">저장</button>
+                    <button id="cancelEditBtn" onclick="resetEditMode()" type="button" class="flex-1 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition hidden">취소</button>
                 </div>
             </div>
             
@@ -172,7 +168,6 @@
             <!-- 입력 패널 -->
             <section class="bg-card-bg p-4 md:p-6 rounded-xl shadow-2xl mb-8">
                 <div class="flex flex-col md:flex-row gap-3">
-                    <!-- 엔터키 이벤트 리스너는 JS에서 추가 -->
                     <input type="text" id="channelId" placeholder="채널 ID, 핸들(@), 또는 영상 링크" class="flex-grow p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent text-text-light outline-none transition placeholder-text-light/30">
                     <button id="analyzeButton" onclick="startAnalysis()" class="w-full md:w-auto py-3 px-6 bg-primary-accent text-white font-bold rounded-lg hover:bg-primary-accent/80 transition shadow-lg whitespace-nowrap flex justify-center items-center">
                         <span id="buttonText">분석 시작</span>
@@ -247,7 +242,7 @@
                     <div id="calendarBody" class="grid grid-cols-7 gap-1 min-w-[300px]"></div>
                 </div>
 
-                <!-- Shorts 미리보기 (버튼 위치 및 색상 수정됨) -->
+                <!-- Shorts 미리보기 -->
                 <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 flex flex-col sm:flex-row justify-between items-center gap-2">
                     <span>🔥 최신 Shorts (1분 이하)</span>
                     <div class="flex gap-2 text-sm items-center">
@@ -263,12 +258,8 @@
                     </div>
                 </h3>
                 <div id="shortsContainer" class="shorts-scroll-container group relative py-4 px-10 bg-card-bg rounded-xl shadow-inner mb-10 hidden">
-                    <!-- 왼쪽 버튼 -->
                     <button class="scroll-button left-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="left: 0.5rem;" onclick="scrollShorts(-300)">◀</button>
-                    
                     <div id="shortsContent" class="shorts-content flex space-x-4 px-1 overflow-x-auto scrollbar-hide"></div>
-                    
-                    <!-- 오른쪽 버튼 (위치 및 색상 명시적 수정) -->
                     <button class="scroll-button right-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="right: 0.5rem; left: auto;" onclick="scrollShorts(300)">▶</button>
                 </div>
 
@@ -318,7 +309,6 @@
                         <thead class="bg-bg-dark">
                             <tr>
                                 <th class="px-2 py-3 text-left text-xs font-medium text-text-light/70 uppercase w-12">No</th>
-                                <!-- 제목 열 너비 확장 -->
                                 <th class="px-2 py-3 text-left text-xs font-medium text-text-light/70 uppercase w-64 md:w-80 lg:w-96 sortable-header" onclick="setVideoSort('title')">제목 ↕</th>
                                 <th class="px-2 py-3 text-right text-xs font-medium text-text-light/70 uppercase w-24 sortable-header" onclick="setVideoSort('publishedAt')">게시일 ↕</th>
                                 <th class="px-2 py-3 text-right text-xs font-medium text-text-light/70 uppercase w-20 sortable-header" onclick="setVideoSort('viewCount')">조회수 ↕</th>
@@ -371,7 +361,8 @@
         // Global Vars
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
         let db, auth, masterUserId, currentApiKey = '';
-        let editingKeyName = null; // API 키 수정 모드 상태
+        let editingKeyName = null; 
+        const LOCAL_STORAGE_KEY_API = 'youtube_manager_api_keys';
         
         let allVideosData = [];
         let channelMetadata = null;
@@ -380,7 +371,6 @@
         // Sorting States
         let videoSortState = { key: 'publishedAt', dir: 'desc' };
         let savedSortState = { key: 'lastUpdated', dir: 'desc' };
-        // Shorts Sorting State
         let shortsSortState = { key: 'publishedAt', dir: 'desc' };
 
         let currentCalendarDate = null;
@@ -416,8 +406,9 @@
                 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        // [CRITICAL] 기기 간 데이터 공유를 위해 고정 ID 사용
                         masterUserId = 'master_user_shared'; 
+                        document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
+                        document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
                         fetchApiKeys();
                         subscribeToSavedChannels();
                         setStatus('Firebase 연결 및 인증 성공.', false);
@@ -427,13 +418,16 @@
                             else await signInAnonymously(auth);
                         } catch(e) {
                             console.error("Sign-in failed:", e);
-                            setStatus('Firebase 인증 실패. 네트워크를 확인하세요.', true);
+                            document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
+                            setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
+                            fetchApiKeys(); // 로컬 모드 실행
                         }
                     }
                 });
             } catch(e) {
                 console.error("Firebase Init Error:", e);
-                throw e;
+                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
+                fetchApiKeys(); // 로컬 모드 실행
             }
         }
 
@@ -448,7 +442,7 @@
                 }
             });
 
-            // 엔터키 리스너 추가 (명시적 - keydown으로 변경)
+            // 엔터키 리스너 추가
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keydown', function (e) {
@@ -463,7 +457,6 @@
             let firebaseConfig = initialConfig;
             if (!firebaseConfig) {
                 try {
-                    // [FIX] Cache busting to ensure fresh fetch
                     const res = await fetch('./firebase-config.json?t=' + new Date().getTime());
                     if (res.ok) {
                         firebaseConfig = await res.json();
@@ -479,8 +472,10 @@
             if (firebaseConfig) {
                 await initFirebase(firebaseConfig);
             } else {
-                setStatus('⚠️ firebase-config.json 로드 실패. API 설정에서 구성을 직접 입력해주세요.', true);
+                setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
                 document.getElementById('firebaseConfigSection').classList.remove('hidden');
+                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
+                fetchApiKeys(); // 로컬 모드 실행
             }
         });
 
@@ -497,13 +492,16 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
-            if (!db || !masterUserId) return;
-            
-            onSnapshot(collection(db, 'artifacts', appId, 'users', masterUserId, 'channels'), (snap) => {
-                savedChannelsData = [];
-                snap.forEach(doc => savedChannelsData.push(doc.data()));
-                renderSavedChannelsList();
-            });
+            // Firebase 모드
+            if (db && masterUserId) {
+                onSnapshot(collection(db, 'artifacts', appId, 'users', masterUserId, 'channels'), (snap) => {
+                    savedChannelsData = [];
+                    snap.forEach(doc => savedChannelsData.push(doc.data()));
+                    renderSavedChannelsList();
+                });
+            } 
+            // LocalStorage 모드 (채널 데이터는 용량이 커서 로컬 저장은 권장하지 않으나 필요시 구현 가능)
+            // 여기서는 API 키 관리 위주로 로컬 지원하므로 채널 저장은 생략하거나 추후 구현
         }
 
         function setSavedSort(key) {
@@ -586,7 +584,9 @@
 
         async function deleteSavedChannel(id) {
             if(!confirm('삭제하시겠습니까?')) return;
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', id));
+            if (db && masterUserId) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', id));
+            }
         }
         window.deleteSavedChannel = deleteSavedChannel;
 
@@ -647,15 +647,14 @@
                 
                 const stats90 = calc90DayStats(videos);
                 
-                if (!db || !masterUserId) {
-                    setStatus('분석 완료, 그러나 Firebase 연결 문제로 저장하지 못했습니다.', true);
-                } else {
+                if (db && masterUserId) {
                     const saveRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', meta.id);
                     await setDoc(saveRef, {
                         metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
                     });
+                } else {
+                    setStatus('분석 완료 (로컬 모드 - 저장 안됨)', false);
                 }
-
 
                 channelMetadata = meta;
                 allVideosData = videos;
@@ -857,7 +856,6 @@
 
                 tr.innerHTML = `
                     <td class="px-2 py-3 text-text-light/50 text-center">${idx + 1}</td>
-                    <!-- 제목 열 확장: max-w 제거 및 whitespace-normal 적용 -->
                     <td class="px-2 py-3 font-medium min-w-[200px] break-words whitespace-normal">
                         <div class="flex flex-col">
                             <span class="leading-tight">${v.title}</span>
@@ -971,23 +969,14 @@
         // --- Logic Helpers ---
 
         async function fetchChannelData(query) {
-            // 1. 입력값 디코딩 (한글 핸들 등 처리) 및 공백 제거
             let id = decodeURIComponent(query).trim();
             
-            // 2. Direct Channel ID (UC...)
             if (id.startsWith('UC') && id.length === 24) {
                 return await fetchChannelInfoById(id);
             }
             
-            // 3. YouTube URL Parsing
             if (id.includes('youtube.com') || id.includes('youtu.be')) {
-                // 3-1. Video URL -> Get Channel ID from Video
-                // v=VIDEO_ID 또는 /VIDEO_ID (shorts 포함)
                 const vMatch = id.match(/(?:v=|shorts\/|\/)([\w-]{11})(?:\?|&|\/|$)/);
-                // 주의: 핸들(@)이 있는 경우는 비디오 ID로 오인하지 않도록 우선순위 조정 필요하나, 
-                // 보통 영상 링크엔 @가 없음. 단, @handle/shorts/VIDEO_ID 패턴일 수 있음.
-                // 만약 /shorts/VIDEO_ID 형태라면 비디오 ID로 먼저 시도.
-                
                 if (vMatch && !id.includes('@')) { 
                     try {
                         const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vMatch[1]}&key=${currentApiKey}`);
@@ -996,36 +985,23 @@
                              return await fetchChannelInfoById(vData.items[0].snippet.channelId);
                         }
                     } catch (e) {
-                        // 비디오 ID로 찾기 실패 시 핸들 파싱으로 넘어감
                         console.warn("Video ID lookup failed, trying handle...", e);
                     }
                 }
-                
-                // 3-2. Channel URL (/channel/UC...)
                 const cMatch = id.match(/channel\/(UC[\w-]{22})/);
-                if (cMatch) {
-                    return await fetchChannelInfoById(cMatch[1]);
-                }
+                if (cMatch) return await fetchChannelInfoById(cMatch[1]);
 
-                // 3-3. Handle URL (/@handle...)
-                // /shorts, /videos, /featured 등 서브 경로가 있어도 @handle 부분만 추출
                 const hMatch = id.match(/@([^/?]+)/);
-                if (hMatch) {
-                    return await fetchChannelInfoByHandle('@' + hMatch[1]);
-                }
+                if (hMatch) return await fetchChannelInfoByHandle('@' + hMatch[1]);
                 
                 throw new Error('올바른 채널/영상 URL 형식이 아닙니다.');
             }
             
-            // 4. Handle (starts with @)
             if (id.startsWith('@')) {
-                // /shorts 등 뒤에 붙은 경로 제거
                 const cleanHandle = id.split('/')[0];
                 return await fetchChannelInfoByHandle(cleanHandle);
             }
 
-            // 5. Default: Assume Handle if not ID (try adding @)
-            // 공백이나 특수문자가 없는 경우만 시도
             if (!id.includes('/')) {
                  return await fetchChannelInfoByHandle('@' + id);
             }
@@ -1046,9 +1022,108 @@
             if (!data.items?.length) throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
             return data;
         }
-        
-        // (Other fetch functions remain unchanged)
 
+        // --- API Keys Management ---
+        window.fetchApiKeys = () => {
+             // Local Storage First/Fallback Logic
+             const loadKeys = (fromDB) => {
+                 let keys = [];
+                 if (fromDB && savedChannelsData) {
+                     // Not implemented for keys in Firestore in this snippet for brevity, 
+                     // relying on LocalStorage for keys to ensure offline capability as requested.
+                 }
+                 const local = localStorage.getItem(LOCAL_STORAGE_KEY_API);
+                 if (local) keys = JSON.parse(local);
+                 
+                 const el = document.getElementById('apiKeyList');
+                 el.innerHTML = '';
+                 keys.forEach(d => {
+                     if(d.active) currentApiKey = d.value;
+                     const div = document.createElement('div');
+                     div.className = `flex justify-between items-center p-3 rounded text-sm text-text-light border transition-all duration-300 ${d.active ? 'border-primary-accent bg-bg-dark shadow-[0_0_10px_rgba(233,69,96,0.3)]' : 'border-transparent bg-bg-dark/30 opacity-70'}`;
+                     div.innerHTML = `
+                        <div class="flex flex-col overflow-hidden mr-2">
+                            <span class="font-bold truncate ${d.active ? 'text-primary-accent' : 'text-text-light/70'}">${d.name}</span>
+                            <span class="text-xs ${d.active ? 'text-text-light' : 'text-text-light/30'} truncate">${d.active ? '✅ 사용 중' : '비활성'}</span>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0">
+                            ${!d.active ? `<button onclick="activateApiKey('${d.name}')" class="px-2 py-1 bg-card-bg border border-text-light/20 rounded hover:bg-success-status hover:text-bg-dark transition text-xs">활성</button>` : ''}
+                            <button onclick="editApiKey('${d.name}', '${d.value}')" class="px-2 py-1 text-text-light/50 hover:text-primary-accent transition text-xs">✏️</button>
+                            <button onclick="deleteApiKey('${d.name}')" class="px-2 py-1 text-text-light/50 hover:text-red-500 transition text-xs">🗑️</button>
+                        </div>
+                     `;
+                     el.appendChild(div);
+                 });
+             };
+             
+             // Always load from local for reliability in this demo
+             loadKeys(false);
+        };
+
+        window.saveApiKey = async () => {
+            const name = document.getElementById('newKeyName').value.trim();
+            const val = document.getElementById('newKeyValue').value.trim();
+            if(!name || !val) return alert('이름과 값을 모두 입력해주세요.');
+
+            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
+            
+            if (editingKeyName) {
+                const idx = keys.findIndex(k => k.name === editingKeyName);
+                if(idx !== -1) keys[idx].value = val;
+                resetEditMode();
+            } else {
+                if(keys.some(k => k.name === name)) return alert('이미 존재하는 이름입니다.');
+                keys.push({ name, value: val, active: keys.length === 0 });
+            }
+            
+            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
+            fetchApiKeys();
+            document.getElementById('newKeyName').value = '';
+            document.getElementById('newKeyValue').value = '';
+            
+            // Sync with Firebase if available (Optional enhancement)
+            if (db && masterUserId) {
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', name), { value: val, active: true }, { merge: true });
+                } catch(e) { console.log("Firebase sync failed, local only"); }
+            }
+        };
+
+        window.activateApiKey = (name) => {
+            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
+            keys.forEach(k => k.active = (k.name === name));
+            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
+            fetchApiKeys();
+        };
+
+        window.deleteApiKey = (name) => {
+            if(!confirm('삭제하시겠습니까?')) return;
+            let keys = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY_API) || '[]');
+            keys = keys.filter(k => k.name !== name);
+            localStorage.setItem(LOCAL_STORAGE_KEY_API, JSON.stringify(keys));
+            fetchApiKeys();
+        };
+
+        window.editApiKey = (name, val) => {
+            document.getElementById('newKeyName').value = name;
+            document.getElementById('newKeyValue').value = val;
+            document.getElementById('newKeyName').disabled = true;
+            editingKeyName = name;
+            document.getElementById('saveKeyBtn').textContent = "수정";
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+        };
+
+        window.resetEditMode = () => {
+            editingKeyName = null;
+            document.getElementById('newKeyName').value = '';
+            document.getElementById('newKeyValue').value = '';
+            document.getElementById('newKeyName').disabled = false;
+            document.getElementById('saveKeyBtn').textContent = "저장";
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+        };
+        
+        // Expose functions globally
+        window.applyManualConfig = window.applyManualConfig; 
     </script>
 </body>
 </html>
