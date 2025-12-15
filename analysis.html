@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 🔎 YOUTUBE 채널 심층 분석기 </title>
+    <title> YOUTUBE 채널 심층 분석기</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -381,14 +381,28 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         masterUserId = user.uid;
+                        // [FIX] 인증 완료 후 Firestore 리스너 호출
                         fetchApiKeys();
                         subscribeToSavedChannels();
                     } else {
-                        if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-                        else await signInAnonymously(auth);
+                        try {
+                            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                            else await signInAnonymously(auth);
+                        } catch(e) {
+                            console.error("Sign-in failed:", e);
+                            // 익명 로그인 또는 커스텀 토큰 로그인 실패 시 Firebase 기능 비활성화
+                            document.getElementById('newKeyName').disabled = true;
+                            document.getElementById('newKeyValue').disabled = true;
+                            document.getElementById('saveKeyBtn').disabled = true;
+                            setStatus('Firebase 인증 실패. 저장 기능 불가.', true);
+                        }
                     }
                 });
             } else {
+                // [FIX] Firebase 설정이 없을 경우 키 관리 기능을 명시적으로 비활성화
+                document.getElementById('newKeyName').disabled = true;
+                document.getElementById('newKeyValue').disabled = true;
+                document.getElementById('saveKeyBtn').disabled = true;
                 setStatus('Firebase 설정이 없습니다. 저장 기능 불가.', true);
             }
         });
@@ -406,6 +420,9 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
+            // [FIX] db, masterUserId 유효성 확인 추가
+            if (!db || !masterUserId) return;
+            
             onSnapshot(collection(db, 'artifacts', appId, 'users', masterUserId, 'channels'), (snap) => {
                 savedChannelsData = [];
                 snap.forEach(doc => savedChannelsData.push(doc.data()));
@@ -546,10 +563,16 @@
                 
                 const stats90 = calc90DayStats(videos);
                 
-                const saveRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', meta.id);
-                await setDoc(saveRef, {
-                    metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
-                });
+                // [FIX] 저장 전 유효성 검사
+                if (!db || !masterUserId) {
+                    setStatus('분석 완료, 그러나 Firebase 연결 문제로 저장하지 못했습니다.', true);
+                } else {
+                    const saveRef = doc(db, 'artifacts', appId, 'users', masterUserId, 'channels', meta.id);
+                    await setDoc(saveRef, {
+                        metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
+                    });
+                }
+
 
                 channelMetadata = meta;
                 allVideosData = videos;
@@ -1010,6 +1033,9 @@
 
         // --- API Keys Management ---
         window.fetchApiKeys = () => {
+            // [FIX] db, masterUserId 유효성 확인 추가
+            if (!db || !masterUserId) return;
+
             onSnapshot(collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys'), snap => {
                 const el = document.getElementById('apiKeyList');
                 el.innerHTML = '';
@@ -1038,6 +1064,9 @@
         };
 
         window.activateApiKey = async (id) => {
+            if (!db || !masterUserId) {
+                alert('Firebase 연결 문제로 활성화할 수 없습니다.'); return;
+            }
             const snapshot = await getDocs(collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys'));
             const batch = writeBatch(db);
             snapshot.forEach(doc => {
@@ -1047,6 +1076,9 @@
         };
 
         window.deleteApiKey = async (id) => {
+            if (!db || !masterUserId) {
+                alert('Firebase 연결 문제로 삭제할 수 없습니다.'); return;
+            }
             if(!confirm("이 키를 삭제하시겠습니까?")) return;
             await deleteDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', id));
             // 만약 삭제한 키가 편집 중이었다면 리셋
@@ -1081,15 +1113,20 @@
             const val = document.getElementById('newKeyValue').value.trim();
             
             if(!name || !val) return alert('이름과 값을 모두 입력해주세요.');
+            
+            // [FIX] Firebase 연결 문제 방어 로직 추가
+            if (!db || !masterUserId) {
+                 alert('Firebase 설정이 누락되어 키를 저장할 수 없습니다.');
+                 setStatus('키 저장 실패: Firebase 설정 및 인증 상태를 확인하세요.', true);
+                 return;
+            }
 
             if (editingKeyName) {
                 // 수정 모드: 값만 업데이트
                 await setDoc(doc(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys', name), { value: val }, { merge: true });
                 resetEditMode();
             } else {
-                // 신규 모드: 활성화 상태로 추가 (기존 키들은 그대로 두고 사용자가 직접 활성화하게 하거나, 편의상 자동 활성화)
-                // 여기서는 안전하게 추가만 하고 활성화는 사용자가 선택하도록 함 (active: false 기본)
-                // 단, 첫 키라면 active: true
+                // 신규 모드
                 const snapshot = await getDocs(collection(db, 'artifacts', appId, 'users', masterUserId, 'apiKeys'));
                 const isFirst = snapshot.empty;
                 
