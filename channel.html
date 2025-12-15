@@ -722,11 +722,11 @@
                 }
                 
             } catch (e) {
-                // URL 파싱 실패 시, 원본 URL을 쿼리로 사용
+                // URL 파싱 실패
                 return { type: 'query', value: url };
             }
             
-            // 추출 실패 시, 원본 URL을 쿼리로 사용하도록 기본 처리
+            // 추출 실패 시, 전체 URL을 쿼리로 사용하도록 기본 처리
             return { type: 'query', value: url };
         };
 
@@ -768,13 +768,13 @@
                 let bestMatchItem = null;
                 
                 if (searchData.items && searchData.items.length > 0) {
-                     const targetNameLower = decodeURIComponent(queryTerm).toLowerCase();
-
+                     const targetNameLower = decodeURIComponent(queryTerm).toLowerCase().replace(/@/g, ''); // @ 제거
+                     
                      // 1. 핸들 입력인 경우, 제목과 쿼리(핸들) 이름이 정확히 일치하거나 매우 유사한 채널을 찾습니다.
                      bestMatchItem = searchData.items.find(item => {
                         const titleLower = item.snippet.title.toLowerCase();
-                        // 정확히 일치하거나, 제목에 띄어쓰기 없이 해당 이름이 포함되는지 확인 (매우 중요)
-                        return titleLower === targetNameLower || titleLower.replace(/\s/g, '').includes(targetNameLower.replace(/\s/g, ''));
+                        // 띄어쓰기 제거 후 비교 (채널 제목이 띄어쓰기로 인해 다를 수 있으므로)
+                        return titleLower.replace(/\s/g, '') === targetNameLower.replace(/\s/g, '') || titleLower.replace(/\s/g, '').includes(targetNameLower.replace(/\s/g, ''));
                      });
                      
                      // 2. 정확한 일치 항목이 없으면, API가 랭킹한 첫 번째 결과를 사용합니다.
@@ -1462,7 +1462,7 @@
             
             <!-- Row 1: 유튜브 링크 입력 및 추가 (단독 한 줄) -->
             <form id="add-channel-form" onsubmit="window.handleAddChannel(event)" class="flex space-x-2">
-                <input type="url" id="youtube-url-input" placeholder="유튜브 채널 URL 또는 @핸들 입력" required
+                <input type="text" id="youtube-url-input" placeholder="유튜브 채널 URL 또는 @핸들/채널명 입력" required
                        class="flex-grow bg-gray-800 text-gray-100 border border-gray-700 rounded-lg p-3 focus:ring-indigo-500 focus:border-indigo-500 placeholder:text-gray-500">
                 <button type="submit" class="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md flex-shrink-0 text-lg">
                     추가
