@@ -49,7 +49,7 @@
         }
         @media (min-width: 768px) { .scroll-button { display: flex; } }
 
-        /* 탭 스타일 (CSS 직접 정의로 호환성 확보) */
+        /* 탭 스타일 */
         .tab-btn { 
             flex: 1;
             padding: 1rem;
@@ -58,7 +58,7 @@
             color: rgba(248, 248, 248, 0.4);
             transition: all 0.3s;
             border-radius: 0.75rem 0.75rem 0 0;
-            background-color: #10101a; /* 비활성 배경 */
+            background-color: #10101a; 
             border-bottom: 4px solid transparent;
             font-size: 0.875rem;
             cursor: pointer;
@@ -70,10 +70,9 @@
             background-color: #1f1f2e;
             color: rgba(248, 248, 248, 0.8);
         }
-        /* 활성 탭 강조 스타일 */
         .tab-btn.active { 
             color: #ffffff !important;
-            background-color: #e94560 !important; /* Red Accent */
+            background-color: #e94560 !important; 
             border-bottom-color: #e94560 !important;
             box-shadow: 0 -4px 15px -3px rgba(233, 69, 96, 0.4);
         }
@@ -634,15 +633,15 @@
 
         // --- Saved Channels Logic ---
         function subscribeToSavedChannels() {
-            // Firebase 모드
+            // Firebase 모드 - 채널 목록(요약본) 구독
             if (db && masterUserId) {
-                // Public data collection
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), (snap) => {
+                // Public data collection for list
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channel_list'), (snap) => {
                     savedChannelsData = [];
                     snap.forEach(doc => savedChannelsData.push(doc.data()));
                     renderSavedChannelsList();
                 }, (error) => {
-                    console.error("저장된 채널 구독 오류:", error);
+                    console.error("저장된 채널 목록 구독 오류:", error);
                 });
             } 
         }
@@ -672,9 +671,14 @@
                 let valA, valB;
                 const key = savedSortState.key;
                 
-                if (key === 'title') { valA = a.metadata.title; valB = b.metadata.title; }
-                else if (key === 'subscribers') { valA = parseInt(a.metadata.subscribers); valB = parseInt(b.metadata.subscribers); }
-                else if (key === 'lastUpdated') { valA = new Date(a.lastUpdated); valB = new Date(b.lastUpdated); }
+                // metadata 안에 있는 속성 접근 처리
+                if (key === 'title') { 
+                    valA = a.metadata.title; valB = b.metadata.title; 
+                } else if (key === 'subscribers') { 
+                    valA = parseInt(a.metadata.subscribers); valB = parseInt(b.metadata.subscribers); 
+                } else if (key === 'lastUpdated') { 
+                    valA = new Date(a.lastUpdated); valB = new Date(b.lastUpdated); 
+                }
 
                 if (valA < valB) return savedSortState.dir === 'asc' ? -1 : 1;
                 if (valA > valB) return savedSortState.dir === 'asc' ? 1 : -1;
@@ -685,7 +689,7 @@
                 const meta = ch.metadata;
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-bg-dark/50 cursor-pointer transition border-b border-bg-dark/50';
-                tr.onclick = () => loadChannelFromCache(ch);
+                tr.onclick = () => loadChannelFromCache(meta.id);
                 
                 tr.innerHTML = `
                     <td class="px-4 py-3">
@@ -708,14 +712,38 @@
             });
         }
 
-        function loadChannelFromCache(data) {
-            allVideosData = data.videos || [];
-            channelMetadata = data.metadata;
-            const stats90 = data.stats90 || { avgViews: 0, avgLikes: 0, avgComments: 0 };
+        async function loadChannelFromCache(id) {
+            // 상세 데이터 로드 (전체 비디오 포함)
+            if (db) {
+                setStatus('상세 데이터 로딩 중...', false);
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', id);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        allVideosData = data.videos || [];
+                        channelMetadata = data.metadata;
+                        const stats90 = data.stats90 || { avgViews: 0, avgLikes: 0, avgComments: 0 };
 
-            renderAnalysisUI(stats90);
-            switchTab('analyze');
-            setStatus(`📂 불러오기 완료: ${channelMetadata.title}`, false);
+                        renderAnalysisUI(stats90);
+                        switchTab('analyze');
+                        setStatus(`📂 불러오기 완료: ${channelMetadata.title}`, false);
+                    } else {
+                        // 만약 상세 데이터가 없다면 목록용 데이터라도 사용 시도 (fallback)
+                        const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', id);
+                        const listSnap = await getDoc(listRef);
+                        if(listSnap.exists()) {
+                             alert('상세 비디오 데이터가 없습니다. 다시 분석해주세요.');
+                             refreshChannel(id);
+                        } else {
+                             alert('데이터를 찾을 수 없습니다.');
+                        }
+                    }
+                } catch(e) {
+                    console.error("Load failed:", e);
+                    setStatus('데이터 로드 실패', true);
+                }
+            }
         }
 
         async function refreshChannel(id) {
@@ -728,8 +756,9 @@
         async function deleteSavedChannel(id) {
             if(!confirm('삭제하시겠습니까?')) return;
             if (db && masterUserId) {
-                // Public data path
+                // 두 컬렉션 모두 삭제
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channels', id));
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', id));
             }
         }
         window.deleteSavedChannel = deleteSavedChannel;
@@ -791,34 +820,28 @@
                 
                 const stats90 = calc90DayStats(videos);
                 
-                // 데이터 저장 로직 개선
+                // [FIX] 데이터 저장 로직 개선 (이원화 저장)
                 if (db && masterUserId) {
+                    // 1. 상세 데이터 저장 (channels)
                     const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
                     try {
-                        // 1차 시도: 전체 데이터 저장
                         await setDoc(saveRef, {
                             metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
                         });
+                        
+                        // 2. 목록용 요약 데이터 저장 (channel_list) - 비디오 리스트 제외
+                        const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
+                        await setDoc(listRef, {
+                            metadata: meta, stats90: stats90, lastUpdated: new Date().toISOString()
+                        });
+                        
                     } catch (saveError) {
-                        console.warn("전체 데이터 저장 실패 (용량 초과 가능성), 요약본 저장 시도:", saveError);
-                        try {
-                            // 2차 시도: 비디오 설명/태그 제외하고 저장 (용량 줄이기)
-                            const simpleVideos = videos.map(v => ({
-                                videoId: v.videoId, title: v.title, publishedAt: v.publishedAt,
-                                viewCount: v.viewCount, likeCount: v.likeCount, commentCount: v.commentCount,
-                                durationSeconds: v.durationSeconds, durationCategory: v.durationCategory,
-                                likeRatio: v.likeRatio, commentRatio: v.commentRatio,
-                                likeRating: v.likeRating, commentRating: v.commentRating
-                                // description, tags 제외
-                            }));
-                            await setDoc(saveRef, {
-                                metadata: meta, videos: simpleVideos, stats90: stats90, lastUpdated: new Date().toISOString()
-                            });
-                            setStatus('분석 완료 (일부 상세 데이터 제외하고 저장됨)', false);
-                        } catch (retryError) {
-                            console.error("요약본 저장 실패:", retryError);
-                            setStatus('분석 완료되었으나 저장에 실패했습니다. (데이터 크기 초과)', true);
-                        }
+                        console.warn("전체 데이터 저장 실패, 요약본만 저장 시도:", saveError);
+                        // 실패 시 요약본이라도 저장
+                         const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
+                        await setDoc(listRef, {
+                            metadata: meta, stats90: stats90, lastUpdated: new Date().toISOString()
+                        });
                     }
                 } else {
                     setStatus('분석 완료 (로컬 모드 - 저장 안됨)', false);
