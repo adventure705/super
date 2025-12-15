@@ -49,7 +49,7 @@
         }
         @media (min-width: 768px) { .scroll-button { display: flex; } }
 
-        /* 탭 스타일 */
+        /* 탭 스타일 (CSS 직접 정의로 호환성 확보) */
         .tab-btn { 
             flex: 1;
             padding: 1rem;
@@ -58,7 +58,7 @@
             color: rgba(248, 248, 248, 0.4);
             transition: all 0.3s;
             border-radius: 0.75rem 0.75rem 0 0;
-            background-color: #10101a; 
+            background-color: #10101a; /* 비활성 배경 */
             border-bottom: 4px solid transparent;
             font-size: 0.875rem;
             cursor: pointer;
@@ -70,9 +70,10 @@
             background-color: #1f1f2e;
             color: rgba(248, 248, 248, 0.8);
         }
+        /* 활성 탭 강조 스타일 */
         .tab-btn.active { 
             color: #ffffff !important;
-            background-color: #e94560 !important; 
+            background-color: #e94560 !important; /* Red Accent */
             border-bottom-color: #e94560 !important;
             box-shadow: 0 -4px 15px -3px rgba(233, 69, 96, 0.4);
         }
@@ -587,7 +588,7 @@
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && !e.isComposing) {
                         e.preventDefault(); 
                         startAnalysis();
                     }
