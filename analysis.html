@@ -29,10 +29,12 @@
         .shorts-scroll-container { position: relative; }
         .shorts-content { overflow-x: auto; scroll-behavior: smooth; white-space: nowrap; padding-bottom: 10px; }
         
-        /* 스크롤 버튼 스타일 개선 */
+        /* 스크롤 버튼 스타일 개선 (절대 위치 보장) */
         .scroll-button {
-            @apply absolute top-1/2 -translate-y-1/2 z-20 rounded-full p-3 shadow-lg transition-all duration-200 hidden md:flex items-center justify-center font-bold text-lg;
+            @apply absolute z-20 rounded-full p-3 shadow-lg transition-all duration-200 hidden md:flex items-center justify-center font-bold text-lg;
             width: 40px; height: 40px;
+            top: 50%; /* 수직 중앙 */
+            transform: translateY(-50%);
         }
 
         /* 탭 스타일 개선 - 레드 계열 강조 */
@@ -245,7 +247,7 @@
                     <div id="calendarBody" class="grid grid-cols-7 gap-1 min-w-[300px]"></div>
                 </div>
 
-                <!-- Shorts 미리보기 (정렬 기능 및 버튼 위치 수정됨) -->
+                <!-- Shorts 미리보기 (버튼 위치 및 색상 수정됨) -->
                 <h3 class="text-xl font-semibold mb-4 border-b border-primary-accent/50 pb-2 flex flex-col sm:flex-row justify-between items-center gap-2">
                     <span>🔥 최신 Shorts (1분 이하)</span>
                     <div class="flex gap-2 text-sm items-center">
@@ -261,10 +263,13 @@
                     </div>
                 </h3>
                 <div id="shortsContainer" class="shorts-scroll-container group relative py-4 px-10 bg-card-bg rounded-xl shadow-inner mb-10 hidden">
-                    <!-- 버튼 위치 수정: 빨간색 강조 -->
-                    <button class="scroll-button left-2 bg-primary-accent text-white hover:bg-primary-accent/80" onclick="scrollShorts(-300)">◀</button>
+                    <!-- 왼쪽 버튼 -->
+                    <button class="scroll-button left-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="left: 0.5rem;" onclick="scrollShorts(-300)">◀</button>
+                    
                     <div id="shortsContent" class="shorts-content flex space-x-4 px-1 overflow-x-auto scrollbar-hide"></div>
-                    <button class="scroll-button right-2 bg-primary-accent text-white hover:bg-primary-accent/80" onclick="scrollShorts(300)">▶</button>
+                    
+                    <!-- 오른쪽 버튼 (위치 및 색상 명시적 수정) -->
+                    <button class="scroll-button right-2 bg-primary-accent text-white hover:bg-primary-accent/80" style="right: 0.5rem; left: auto;" onclick="scrollShorts(300)">▶</button>
                 </div>
 
                 <!-- 비디오 리스트 & 필터 & 다운로드 -->
@@ -1114,18 +1119,43 @@
             return html;
         }
 
-        // --- CSV Export ---
+        // --- CSV Export (Updated) ---
         window.exportToCSV = () => {
             if (!allVideosData.length) return alert('데이터 없음');
-            const bom = "\uFEFF";
-            const header = "제목,게시일,조회수,좋아요,댓글,길이(초),분류,태그,설명\n";
+            
+            // Recalculate stats for latest data
+            const stats90 = calc90DayStats(allVideosData);
+            
+            const bom = "\uFEFF"; // UTF-8 BOM
+            
+            // 1. Channel Metadata Headers
+            let csvContent = `채널명,${channelMetadata.title}\n`;
+            csvContent += `채널ID,${channelMetadata.id}\n`;
+            csvContent += `구독자수,${channelMetadata.subscribers}\n`;
+            csvContent += `총조회수,${channelMetadata.totalViews}\n`;
+            csvContent += `총영상수,${channelMetadata.totalVideos}\n`;
+            csvContent += `개설일,${channelMetadata.publishedAt}\n`;
+            csvContent += `90일평균조회수,${stats90.avgViews}\n`;
+            csvContent += `90일평균좋아요,${stats90.avgLikes}\n`;
+            csvContent += `90일평균댓글,${stats90.avgComments}\n`;
+            csvContent += `채널설명,"${(channelMetadata.description||'').replace(/"/g, '""').replace(/\n/g, ' ')}"\n\n`;
+
+            // 2. Video Data Headers
+            csvContent += "제목,유튜브링크,게시일,조회수,좋아요,댓글,길이(초),분류,태그,설명\n";
+            
+            // 3. Video Rows
             const rows = allVideosData.map(v => {
                 const safeTitle = `"${v.title.replace(/"/g, '""')}"`;
                 const safeDesc = `"${(v.description||'').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
                 const safeTags = `"${(v.tags||[]).join('|')}"`;
-                return `${safeTitle},${v.publishedAt},${v.viewCount},${v.likeCount},${v.commentCount},${v.durationSeconds},${v.durationCategory},${safeTags},${safeDesc}`;
+                const link = `https://youtu.be/${v.videoId}`;
+                
+                return `${safeTitle},${link},${v.publishedAt},${v.viewCount},${v.likeCount},${v.commentCount},${v.durationSeconds},${v.durationCategory},${safeTags},${safeDesc}`;
             }).join("\n");
-            const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
+
+            csvContent += rows;
+
+            const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
