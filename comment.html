@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 댓글 심층 분석기 </title>
+    <title>YouTube 댓글 심층 분석기 (Pro - Cloud Sync)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -612,6 +612,7 @@
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('statsDashboard').classList.add('hidden');
             document.getElementById('webReport').classList.add('hidden');
+            // Removed Markdown Section Hiding as it is removed
             updateLoadingText(0, text);
         }
 
@@ -1383,7 +1384,8 @@
         }
 
         const extractVideoId = (url) => {
-            const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+            // Added 'shorts/' to the regex
+            const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/);
             return (match && match[2].length === 11) ? match[2] : null;
         };
 
