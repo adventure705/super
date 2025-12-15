@@ -277,6 +277,14 @@
                                     <label class="cursor-pointer"><input type="checkbox" class="filter-like" value="4" checked onchange="renderVideoList()"><br><span class="text-xs">4★</span></label>
                                     <label class="cursor-pointer"><input type="checkbox" class="filter-like" value="5" checked onchange="renderVideoList()"><br><span class="text-xs">5★</span></label>
                                 </div>
+                                <h4 class="text-xs font-bold text-primary-accent mb-2 mt-3">C/V 등급 (댓글 비율)</h4>
+                                <div class="grid grid-cols-5 gap-1 text-center mb-3 text-text-light">
+                                    <label class="cursor-pointer"><input type="checkbox" class="filter-comment" value="1" checked onchange="renderVideoList()"><br><span class="text-xs">1★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" class="filter-comment" value="2" checked onchange="renderVideoList()"><br><span class="text-xs">2★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" class="filter-comment" value="3" checked onchange="renderVideoList()"><br><span class="text-xs">3★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" class="filter-comment" value="4" checked onchange="renderVideoList()"><br><span class="text-xs">4★</span></label>
+                                    <label class="cursor-pointer"><input type="checkbox" class="filter-comment" value="5" checked onchange="renderVideoList()"><br><span class="text-xs">5★</span></label>
+                                </div>
                             </div>
                         </div>
                         <button id="downloadCsvBtn" class="px-4 py-2 bg-success-status text-bg-dark font-bold rounded text-sm hover:bg-success-status/80" onclick="exportToCSV()" disabled>⬇️ CSV</button>
@@ -289,7 +297,7 @@
                         <thead class="bg-bg-dark">
                             <tr>
                                 <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase w-10">No</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase min-w-[200px] sortable-header" onclick="setVideoSort('title')">제목 ↕</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-text-light/70 uppercase min-w-[300px] sortable-header" onclick="setVideoSort('title')">제목 ↕</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase min-w-[80px] sortable-header" onclick="setVideoSort('publishedAt')">게시일 ↕</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase min-w-[80px] sortable-header" onclick="setVideoSort('viewCount')">조회수 ↕</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-text-light/70 uppercase min-w-[60px] sortable-header" onclick="setVideoSort('durationSeconds')">길이 ↕</th>
@@ -414,11 +422,12 @@
                 }
             });
 
-            // 엔터키 리스너 추가
+            // 엔터키 리스너 추가 (명시적)
             const inputEl = document.getElementById('channelId');
             if (inputEl) {
                 inputEl.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') {
+                        e.preventDefault(); // 폼 제출 등 기본 동작 방지
                         startAnalysis();
                     }
                 });
@@ -752,12 +761,16 @@
 
             const durationFilters = Array.from(document.querySelectorAll('.filter-type:checked')).map(c => c.value);
             const likeFilters = Array.from(document.querySelectorAll('.filter-like:checked')).map(c => parseInt(c.value));
+            // New C/V Filters
+            const commentFilters = Array.from(document.querySelectorAll('.filter-comment:checked')).map(c => parseInt(c.value));
             
             let filtered = allVideosData.filter(v => {
                 if (currentFilterDate && !v.publishedAt.startsWith(currentFilterDate)) return false;
                 if (!durationFilters.includes(v.durationCategory)) return false;
                 const lRate = v.likeRating || 1;
                 if (!likeFilters.includes(lRate)) return false;
+                const cRate = v.commentRating || 1;
+                if (!commentFilters.includes(cRate)) return false;
                 return true;
             });
 
