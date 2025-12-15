@@ -671,73 +671,62 @@
          * 다양한 형태의 URL에서 채널 ID 또는 핸들을 추출합니다.
          */
         const extractChannelIdentifier = (url) => {
+            const trimmedUrl = url.trim();
+
+            // 1. 순수 @핸들 입력 (@name)
+            if (trimmedUrl.startsWith('@')) {
+                 return { type: 'handle', value: decodeURIComponent(trimmedUrl.substring(1)) };
+            }
+            
+            // 2. 순수 채널 이름 입력 (URL 스키마나 도메인이 없는 경우)
+            if (!trimmedUrl.includes('http') && !trimmedUrl.includes('/') && !trimmedUrl.includes('.')) {
+                 // 예: "스토리슈퍼", "gunesbuk"
+                 return { type: 'handle', value: decodeURIComponent(trimmedUrl) };
+            }
+            
             try {
-                // 입력된 URL이 핸들(@name) 형태인 경우, URL 객체 생성 전에 스키마를 추가하여 파싱 오류 방지
-                const normalizedUrl = url.includes('http') || url.startsWith('@') ? url : `https://${url}`;
-                
-                // 쿼리 파라미터와 #fragment를 제거
-                const urlParts = normalizedUrl.split('?')[0].split('#')[0];
-                const urlObj = new URL(urlParts);
+                // 3. URL 파싱 시도 (https://www.youtube.com/channel/UC...)
+                const urlObj = new URL(trimmedUrl.includes('http') ? trimmedUrl : `https://${trimmedUrl}`);
                 const pathname = urlObj.pathname.toLowerCase();
                 const pathParts = pathname.split('/').filter(p => p);
                 
-                // 1. 표준 채널 ID: /channel/UCXXXXX
+                // 3-1. 표준 채널 ID: /channel/UCXXXXX (가장 확실)
                 if (pathname.includes('/channel/') && pathParts.length >= 2) {
                     return { type: 'channelId', value: pathParts[pathParts.indexOf('channel') + 1] };
                 }
 
-                // 2. 레거시 사용자 이름: /user/username
+                // 3-2. 레거시 사용자 이름: /user/username
                 if (pathname.includes('/user/') && pathParts.length >= 2) {
                     return { type: 'username', value: pathParts[pathParts.indexOf('user') + 1] };
                 }
                 
-                // 3. 핸들: /@handle, /@handle/shorts, /@handle/videos 등
-                if (pathname.includes('/@') || url.startsWith('@')) {
-                    // pathParts에서 '@'로 시작하는 세그먼트를 찾거나, 첫 번째 세그먼트를 사용
-                    const handleSegment = pathParts.find(p => p.startsWith('@')) || (pathParts.length > 0 && pathParts[0].startsWith('@') ? pathParts[0] : '');
+                // 3-3. 핸들 URL: /@handle/ 또는 youtube.com/handle
+                if (pathname.includes('/@') || (urlObj.hostname.includes('youtube.com') && pathParts.length > 0)) {
+                    let potentialHandleSegment = pathParts.find(p => p.startsWith('@'));
                     
-                    if (handleSegment) {
-                         // %ED%95%9C%EA%B5%AD 등 인코딩된 문자열을 디코딩하여 핸들로 사용
-                         const handle = decodeURIComponent(handleSegment.startsWith('@') ? handleSegment.substring(1) : handleSegment);
+                    if (potentialHandleSegment) {
+                         const handle = decodeURIComponent(potentialHandleSegment.substring(1));
                          return { type: 'handle', value: handle };
-                    } else if (url.startsWith('@')) {
-                        // 입력이 순수한 @handle 일 경우 (URL 객체 생성 과정에서 @가 경로로 인식 안될 수 있음)
-                        return { type: 'handle', value: decodeURIComponent(url.substring(1)) };
+                    } else if (pathParts.length > 0 && pathParts[0] !== 'watch' && pathParts[0] !== 'shorts' && pathParts[0] !== 'videos') {
+                        // ex: youtube.com/handleName
+                        const handle = decodeURIComponent(pathParts[0]);
+                         if (!handle.match(/^[a-z0-9]{24}$/i)) { // UC ID처럼 보이지 않으면 핸들로 간주
+                             return { type: 'handle', value: handle };
+                         }
                     }
                 }
 
-                // 4. 단축 URL (youtu.be) 처리: video ID 추출 후 search API로 채널 검색
-                if (urlObj.hostname.includes('youtu.be')) {
-                     // 단축 링크는 비디오 ID가 경로의 첫 번째 부분입니다.
-                     const videoId = pathParts[0];
-                     if (videoId) {
-                         // video ID를 쿼리하여 채널 ID를 찾는 방식으로 처리
-                         return { type: 'query', value: videoId };
-                     }
-                }
-                
-                // 5. 루트 URL에 핸들만 남은 경우 (https://youtube.com/handle)
-                let potentialHandle = null;
-                if (pathParts.length > 0) {
-                     let normalizedPath = pathParts[0].toLowerCase();
-                     if (normalizedPath !== 'watch' && normalizedPath !== 'shorts' && normalizedPath !== 'videos') {
-                         potentialHandle = decodeURIComponent(pathParts[0]);
-                     }
-                }
-
-                if (potentialHandle) {
-                    // ID가 아닐 가능성이 높을 때만 핸들로 간주
-                    if (!potentialHandle.match(/^[a-z0-9]{24}$/i)) {
-                         return { type: 'handle', value: potentialHandle };
-                    }
+                // 4. 단축 URL (youtu.be/video_id) 처리: video ID 추출 후 search API로 채널 검색 (query로 대체)
+                if (urlObj.hostname.includes('youtu.be') && pathParts.length > 0) {
+                    return { type: 'query', value: pathParts[0] }; 
                 }
                 
             } catch (e) {
-                // URL 파싱 실패
-                return { type: 'error', value: e.message };
+                // URL 파싱 실패 시, 원본 URL을 쿼리로 사용
+                return { type: 'query', value: url };
             }
             
-            // 추출 실패 시, 전체 URL을 쿼리로 사용하도록 기본 처리
+            // 추출 실패 시, 원본 URL을 쿼리로 사용하도록 기본 처리
             return { type: 'query', value: url };
         };
 
@@ -772,23 +761,23 @@
                 const queryTerm = identifier.value;
                 
                 // search API를 사용하여 정확도를 높이고, 채널 제목이나 설명에 핸들 이름이 포함된 결과를 가져옵니다.
-                // maxResults를 5개로 늘려 더 많은 결과를 검토할 기회를 만듭니다.
+                // maxResults=5로 늘려 정확한 채널을 찾을 기회를 만듭니다.
                 const searchUrl = `${YOUTUBE_API_BASE}/search?key=${apiKey}&q=${encodeURIComponent(queryTerm)}&type=channel&part=snippet&maxResults=5`; 
                 const searchData = await fetchWithBackoff(searchUrl);
                 
                 let bestMatchItem = null;
                 
                 if (searchData.items && searchData.items.length > 0) {
-                     const decodedQueryTerm = decodeURIComponent(queryTerm).toLowerCase();
+                     const targetNameLower = decodeURIComponent(queryTerm).toLowerCase();
 
-                     // 1. 핸들 입력인 경우, 제목과 쿼리(핸들) 이름이 정확히 일치하는 채널을 찾습니다.
+                     // 1. 핸들 입력인 경우, 제목과 쿼리(핸들) 이름이 정확히 일치하거나 매우 유사한 채널을 찾습니다.
                      bestMatchItem = searchData.items.find(item => {
                         const titleLower = item.snippet.title.toLowerCase();
-                        // 정확히 일치하거나, 핸들로 시작하는지 확인
-                        return titleLower === decodedQueryTerm || titleLower.startsWith(decodedQueryTerm);
+                        // 정확히 일치하거나, 제목에 띄어쓰기 없이 해당 이름이 포함되는지 확인 (매우 중요)
+                        return titleLower === targetNameLower || titleLower.replace(/\s/g, '').includes(targetNameLower.replace(/\s/g, ''));
                      });
                      
-                     // 2. 정확한 일치 항목이 없으면, API가 랭킹한 첫 번째 결과를 사용합니다. (이 경우에도 최신 채널을 보장하기 어려움)
+                     // 2. 정확한 일치 항목이 없으면, API가 랭킹한 첫 번째 결과를 사용합니다.
                      if (!bestMatchItem) {
                          bestMatchItem = searchData.items[0];
                      }
