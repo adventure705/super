@@ -29,26 +29,59 @@
         .shorts-scroll-container { position: relative; }
         .shorts-content { overflow-x: auto; scroll-behavior: smooth; white-space: nowrap; padding-bottom: 10px; }
         
-        /* 스크롤 버튼 스타일 개선 (절대 위치 보장) */
+        /* 스크롤 버튼 스타일 (CSS 직접 정의) */
         .scroll-button {
-            @apply absolute z-20 rounded-full p-3 shadow-lg transition-all duration-200 hidden md:flex items-center justify-center font-bold text-lg;
-            width: 40px; height: 40px;
-            top: 50%; /* 수직 중앙 */
+            position: absolute;
+            z-index: 20;
+            border-radius: 9999px;
+            padding: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.125rem;
+            width: 40px;
+            height: 40px;
+            top: 50%;
             transform: translateY(-50%);
         }
+        @media (min-width: 768px) { .scroll-button { display: flex; } }
 
-        /* 탭 스타일 개선 - 레드 계열 강조 */
+        /* 탭 스타일 (CSS 직접 정의로 호환성 확보) */
         .tab-btn { 
-            @apply flex-1 py-4 text-center font-bold text-text-light/40 transition-all duration-300 rounded-t-xl border-b-4 border-transparent bg-[#10101a] text-sm sm:text-base; /* 비활성 */
+            flex: 1;
+            padding: 1rem;
+            text-align: center;
+            font-weight: 700;
+            color: rgba(248, 248, 248, 0.4);
+            transition: all 0.3s;
+            border-radius: 0.75rem 0.75rem 0 0;
+            background-color: #10101a; /* 비활성 배경 */
+            border-bottom: 4px solid transparent;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+        @media (min-width: 640px) {
+            .tab-btn { font-size: 1rem; }
         }
         .tab-btn:hover {
-            @apply bg-[#1f1f2e] text-text-light/70;
+            background-color: #1f1f2e;
+            color: rgba(248, 248, 248, 0.8);
         }
+        /* 활성 탭 강조 스타일 */
         .tab-btn.active { 
-            @apply text-white bg-primary-accent border-primary-accent shadow-[0_-4px_15px_-3px_rgba(233,69,96,0.4)]; /* 활성: 레드(#e94560) */
+            color: #ffffff !important;
+            background-color: #e94560 !important; /* Red Accent */
+            border-bottom-color: #e94560 !important;
+            box-shadow: 0 -4px 15px -3px rgba(233, 69, 96, 0.4);
         }
         .tab-container {
-            @apply flex gap-2 border-b border-card-bg mb-6;
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid #282a4d;
+            margin-bottom: 1.5rem;
         }
 
         /* 별점 색상 */
@@ -438,6 +471,55 @@
             return html;
         }
 
+        // --- Core Logic Functions (Restored) ---
+
+        function calculateEngagementRatings(videos) {
+            if (!videos.length) return;
+            const assignStars = (list, keyRatio, keyRating) => {
+                const sorted = list.map(v => v[keyRatio]).sort((a, b) => a - b);
+                const len = sorted.length;
+                if (len === 0) return;
+                const p20 = sorted[Math.floor(len * 0.2)];
+                const p40 = sorted[Math.floor(len * 0.4)];
+                const p60 = sorted[Math.floor(len * 0.6)];
+                const p80 = sorted[Math.floor(len * 0.8)];
+                list.forEach(v => {
+                    const val = v[keyRatio];
+                    if (val >= p80) v[keyRating] = 5;
+                    else if (val >= p60) v[keyRating] = 4;
+                    else if (val >= p40) v[keyRating] = 3;
+                    else if (val >= p20) v[keyRating] = 2;
+                    else v[keyRating] = 1;
+                });
+            };
+            assignStars(videos, 'likeRatio', 'likeRating');
+            assignStars(videos, 'commentRatio', 'commentRating');
+        }
+
+        function calc90DayStats(videos) {
+            const d = new Date(); d.setDate(d.getDate()-90);
+            const recent = videos.filter(v => new Date(v.publishedAt) >= d);
+            if (!recent.length) return { avgViews:0, avgLikes:0, avgComments:0 };
+            const sum = k => recent.reduce((a,b) => a + (b[k]||0), 0);
+            return {
+                avgViews: Math.round(sum('viewCount')/recent.length),
+                avgLikes: Math.round(sum('likeCount')/recent.length),
+                avgComments: Math.round(sum('commentCount')/recent.length)
+            };
+        }
+
+        function generateCalendarData(videos) {
+            const data = {};
+            videos.forEach(v => {
+                const m = v.publishedAt.slice(0, 7);
+                if (!data[m]) data[m] = new Map();
+                const date = v.publishedAt.slice(0, 10);
+                data[m].set(date, (data[m].get(date)||0)+1);
+            });
+            availableMonths = Object.keys(data).sort().reverse();
+            return data;
+        }
+
         // --- Firebase Setup ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -705,6 +787,7 @@
                 const stats90 = calc90DayStats(videos);
                 
                 if (db && masterUserId) {
+                    // Public data path
                     const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
                     await setDoc(saveRef, {
                         metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
