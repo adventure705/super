@@ -348,7 +348,8 @@
 
         // Firebase Setup
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // [FIX] __firebase_config might be missing in standalone mode
+        const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -372,36 +373,52 @@
                 });
             }
 
-            if (Object.keys(firebaseConfig).length > 0) {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        masterUserId = user.uid;
-                        // [FIX] 인증 완료 후 Firestore 리스너 호출
-                        fetchApiKeys();
-                        subscribeToSavedChannels();
+            // [FIX] Initialize Firebase: Check global var OR fetch config file
+            let firebaseConfig = initialConfig;
+            if (!firebaseConfig) {
+                try {
+                    const res = await fetch('./firebase_config.json');
+                    if (res.ok) {
+                        firebaseConfig = await res.json();
+                        console.log("Loaded firebase_config.json");
                     } else {
-                        try {
-                            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-                            else await signInAnonymously(auth);
-                        } catch(e) {
-                            console.error("Sign-in failed:", e);
-                            // 익명 로그인 또는 커스텀 토큰 로그인 실패 시 Firebase 기능 비활성화
-                            document.getElementById('newKeyName').disabled = true;
-                            document.getElementById('newKeyValue').disabled = true;
-                            document.getElementById('saveKeyBtn').disabled = true;
-                            setStatus('Firebase 인증 실패. 저장 기능 불가.', true);
-                        }
+                        console.warn("firebase_config.json not found.");
                     }
-                });
+                } catch(e) {
+                    console.error("Config fetch error:", e);
+                }
+            }
+
+            if (firebaseConfig) {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            // [FIX] Use shared master user ID for persistence across devices
+                            masterUserId = 'master_user_shared'; 
+                            
+                            // [FIX] 인증 완료 후 Firestore 리스너 호출
+                            fetchApiKeys();
+                            subscribeToSavedChannels();
+                        } else {
+                            try {
+                                if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                                else await signInAnonymously(auth);
+                            } catch(e) {
+                                console.error("Sign-in failed:", e);
+                                setStatus('Firebase 인증 실패. 저장 기능 불가.', true);
+                            }
+                        }
+                    });
+                } catch(e) {
+                    console.error("Firebase init failed:", e);
+                    setStatus('Firebase 초기화 오류.', true);
+                }
             } else {
-                // [FIX] Firebase 설정이 없을 경우 키 관리 기능을 명시적으로 비활성화
-                document.getElementById('newKeyName').disabled = true;
-                document.getElementById('newKeyValue').disabled = true;
-                document.getElementById('saveKeyBtn').disabled = true;
-                setStatus('Firebase 설정이 없습니다. 저장 기능 불가.', true);
+                // [FIX] Don't disable inputs, just warn
+                setStatus('Firebase 설정(firebase_config.json)을 찾을 수 없습니다. 저장 기능이 제한됩니다.', true);
             }
         });
 
@@ -841,174 +858,6 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
         window.copyToClipboard = copyToClipboard;
-
-        // --- Logic Helpers ---
-
-        async function fetchChannelData(query) {
-            let id = query;
-            
-            // 1. YouTube Video URL Check
-            if (query.includes('youtu')) {
-                const vid = query.match(/v=([\w-]+)/) || query.match(/\/([\w-]+)$/);
-                if (vid && vid[1]) {
-                    const vRes = await fetch(`${API_BASE_URL}videos?part=snippet&id=${vid[1]}&key=${currentApiKey}`);
-                    const vData = await checkResponse(vRes); // Use checkResponse
-                    
-                    if (!vData.items || vData.items.length === 0) {
-                        throw new Error('해당 링크에서 비디오 정보를 찾을 수 없습니다.');
-                    }
-                    id = vData.items[0].snippet.channelId;
-                }
-            } 
-            // 2. Handle Check (if not Channel ID 'UC...')
-            else if (!query.startsWith('UC')) {
-                const handle = query.startsWith('@') ? query : '@' + query;
-                const hRes = await fetch(`${API_BASE_URL}channels?part=id&forHandle=${handle}&key=${currentApiKey}`);
-                const hData = await checkResponse(hRes); // Use checkResponse
-                
-                if (!hData.items || hData.items.length === 0) {
-                    throw new Error(`핸들(${handle})로 채널을 찾을 수 없습니다.`);
-                }
-                id = hData.items[0].id;
-            }
-            
-            // 3. Final Channel Data Fetch
-            const res = await fetch(`${API_BASE_URL}channels?part=snippet,contentDetails,statistics&id=${id}&key=${currentApiKey}`);
-            const data = await checkResponse(res); // Use checkResponse
-            
-            if (!data.items || data.items.length === 0) {
-                throw new Error('채널 정보를 불러올 수 없습니다. ID나 핸들을 확인해주세요.');
-            }
-            return data;
-        }
-
-        async function fetchAllVideos(playlistId, videos = [], token = '') {
-            const res = await fetch(`${API_BASE_URL}playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50&pageToken=${token}&key=${currentApiKey}`);
-            const data = await res.json();
-            if (!data.items) return videos;
-            data.items.forEach(i => {
-                if (i.snippet.title !== 'Deleted video') {
-                    videos.push({
-                        videoId: i.contentDetails.videoId,
-                        title: i.snippet.title,
-                        publishedAt: i.snippet.publishedAt
-                    });
-                }
-            });
-            if (data.nextPageToken) return fetchAllVideos(playlistId, videos, data.nextPageToken);
-            return videos;
-        }
-
-        async function fetchVideoStats(ids) {
-            const stats = [];
-            while (ids.length) {
-                const batch = ids.splice(0, 50);
-                const res = await fetch(`${API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${batch.join(',')}&key=${currentApiKey}`);
-                const data = await res.json();
-                if (data.items) stats.push(...data.items);
-            }
-            return stats;
-        }
-
-        function mergeVideoData(videos, statsList) {
-            const map = new Map(statsList.map(s => [s.id, s]));
-            return videos.map(v => {
-                const s = map.get(v.videoId);
-                if (!s) return v;
-                const dur = parseDuration(s.contentDetails.duration);
-                const views = parseInt(s.statistics.viewCount || 0);
-                const likes = parseInt(s.statistics.likeCount || 0);
-                const comments = parseInt(s.statistics.commentCount || 0);
-                return {
-                    ...v,
-                    viewCount: views, likeCount: likes, commentCount: comments,
-                    durationSeconds: dur,
-                    durationCategory: dur <= 60 ? 'Short' : (dur < 180 ? 'Mid' : 'Long'),
-                    tags: s.snippet.tags || [],
-                    description: s.snippet.description,
-                    likeRatio: views ? (likes/views)*100 : 0,
-                    commentRatio: views ? (comments/views)*100 : 0,
-                    likeRating: 1,
-                    commentRating: 1
-                };
-            });
-        }
-
-        function calculateEngagementRatings(videos) {
-            if (!videos.length) return;
-            const assignStars = (list, keyRatio, keyRating) => {
-                const sorted = list.map(v => v[keyRatio]).sort((a, b) => a - b);
-                const len = sorted.length;
-                if (len === 0) return;
-                const p20 = sorted[Math.floor(len * 0.2)];
-                const p40 = sorted[Math.floor(len * 0.4)];
-                const p60 = sorted[Math.floor(len * 0.6)];
-                const p80 = sorted[Math.floor(len * 0.8)];
-                list.forEach(v => {
-                    const val = v[keyRatio];
-                    if (val >= p80) v[keyRating] = 5;
-                    else if (val >= p60) v[keyRating] = 4;
-                    else if (val >= p40) v[keyRating] = 3;
-                    else if (val >= p20) v[keyRating] = 2;
-                    else v[keyRating] = 1;
-                });
-            };
-            assignStars(videos, 'likeRatio', 'likeRating');
-            assignStars(videos, 'commentRatio', 'commentRating');
-        }
-
-        function calc90DayStats(videos) {
-            const d = new Date(); d.setDate(d.getDate()-90);
-            const recent = videos.filter(v => new Date(v.publishedAt) >= d);
-            if (!recent.length) return { avgViews:0, avgLikes:0, avgComments:0 };
-            const sum = k => recent.reduce((a,b) => a + (b[k]||0), 0);
-            return {
-                avgViews: Math.round(sum('viewCount')/recent.length),
-                avgLikes: Math.round(sum('likeCount')/recent.length),
-                avgComments: Math.round(sum('commentCount')/recent.length)
-            };
-        }
-
-        function generateCalendarData(videos) {
-            const data = {};
-            videos.forEach(v => {
-                const m = v.publishedAt.slice(0, 7);
-                if (!data[m]) data[m] = new Map();
-                const date = v.publishedAt.slice(0, 10);
-                data[m].set(date, (data[m].get(date)||0)+1);
-            });
-            availableMonths = Object.keys(data).sort().reverse();
-            return data;
-        }
-
-        function formatNumber(num) { return new Intl.NumberFormat('ko-KR').format(num); }
-        function parseDuration(pt) {
-            const m = pt.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-            const h = parseInt(m[1])||0, min = parseInt(m[2])||0, sec = parseInt(m[3])||0;
-            return h*3600 + min*60 + sec;
-        }
-        function formatTime(sec) {
-            const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
-            return h>0 ? `${h}:${m}:${s}` : `${m}:${s}`;
-        }
-        function setStatus(msg, err) {
-            const el = document.getElementById('statusMessage');
-            el.textContent = msg;
-            el.className = `mt-4 text-center text-sm font-medium ${err ? 'text-primary-accent' : 'text-success-status'}`;
-        }
-        function getColorForCategory(cat) {
-            if (cat === 'Short') return 'text-primary-accent'; 
-            if (cat === 'Mid') return 'text-text-light/80';    
-            if (cat === 'Long') return 'text-success-status';  
-            return '';
-        }
-        function renderStars(rating) {
-            let html = '';
-            for(let i=0; i<5; i++) {
-                html += i < rating ? '<span class="star-filled">★</span>' : '<span class="star-empty">☆</span>';
-            }
-            return html;
-        }
 
         // --- CSV Export ---
         window.exportToCSV = () => {
