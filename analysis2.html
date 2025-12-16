@@ -516,7 +516,7 @@
 
         // --- Global Vars ---
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
-        let db, auth, masterUserId, currentApiKey = '';
+        let db = null, auth, masterUserId, currentApiKey = '';
         let geminiKey = '';
         let editingKeyName = null; 
         let editingKeyType = null;
@@ -648,8 +648,13 @@
                     return;
                 }
                 
+                // [Fix] DB 체크 및 구체적인 에러 메시지 제공
                 if (!db) {
-                    alert('데이터베이스에 연결되지 않았습니다. 인터넷 연결을 확인하거나 페이지를 새로고침해주세요.');
+                    if (document.getElementById('firebaseConfigSection').classList.contains('hidden') === false) {
+                        alert('Firebase 설정이 완료되지 않았습니다. 상단의 설정창에 firebase-config.json 내용을 붙여넣고 [설정 적용]을 눌러주세요.');
+                    } else {
+                        alert('데이터베이스 연결 중입니다. 잠시 후 다시 시도하거나 페이지를 새로고침해주세요.');
+                    }
                     return;
                 }
 
@@ -1534,6 +1539,200 @@
             }
         }
         window.switchTab = switchTab;
+
+        // --- Saved Channels Logic ---
+        function subscribeToSavedChannels() {
+            if (db && masterUserId) {
+                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channel_list'), (snap) => {
+                    savedChannelsData = [];
+                    snap.forEach(doc => savedChannelsData.push(doc.data()));
+                    renderSavedChannelsList();
+                }, (error) => {
+                    console.error("저장된 채널 목록 구독 오류:", error);
+                });
+            } 
+        }
+
+        function setSavedSort(key) {
+            if (savedSortState.key === key) {
+                savedSortState.dir = savedSortState.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                savedSortState.key = key;
+                savedSortState.dir = 'desc'; 
+            }
+            renderSavedChannelsList();
+        }
+        window.setSavedSort = setSavedSort;
+
+        function renderSavedChannelsList() {
+            const tbody = document.getElementById('savedChannelsListBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            if (savedChannelsData.length === 0) {
+                document.getElementById('emptySavedListMsg').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('emptySavedListMsg').classList.add('hidden');
+
+            savedChannelsData.sort((a, b) => {
+                let valA, valB;
+                const key = savedSortState.key;
+                
+                const titleA = a.metadata?.title || '';
+                const titleB = b.metadata?.title || '';
+                const subA = parseInt(a.metadata?.subscribers || 0);
+                const subB = parseInt(b.metadata?.subscribers || 0);
+                const dateA = new Date(a.lastUpdated || 0);
+                const dateB = new Date(b.lastUpdated || 0);
+
+                if (key === 'title') { valA = titleA; valB = titleB; }
+                else if (key === 'subscribers') { valA = subA; valB = subB; }
+                else if (key === 'lastUpdated') { valA = dateA; valB = dateB; }
+
+                if (valA < valB) return savedSortState.dir === 'asc' ? -1 : 1;
+                if (valA > valB) return savedSortState.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            savedChannelsData.forEach(ch => {
+                const meta = ch.metadata;
+                if (!meta) return;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-bg-dark/50 cursor-pointer transition border-b border-bg-dark/50';
+                tr.onclick = () => loadChannelFromCache(meta.id);
+                
+                tr.innerHTML = `
+                    <td class="px-4 py-3">
+                        <div class="flex items-center">
+                            <img src="${meta.thumbnail || 'https://placehold.co/40'}" class="w-10 h-10 rounded-full mr-3 bg-gray-700 object-cover" onerror="this.src='https://placehold.co/40'">
+                            <div>
+                                <div class="font-bold text-text-light">${meta.title}</div>
+                                <div class="text-xs text-text-light/50">${meta.id}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-center text-success-status font-bold">${formatNumber(meta.subscribers)}</td>
+                    <td class="px-4 py-3 text-center text-text-light/60 text-xs">${new Date(ch.lastUpdated).toLocaleString('ko-KR')}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="event.stopPropagation(); refreshChannel('${meta.id}')" class="text-primary-accent hover:bg-primary-accent/10 p-2 rounded mr-1">🔄</button>
+                        <button onclick="event.stopPropagation(); deleteSavedChannel('${meta.id}')" class="text-gray-500 hover:text-red-500 p-2 rounded">🗑️</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- Initialization ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        function subscribeToApiKeys() {
+            if (db) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'api_settings', 'keys');
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        globalApiSettings.youtube = data.youtube || [];
+                        globalApiSettings.gemini = data.gemini || [];
+                        window.renderKeys('youtube');
+                        window.renderKeys('gemini');
+                    } else {
+                        globalApiSettings = { youtube: [], gemini: [] };
+                        window.renderKeys('youtube');
+                        window.renderKeys('gemini');
+                    }
+                }, (error) => {
+                    console.error("API 키 구독 오류:", error);
+                });
+            }
+        }
+
+        async function initFirebase(config) {
+            try {
+                const app = initializeApp(config);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        masterUserId = 'master_user_shared'; 
+                        document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
+                        document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
+                        
+                        subscribeToApiKeys();
+                        subscribeToSavedChannels();
+                        
+                        setStatus('Firebase 연결 및 인증 성공.', false);
+                    } else {
+                        try {
+                            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                            else await signInAnonymously(auth);
+                        } catch(e) {
+                            console.error("Sign-in failed:", e);
+                            document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
+                            setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
+                        }
+                    }
+                });
+            } catch(e) {
+                console.error("Firebase Init Error:", e);
+                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
+            }
+        }
+
+        async function loadConfig() {
+            // 1. Try Global Env Var
+            if (initialConfig) {
+                try {
+                    await initFirebase(initialConfig);
+                    return;
+                } catch(e) { console.error("Global config init error", e); }
+            }
+
+            // 2. Try Fetch JSON
+            try {
+                const res = await fetch('firebase-config.json');
+                if (res.ok) {
+                    const config = await res.json();
+                    await initFirebase(config);
+                    return;
+                }
+            } catch(e) { console.warn("JSON fetch failed", e); }
+
+            // 3. Fallback: Show Manual Input
+            document.getElementById('firebaseConfigSection').classList.remove('hidden');
+            setStatus('Firebase 설정이 필요합니다.', true);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Scroll btn logic
+            const scrollBtn = document.getElementById('scrollToTopBtn');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    scrollBtn.classList.remove('opacity-0', 'pointer-events-none');
+                } else {
+                    scrollBtn.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+
+            // Enter key logic
+            const inputEl = document.getElementById('channelId');
+            if (inputEl) {
+                inputEl.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); 
+                        startAnalysis();
+                    }
+                });
+            }
+
+            // Start Config Load
+            loadConfig();
+        });
     </script>
 </body>
 </html>
