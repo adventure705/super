@@ -254,7 +254,7 @@
 
         <!-- 탭 1: 분석 및 결과 -->
         <div id="content-analyze">
-            <!-- 입력 패널 (ID 추가됨) -->
+            <!-- 입력 패널 (ID 확인) -->
             <section id="searchPanel" class="bg-card-bg p-4 md:p-6 rounded-xl shadow-2xl mb-8">
                 <div class="flex flex-col md:flex-row gap-3">
                     <input type="text" id="channelId" placeholder="채널 ID, 핸들(@), 또는 채널명 (예: @Google, MrBeast)" class="flex-grow p-3 rounded-lg bg-bg-dark border border-card-bg focus:border-primary-accent text-text-light outline-none transition placeholder-text-light/30">
@@ -484,6 +484,29 @@
             </section>
         </div>
 
+        <!-- 탭 2: 저장된 목록 (ID 확인) -->
+        <div id="content-saved" class="hidden">
+            <section class="mb-12">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-xs text-text-light/50 ml-auto">헤더를 클릭하여 정렬하세요</span>
+                </div>
+                <div class="overflow-x-auto bg-card-bg rounded-xl shadow-xl">
+                    <table class="min-w-full divide-y divide-bg-dark">
+                        <thead class="bg-bg-dark">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-text-light/70 uppercase sortable-header min-w-[200px]" onclick="setSavedSort('title')">채널 정보 ↕</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-text-light/70 uppercase sortable-header min-w-[100px]" onclick="setSavedSort('subscribers')">구독자 ↕</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-text-light/70 uppercase sortable-header min-w-[120px]" onclick="setSavedSort('lastUpdated')">업데이트 ↕</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-text-light/70 uppercase min-w-[100px]">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="savedChannelsListBody" class="divide-y divide-bg-dark/50 text-sm"></tbody>
+                    </table>
+                    <p id="emptySavedListMsg" class="text-center py-8 text-text-light/30 hidden">저장된 채널이 없습니다.</p>
+                </div>
+            </section>
+        </div>
+
     </main>
 
     <script type="module">
@@ -525,7 +548,6 @@
         let expandedRowId = null;
 
         // --- Utilities ---
-        // [Add] Data Sanitizer to prevent "Unsupported field value: undefined" error in Firestore
         function sanitizeData(obj) {
             if (obj === undefined) return null;
             if (obj === null) return null;
@@ -580,6 +602,7 @@
             const keys = globalApiSettings[type] || [];
             
             const container = document.getElementById(containerId);
+            if (!container) return;
             container.innerHTML = '';
             
             const activeKey = keys.find(k => k.active);
@@ -605,34 +628,62 @@
         };
 
         window.saveKey = async (type) => {
-            const nameInput = type === 'youtube' ? 'newYoutubeKeyName' : 'newGeminiKeyName';
-            const valInput = type === 'youtube' ? 'newYoutubeKeyValue' : 'newGeminiKeyValue';
-
-            const name = document.getElementById(nameInput).value.trim();
-            const val = document.getElementById(valInput).value.trim();
-
-            if (!name || !val) return alert('이름과 키 값을 모두 입력해주세요.');
-            if (!db) return alert('데이터베이스 연결 전입니다.');
-
-            let keys = [...(globalApiSettings[type] || [])];
-
-            if (editingKeyName && editingKeyType === type) {
-                const idx = keys.findIndex(k => k.name === editingKeyName);
-                if (idx !== -1) keys[idx].value = val;
-                resetEditMode(type);
-            } else {
-                if (keys.some(k => k.name === name)) return alert('이미 존재하는 이름입니다.');
-                keys.push({ name, value: val, active: keys.length === 0 });
-            }
-
+            const btnId = type === 'youtube' ? 'saveYoutubeKeyBtn' : 'saveGeminiKeyBtn';
+            const btn = document.getElementById(btnId);
+            const originalText = btn.innerText;
+            
             try {
+                // UI Feedback
+                btn.disabled = true;
+                btn.innerText = "저장 중...";
+
+                const nameInput = type === 'youtube' ? 'newYoutubeKeyName' : 'newGeminiKeyName';
+                const valInput = type === 'youtube' ? 'newYoutubeKeyValue' : 'newGeminiKeyValue';
+
+                const name = document.getElementById(nameInput).value.trim();
+                const val = document.getElementById(valInput).value.trim();
+
+                if (!name || !val) {
+                    alert('이름과 키 값을 모두 입력해주세요.');
+                    return;
+                }
+                
+                if (!db) {
+                    alert('데이터베이스에 연결되지 않았습니다. 인터넷 연결을 확인하거나 페이지를 새로고침해주세요.');
+                    return;
+                }
+
+                let keys = [...(globalApiSettings[type] || [])];
+
+                if (editingKeyName && editingKeyType === type) {
+                    const idx = keys.findIndex(k => k.name === editingKeyName);
+                    if (idx !== -1) keys[idx].value = val;
+                    resetEditMode(type);
+                } else {
+                    if (keys.some(k => k.name === name)) {
+                        alert('이미 존재하는 이름입니다.');
+                        return;
+                    }
+                    keys.push({ name, value: val, active: keys.length === 0 });
+                }
+
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'api_settings', 'keys');
                 await setDoc(docRef, { [type]: keys }, { merge: true });
                 document.getElementById(nameInput).value = '';
                 document.getElementById(valInput).value = '';
+                
+                // Optimistic update
+                globalApiSettings[type] = keys;
+                window.renderKeys(type);
+                
+                alert('저장되었습니다.');
+                
             } catch(e) {
-                console.error(e);
-                alert('저장 실패: ' + e.message);
+                console.error("Save Error:", e);
+                alert(`저장 중 오류가 발생했습니다: ${e.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         };
 
@@ -887,234 +938,6 @@
             }
         };
 
-        // --- Firebase Setup ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        window.applyManualConfig = async () => {
-            const input = document.getElementById('manualConfigInput').value;
-            try {
-                const config = JSON.parse(input);
-                await initFirebase(config);
-                document.getElementById('firebaseConfigSection').classList.add('hidden');
-                setStatus('Firebase 설정이 수동으로 적용되었습니다.', false);
-            } catch (e) {
-                alert('JSON 형식이 올바르지 않거나 초기화에 실패했습니다.');
-                console.error(e);
-            }
-        };
-
-        function subscribeToApiKeys() {
-            if (db) {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'api_settings', 'keys');
-                onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        globalApiSettings.youtube = data.youtube || [];
-                        globalApiSettings.gemini = data.gemini || [];
-                        window.renderKeys('youtube');
-                        window.renderKeys('gemini');
-                    } else {
-                        globalApiSettings = { youtube: [], gemini: [] };
-                        window.renderKeys('youtube');
-                        window.renderKeys('gemini');
-                    }
-                }, (error) => {
-                    console.error("API 키 구독 오류:", error);
-                });
-            }
-        }
-
-        async function initFirebase(config) {
-            try {
-                const app = initializeApp(config);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        masterUserId = 'master_user_shared'; 
-                        document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 연결됨 (Online)';
-                        document.getElementById('firebaseStatusMsg').className = 'mb-4 text-xs text-success-status bg-bg-dark p-2 rounded';
-                        
-                        subscribeToApiKeys();
-                        subscribeToSavedChannels();
-                        
-                        setStatus('Firebase 연결 및 인증 성공.', false);
-                    } else {
-                        try {
-                            if (initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
-                            else await signInAnonymously(auth);
-                        } catch(e) {
-                            console.error("Sign-in failed:", e);
-                            document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 인증 실패 (Offline Mode)';
-                            setStatus('Firebase 인증 실패. 로컬 모드로 동작합니다.', true);
-                        }
-                    }
-                });
-            } catch(e) {
-                console.error("Firebase Init Error:", e);
-                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 초기화 오류 (Offline Mode)';
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            const scrollBtn = document.getElementById('scrollToTopBtn');
-            window.addEventListener('scroll', () => {
-                if (window.scrollY > 300) {
-                    scrollBtn.classList.remove('opacity-0', 'pointer-events-none');
-                } else {
-                    scrollBtn.classList.add('opacity-0', 'pointer-events-none');
-                }
-            });
-
-            const inputEl = document.getElementById('channelId');
-            if (inputEl) {
-                inputEl.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault(); 
-                        startAnalysis();
-                    }
-                });
-            }
-
-            let firebaseConfig = initialConfig;
-            if (!firebaseConfig) {
-                try {
-                    const res = await fetch('./firebase-config.json?t=' + new Date().getTime());
-                    if (res.ok) {
-                        firebaseConfig = await res.json();
-                        console.log("Loaded firebase-config.json");
-                    } else {
-                        console.warn("firebase-config.json not found.");
-                    }
-                } catch(e) {
-                    console.error("Config fetch error:", e);
-                }
-            }
-
-            if (firebaseConfig) {
-                await initFirebase(firebaseConfig);
-            } else {
-                setStatus('⚠️ firebase-config.json 로드 실패. 로컬 모드로 동작합니다.', true);
-                document.getElementById('firebaseConfigSection').classList.remove('hidden');
-                document.getElementById('firebaseStatusMsg').textContent = 'Firebase 상태: 설정 없음 (Offline Mode)';
-            }
-        });
-
-        // --- Tabs Logic ---
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(`tab-${tabName}`).classList.add('active');
-            
-            // [Fix] 검색창 사라짐 방지: display 속성 강제 조정 및 안전한 클래스 토글
-            const analyzeContent = document.getElementById('content-analyze');
-            const savedContent = document.getElementById('content-saved');
-            
-            if (tabName === 'analyze') {
-                analyzeContent.classList.remove('hidden');
-                savedContent.classList.add('hidden');
-                // 검색 패널 강제 표시
-                const searchPanel = document.getElementById('searchPanel');
-                if (searchPanel) searchPanel.style.display = 'block';
-            } else {
-                analyzeContent.classList.add('hidden');
-                savedContent.classList.remove('hidden');
-            }
-        }
-        window.switchTab = switchTab;
-
-        // --- Saved Channels Logic ---
-        function subscribeToSavedChannels() {
-            if (db && masterUserId) {
-                onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'channel_list'), (snap) => {
-                    savedChannelsData = [];
-                    snap.forEach(doc => savedChannelsData.push(doc.data()));
-                    renderSavedChannelsList();
-                }, (error) => {
-                    console.error("저장된 채널 목록 구독 오류:", error);
-                });
-            } 
-        }
-
-        function setSavedSort(key) {
-            if (savedSortState.key === key) {
-                savedSortState.dir = savedSortState.dir === 'asc' ? 'desc' : 'asc';
-            } else {
-                savedSortState.key = key;
-                savedSortState.dir = 'desc'; 
-            }
-            renderSavedChannelsList();
-        }
-        window.setSavedSort = setSavedSort;
-
-        function renderSavedChannelsList() {
-            const tbody = document.getElementById('savedChannelsListBody');
-            
-            if (!tbody) {
-                console.warn("savedChannelsListBody element not found in DOM");
-                return;
-            }
-            
-            tbody.innerHTML = '';
-            
-            if (savedChannelsData.length === 0) {
-                document.getElementById('emptySavedListMsg').classList.remove('hidden');
-                return;
-            }
-            document.getElementById('emptySavedListMsg').classList.add('hidden');
-
-            savedChannelsData.sort((a, b) => {
-                let valA, valB;
-                const key = savedSortState.key;
-                
-                // [Fix] 안전한 접근을 위한 옵셔널 체이닝
-                const titleA = a.metadata?.title || '';
-                const titleB = b.metadata?.title || '';
-                const subA = parseInt(a.metadata?.subscribers || 0);
-                const subB = parseInt(b.metadata?.subscribers || 0);
-                const dateA = new Date(a.lastUpdated || 0);
-                const dateB = new Date(b.lastUpdated || 0);
-
-                if (key === 'title') { valA = titleA; valB = titleB; }
-                else if (key === 'subscribers') { valA = subA; valB = subB; }
-                else if (key === 'lastUpdated') { valA = dateA; valB = dateB; }
-
-                if (valA < valB) return savedSortState.dir === 'asc' ? -1 : 1;
-                if (valA > valB) return savedSortState.dir === 'asc' ? 1 : -1;
-                return 0;
-            });
-
-            savedChannelsData.forEach(ch => {
-                const meta = ch.metadata;
-                if (!meta) return; // 메타데이터 없으면 스킵
-
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-bg-dark/50 cursor-pointer transition border-b border-bg-dark/50';
-                tr.onclick = () => loadChannelFromCache(meta.id);
-                
-                tr.innerHTML = `
-                    <td class="px-4 py-3">
-                        <div class="flex items-center">
-                            <img src="${meta.thumbnail || 'https://placehold.co/40'}" class="w-10 h-10 rounded-full mr-3 bg-gray-700 object-cover" onerror="this.src='https://placehold.co/40'">
-                            <div>
-                                <div class="font-bold text-text-light">${meta.title}</div>
-                                <div class="text-xs text-text-light/50">${meta.id}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 text-center text-success-status font-bold">${formatNumber(meta.subscribers)}</td>
-                    <td class="px-4 py-3 text-center text-text-light/60 text-xs">${new Date(ch.lastUpdated).toLocaleString('ko-KR')}</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="event.stopPropagation(); refreshChannel('${meta.id}')" class="text-primary-accent hover:bg-primary-accent/10 p-2 rounded mr-1">🔄</button>
-                        <button onclick="event.stopPropagation(); deleteSavedChannel('${meta.id}')" class="text-gray-500 hover:text-red-500 p-2 rounded">🗑️</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
         async function loadChannelFromCache(id) {
             if (db) {
                 setStatus('상세 데이터 로딩 중...', false);
@@ -1141,6 +964,138 @@
                 }
             }
         }
+
+        // --- Note Functions & Gemini ---
+        function loadNoteData(note) {
+            document.getElementById('note_summary').value = note.summary || '';
+            document.getElementById('note_pros').value = note.pros || '';
+            document.getElementById('note_cons').value = note.cons || '';
+            document.getElementById('note_genre').value = note.genre || '';
+            document.getElementById('note_tone').value = note.tone || '';
+            document.getElementById('note_style').value = note.style || '';
+            document.getElementById('note_topic').value = note.topic || '';
+            document.getElementById('note_audience').value = note.audience || '';
+            document.getElementById('note_trust').value = note.trust || '';
+            document.getElementById('note_ad_domain').value = note.ad_domain || '';
+            document.getElementById('note_ad_type').value = note.ad_type || '';
+            document.getElementById('note_ad_perf').value = note.ad_perf || '';
+            document.getElementById('note_engagement_memo').value = note.engagement_memo || '';
+        }
+
+        window.saveChannelNote = async () => {
+            if (!db || !masterUserId || !channelMetadata) {
+                alert('분석된 채널이 없거나 저장 권한이 없습니다.');
+                return;
+            }
+            const noteData = {
+                summary: document.getElementById('note_summary').value,
+                pros: document.getElementById('note_pros').value,
+                cons: document.getElementById('note_cons').value,
+                genre: document.getElementById('note_genre').value,
+                tone: document.getElementById('note_tone').value,
+                style: document.getElementById('note_style').value,
+                topic: document.getElementById('note_topic').value,
+                audience: document.getElementById('note_audience').value,
+                trust: document.getElementById('note_trust').value,
+                ad_domain: document.getElementById('note_ad_domain').value,
+                ad_type: document.getElementById('note_ad_type').value,
+                ad_perf: document.getElementById('note_ad_perf').value,
+                engagement_memo: document.getElementById('note_engagement_memo').value
+            };
+            try {
+                const channelRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', channelMetadata.id);
+                await setDoc(channelRef, { analysisNote: noteData }, { merge: true });
+                alert('노트가 저장되었습니다.');
+            } catch (e) {
+                console.error(e);
+                alert('노트 저장 실패');
+            }
+        };
+
+        // --- Gemini Integration ---
+        async function analyzeChannelWithGemini(isAuto = false) {
+            if (!geminiKey) {
+                if (!isAuto) alert('Gemini API Key가 설정되지 않았습니다.');
+                return;
+            }
+            if (!channelMetadata) {
+                if (!isAuto) alert('먼저 채널을 분석해주세요.');
+                return;
+            }
+
+            const btn = document.getElementById('geminiAnalyzeBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span>🤖 분석 중...</span>';
+            btn.disabled = true;
+
+            try {
+                const topVideos = allVideosData
+                    .sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount))
+                    .slice(0, 10)
+                    .map(v => `${v.title} (조회수: ${v.viewCount}, 좋아요: ${v.likeCount})`);
+                
+                const recentVideos = allVideosData
+                    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+                    .slice(0, 5)
+                    .map(v => v.title);
+
+                const prompt = `
+                    You are a professional YouTube Marketing Analyst. Analyze this channel based on the provided data.
+                    
+                    Channel: ${channelMetadata.title}
+                    Description: ${channelMetadata.description}
+                    Subscribers: ${channelMetadata.subscribers}
+                    
+                    Top 10 Videos by Views:
+                    ${topVideos.join('\n')}
+                    
+                    Recent 5 Videos:
+                    ${recentVideos.join('\n')}
+                    
+                    Please provide a JSON response with the following keys (values in Korean):
+                    {
+                        "summary": "Comprehensive summary of the channel's identity and performance",
+                        "pros": "Key strengths (comma separated)",
+                        "cons": "Potential weaknesses or risks (comma separated)",
+                        "genre": "Main genre/category",
+                        "tone": "Tone and manner",
+                        "style": "Editing and directing style",
+                        "topic": "Main topics covered",
+                        "audience": "Estimated target audience demographics",
+                        "trust": "Channel credibility",
+                        "ad_domain": "Suitable industries for advertising",
+                        "ad_type": "Recommended ad campaign types",
+                        "ad_perf": "Estimated ad performance",
+                        "engagement_memo": "Analysis of viewer engagement"
+                    }
+                    Return ONLY the JSON.
+                `;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+                
+                let text = data.candidates[0].content.parts[0].text;
+                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                
+                const result = JSON.parse(text);
+                loadNoteData(result);
+                if (!isAuto) alert('Gemini 분석이 완료되었습니다.');
+
+            } catch (e) {
+                console.error(e);
+                if (!isAuto) alert(`Gemini 분석 실패: ${e.message}`);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+        window.analyzeChannelWithGemini = analyzeChannelWithGemini;
 
         // --- Standard Functions ---
         async function checkResponse(response) {
@@ -1556,6 +1511,29 @@
 
         // Expose applyManualConfig
         window.applyManualConfig = window.applyManualConfig; 
+
+        // --- Tabs Logic ---
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            // [Fix] 검색창 사라짐 방지: display 속성 강제 조정 및 안전한 클래스 토글
+            const analyzeContent = document.getElementById('content-analyze');
+            const savedContent = document.getElementById('content-saved');
+            const searchPanel = document.getElementById('searchPanel');
+
+            if (tabName === 'analyze') {
+                if (analyzeContent) analyzeContent.classList.remove('hidden');
+                if (savedContent) savedContent.classList.add('hidden');
+                // 검색 패널 강제 표시
+                if (searchPanel) searchPanel.style.display = 'block';
+            } else {
+                if (analyzeContent) analyzeContent.classList.add('hidden');
+                if (savedContent) savedContent.classList.remove('hidden');
+            }
+        }
+        window.switchTab = switchTab;
     </script>
 </body>
 </html>
