@@ -526,6 +526,21 @@
         let expandedRowId = null;
 
         // --- Utilities ---
+        // [Add] Data Sanitizer to prevent "Unsupported field value: undefined" error in Firestore
+        function sanitizeData(obj) {
+            if (obj === undefined) return null;
+            if (obj === null) return null;
+            if (Array.isArray(obj)) return obj.map(sanitizeData);
+            if (typeof obj === 'object') {
+                const newObj = {};
+                for (const key in obj) {
+                    newObj[key] = sanitizeData(obj[key]);
+                }
+                return newObj;
+            }
+            return obj;
+        }
+
         function formatNumber(num) { 
             return num ? new Intl.NumberFormat('ko-KR').format(num) : '0'; 
         }
@@ -796,7 +811,7 @@
                     title: item.snippet.title,
                     description: item.snippet.description,
                     publishedAt: item.snippet.publishedAt,
-                    thumbnail: item.snippet.thumbnails.default?.url
+                    thumbnail: item.snippet.thumbnails.default?.url || '' // Fix: handle missing thumbnail
                 }));
                 videos = videos.concat(items);
                 
@@ -1312,7 +1327,7 @@
                     subscribers: chItem.statistics.subscriberCount,
                     totalViews: chItem.statistics.viewCount,
                     totalVideos: chItem.statistics.videoCount,
-                    thumbnail: chItem.snippet.thumbnails.default.url,
+                    thumbnail: chItem.snippet.thumbnails.default?.url || '', // Fix: Sanitized
                     publishedAt: chItem.snippet.publishedAt,
                     country: chItem.snippet.country || 'N/A'
                 };
@@ -1331,22 +1346,28 @@
                 if (db && masterUserId) {
                     // 1. 상세 데이터 저장 (channels)
                     const saveRef = doc(db, 'artifacts', appId, 'public', 'data', 'channels', meta.id);
+                    
+                    // [Important] Sanitize data before saving to prevent undefined errors
+                    const safeMeta = sanitizeData(meta);
+                    const safeVideos = sanitizeData(videos);
+                    const safeStats = sanitizeData(stats90);
+
                     try {
                         await setDoc(saveRef, {
-                            metadata: meta, videos: videos, stats90: stats90, lastUpdated: new Date().toISOString()
+                            metadata: safeMeta, videos: safeVideos, stats90: safeStats, lastUpdated: new Date().toISOString()
                         }, { merge: true }); 
                         
                         // 2. 목록용 요약 데이터 저장 (channel_list) - 비디오 리스트 제외
                         const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
                         await setDoc(listRef, {
-                            metadata: meta, stats90: stats90, lastUpdated: new Date().toISOString()
+                            metadata: safeMeta, stats90: safeStats, lastUpdated: new Date().toISOString()
                         });
                         
                     } catch (saveError) {
                         console.warn("전체 데이터 저장 실패, 요약본만 저장 시도:", saveError);
                          const listRef = doc(db, 'artifacts', appId, 'public', 'data', 'channel_list', meta.id);
                         await setDoc(listRef, {
-                            metadata: meta, stats90: stats90, lastUpdated: new Date().toISOString()
+                            metadata: safeMeta, stats90: safeStats, lastUpdated: new Date().toISOString()
                         });
                     }
                 } else {
