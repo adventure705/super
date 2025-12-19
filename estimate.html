@@ -102,8 +102,7 @@
         }
 
         .theme-toggle,
-        .key-mgr-btn,
-        .login-btn {
+        .key-mgr-btn {
             background: none;
             border: 1px solid var(--border);
             color: var(--text-main);
@@ -634,7 +633,6 @@
         <header>
             <h1>Revenue Master <span class="badge">PRO</span></h1>
             <div class="header-controls">
-                <button class="login-btn" onclick="handleLogin()" id="loginBtn">👤 Login</button>
                 <button class="key-mgr-btn" onclick="openKeyModal()">🔑 키 관리</button>
                 <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
             </div>
@@ -818,69 +816,30 @@
         const db = getFirestore(app);
         const appId = firebaseConfig.appId || 'default-app-id';
 
-        let currentUser = null;
-        let currentApiKey = null;
+        // *** GLOBAL SHARED ID ***
+        const SHARED_UID = 'masteruserID';
 
-        // --- Helper: Effective UID ---
-        function getEffectiveUid() {
-            const custom = localStorage.getItem('custom_uid');
-            if (custom && custom.trim() !== '') return custom.trim();
-            return currentUser ? currentUser.uid : null;
-        }
+        let currentApiKey = null;
+        let isAuthReady = false;
 
         // --- Auth & Data Loading ---
         signInAnonymously(auth).catch((error) => console.error("Auth Error:", error));
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                currentUser = user;
-            }
-            // Always try to load if we have either a user or a custom ID
-            updateLoginBtn();
-            if (getEffectiveUid()) {
+                isAuthReady = true;
                 loadApiKeys();
             }
         });
 
-        // --- Login Logic ---
-        window.handleLogin = () => {
-            const current = localStorage.getItem('custom_uid') || '';
-            const input = prompt("사용할 User ID를 입력하세요.\n(예: masteruserID)\n빈칸으로 설정 시 자동생성된 익명 ID를 사용합니다.", current);
 
-            if (input === null) return; // Cancelled
-
-            if (input.trim() === '') {
-                localStorage.removeItem('custom_uid');
-                alert("익명 ID 모드로 전환합니다.");
-            } else {
-                localStorage.setItem('custom_uid', input.trim());
-                alert(`ID가 '${input.trim()}'(으)로 설정되었습니다.`);
-            }
-            location.reload();
-        };
-
-        function updateLoginBtn() {
-            const btn = document.getElementById('loginBtn');
-            const custom = localStorage.getItem('custom_uid');
-            if (custom) {
-                btn.innerText = `👤 ${custom}`;
-                btn.classList.add('active');
-                btn.style.borderColor = 'var(--primary)';
-                btn.style.color = 'var(--primary)';
-            } else {
-                btn.innerText = `👤 Login`;
-                btn.style.borderColor = 'var(--border)';
-                btn.style.color = 'var(--text-main)';
-            }
-        }
 
         // --- Firestore Logic ---
         function loadApiKeys() {
-            const uid = getEffectiveUid();
-            if (!uid) return;
+            if (!isAuthReady) return;
 
             const q = query(
-                collection(db, 'artifacts', appId, 'users', uid, 'api_keys'),
+                collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys'),
                 orderBy('createdAt', 'desc')
             );
 
@@ -942,15 +901,13 @@
                 }
             }, (error) => {
                 console.error("Snapshot error:", error);
-                const uid = getEffectiveUid();
-                document.getElementById('keyList').innerHTML = `<div style="padding:10px; color:red;">로딩 실패<br><small>ID: ${uid}<br>권한이 없거나 네트워크 오류입니다.</small></div>`;
+                document.getElementById('keyList').innerHTML = `<div style="padding:10px; color:red;">로딩 실패<br><small>권한이 없거나 네트워크 오류입니다.</small></div>`;
             });
         }
 
         // Expose functions to window
         window.addApiKey = async () => {
-            const uid = getEffectiveUid();
-            if (!uid) { alert("로그인 또는 식별 정보가 필요합니다."); return; }
+            if (!isAuthReady) { alert("연결 중입니다. 잠시 후 다시 시도해주세요."); return; }
 
             const label = document.getElementById('newKeyLabel').value.trim();
             const key = document.getElementById('newKeyValue').value.trim();
@@ -961,7 +918,7 @@
             }
 
             try {
-                await addDoc(collection(db, 'artifacts', appId, 'users', uid, 'api_keys'), {
+                await addDoc(collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys'), {
                     label: label,
                     key: key,
                     isActive: false,
@@ -975,10 +932,9 @@
         };
 
         window.deleteKey = async (docId) => {
-            const uid = getEffectiveUid();
-            if (!uid || !confirm("정말 삭제하시겠습니까?")) return;
+            if (!isAuthReady || !confirm("정말 삭제하시겠습니까? (다른 기기에서도 삭제됩니다)")) return;
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', uid, 'api_keys', docId));
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docId));
             } catch (e) {
                 alert("삭제 실패: " + e.message);
             }
@@ -998,8 +954,7 @@
         };
 
         window.saveKey = async (docId) => {
-            const uid = getEffectiveUid();
-            if (!uid) return;
+            if (!isAuthReady) return;
 
             const newLabel = document.getElementById(`edit-label-${docId}`).value.trim();
             const newKey = document.getElementById(`edit-key-${docId}`).value.trim();
@@ -1010,7 +965,7 @@
             }
 
             try {
-                await updateDoc(doc(db, 'artifacts', appId, 'users', uid, 'api_keys', docId), {
+                await updateDoc(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docId), {
                     label: newLabel,
                     key: newKey
                 });
@@ -1066,8 +1021,6 @@
                 document.getElementById('themeBtn').innerText = '☀️ Light';
             }
 
-            // Update Login Button State on load
-            updateLoginBtn();
         };
 
         window.toggleTheme = function () {
@@ -1267,16 +1220,15 @@
         window.recalcAll();
 
         window.activateKey = async (targetId) => {
-            const uid = getEffectiveUid();
-            if (!uid) return;
+            if (!isAuthReady) return;
 
             const batch = writeBatch(db);
-            const colRef = collection(db, 'artifacts', appId, 'users', uid, 'api_keys');
+            const colRef = collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys');
             const snapshot = await getDocs(colRef);
 
             snapshot.forEach((docSnap) => {
                 const isTarget = docSnap.id === targetId;
-                batch.update(doc(db, 'artifacts', appId, 'users', uid, 'api_keys', docSnap.id), {
+                batch.update(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docSnap.id), {
                     isActive: isTarget
                 });
             });
