@@ -1,0 +1,266 @@
+:root {
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #aaaaaa;
+    --accent-red: #ff3b3b;
+    --accent-red-hover: #ff5252;
+    --border-color: #333333;
+    --table-header-bg: #2d2d2d;
+    --table-row-even: #1e1e1e;
+    --table-row-odd: #181818;
+    --link-blue: #4dabf7;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 1400px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+header {
+    text-align: center;
+    padding: 20px 0;
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--accent-red);
+}
+
+h1 .red-dot {
+    font-size: 1.2rem;
+    color: var(--accent-red);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.top-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.api-btn-container {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#api-btn {
+    background: transparent;
+    border: 1px solid var(--text-secondary);
+    color: var(--text-secondary);
+    padding: 5px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+#api-btn:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+/* Categories */
+.categories-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-title .icon {
+    color: var(--accent-red);
+}
+
+.categories-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.category-pill {
+    background-color: #333;
+    color: #ccc;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.category-pill:hover {
+    background-color: #444;
+}
+
+.category-pill.active {
+    background-color: #4a4a4a;
+    color: white;
+    border-color: #666;
+    font-weight: bold;
+}
+
+.category-indicator-bar {
+    height: 4px;
+    background-color: #333;
+    border-radius: 2px;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.indicator-progress {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 50%;
+    /* Dynamic */
+    background: linear-gradient(90deg, var(--accent-red), transparent);
+}
+
+/* Search Box */
+.search-section {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.search-box {
+    display: flex;
+    border: 2px solid var(--accent-red);
+    border-radius: 5px;
+    overflow: hidden;
+    width: 600px;
+    max-width: 100%;
+}
+
+#keyword-input {
+    flex: 1;
+    background-color: transparent;
+    border: none;
+    padding: 15px 20px;
+    color: white;
+    font-size: 1rem;
+    outline: none;
+}
+
+#search-btn {
+    background-color: var(--accent-red);
+    border: none;
+    color: white;
+    padding: 0 40px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#search-btn:hover {
+    background-color: var(--accent-red-hover);
+}
+
+/* Results */
+.results-section {
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    padding: 20px;
+    min-height: 400px;
+}
+
+.status-message {
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+th,
+td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+th {
+    background-color: var(--table-header-bg);
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+tbody tr:nth-child(even) {
+    background-color: var(--table-row-even);
+}
+
+tbody tr:nth-child(odd) {
+    background-color: var(--table-row-odd);
+}
+
+tbody tr:hover {
+    background-color: #252525;
+}
+
+/* Foreign language columns often blueish in the example */
+td:nth-child(n+3) {
+    color: var(--link-blue);
+}
+
+td:nth-child(1) {
+    color: var(--text-secondary);
+    width: 50px;
+    text-align: center;
+}
+
+th:nth-child(1) {
+    text-align: center;
+}

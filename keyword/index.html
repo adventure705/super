@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 다국어 키워드 검색기</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDKs -->
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script defer src="app.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="top-nav">
+                <!-- Logo ignored as per instructions, but title is needed -->
+                <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기 (100개 키워드)</h1>
+                <div class="api-btn-container">
+                    <button id="api-btn" class="icon-btn">API</button>
+                </div>
+            </div>
+            <p class="subtitle">카테고리 선택/키워드 입력 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
+        </header>
+
+        <!-- Categories -->
+        <section class="categories-section">
+            <div class="section-title"><span class="icon">◎</span> 카테고리 선택</div>
+            <div class="categories-list" id="categories-list">
+                <!-- Categories will be injected by JS -->
+            </div>
+            <div class="category-indicator-bar">
+                <div class="indicator-progress"></div>
+            </div>
+        </section>
+
+        <!-- Search -->
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" id="keyword-input" placeholder="여기에 원하는 키워드를 직접 입력하세요 (예: 여행)">
+                <button id="search-btn">검색</button>
+            </div>
+        </section>
+
+        <!-- Results -->
+        <section class="results-section">
+            <div class="section-title"><span class="icon">●</span> 주제에 대한 연관 키워드 (100개)</div>
+            <div class="status-message" id="status-message">이전 세션의 검색 결과가 복구되었습니다.</div>
+
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>NO</th>
+                            <th>🇰🇷 한국어</th>
+                            <th>🇺🇸 영어</th>
+                            <th>🇯🇵 일본어</th>
+                            <th>🇨🇳 중국어</th>
+                            <th>🇪🇸 스페인어</th>
+                            <th>🇮🇳 인도어</th>
+                            <th>🇷🇺 러시아어</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>
