@@ -621,6 +621,17 @@
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
 
+        // --- OPTIMISTIC UI HELPERS ---
+        function getLocalCache() {
+            try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; }
+            catch { return {}; }
+        }
+        function saveLocalCache(d) {
+            localStorage.setItem('cached_api_keys', JSON.stringify(d));
+            renderKeys(d); // Instant Render
+        }
+        // -----------------------------
+
         // Global functions for HTML onClick binding
         window.openModal = function () { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
         window.closeModal = function () { document.getElementById('api-modal').style.display = "none"; };
@@ -636,36 +647,69 @@
             const n = document.getElementById('new-key-name').value.trim();
             const v = document.getElementById('new-key-value').value.trim();
             const t = document.getElementById('new-key-type').value;
-            const i = document.getElementById('edit-key-id').value;
+            let i = document.getElementById('edit-key-id').value;
 
             if (!n || !v) return alert('이름과 키 값을 모두 입력해주세요.');
-            if (!db) return alert('서버 연결 중입니다. 잠시 후 다시 시도해주세요.');
 
-            const btn = document.getElementById('save-key-btn');
-            btn.innerText = "저장 중...";
-            btn.disabled = true;
+            // 1. Generate ID if new
+            if (!i) {
+                // If DB connected, get key. If not, make temp key that will be overwritten by sync (or use timestamp)
+                // Actually to avoid collisions and sync issues, best to use push id if possible.
+                // If offline, we can use a timestamp-based ID, but firebase push IDs are better.
+                // If db is not ready, we use timestamp.
+                if (db) i = db.ref().push().key;
+                else i = 'local_' + Date.now();
+            }
 
-            const d = { name: n, key: v, type: t, updatedAt: firebase.database.ServerValue.TIMESTAMP };
-            const p = i ? db.ref(DB_KEY + "/" + i).update(d) : (d.active = true, d.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY).push(d));
+            // 2. Prepare Data
+            const d = { name: n, key: v, type: t, active: true, createdAt: Date.now(), updatedAt: Date.now() };
 
-            p.then(() => {
-                alert('성공적으로 저장되었습니다.');
-                window.resetForm();
-            }).catch(e => {
-                alert("저장 실패: " + e.message);
-                btn.innerText = "저장하기";
-                btn.disabled = false;
-            });
+            // 3. OPTIMISTIC UPDATE (Cache & UI First)
+            const cache = getLocalCache();
+            if (cache[i] && cache[i].createdAt) d.createdAt = cache[i].createdAt; // keep created time
+            cache[i] = d;
+            saveLocalCache(cache); // Saves to LS & Renders UI
+
+            // 4. Feedback
+            alert('성공적으로 저장되었습니다.');
+            window.resetForm();
+
+            // 5. Background Sync to DB
+            if (db) {
+                // Use .set/update in background without waiting
+                db.ref(DB_KEY + "/" + i).update(d).catch(e => console.error("BG Sync Fail", e));
+            } else {
+                console.warn("DB offline, saved locally only");
+            }
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        window.togK = (id, v) => db.ref(DB_KEY + "/" + id + "/active").set(v);
-        window.delK = (id) => confirm("정말 삭제하시겠습니까?") && db.ref(DB_KEY + "/" + id).remove();
+
+        window.togK = (id, v) => {
+            // Optimistic
+            const cache = getLocalCache();
+            if (cache[id]) {
+                cache[id].active = v;
+                saveLocalCache(cache);
+                // BG Sync
+                if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => console.error(e));
+            }
+        };
+
+        window.delK = (id) => {
+            if (!confirm("정말 삭제하시겠습니까?")) return;
+            // Optimistic
+            const cache = getLocalCache();
+            delete cache[id];
+            saveLocalCache(cache);
+            // BG Sync
+            if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => console.error(e));
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             setupUI();
 
-            // Re-render from cache completely to be safe
+            // Initial Render
             try {
                 const c = localStorage.getItem('cached_api_keys');
                 if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; }
@@ -685,10 +729,11 @@
                     });
 
                     auth.signInAnonymously().then(() => {
+                        // Inbound Sync (Server -> Local)
                         db.ref(DB_KEY).on('value', s => {
                             const d = s.val() || {};
-                            localStorage.setItem('cached_api_keys', JSON.stringify(d));
-                            renderKeys(d);
+                            // Merge/Overwrite local cache with server truth
+                            saveLocalCache(d);
                         });
                         db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
                     }).catch(e => console.error("Auth", e));
@@ -699,7 +744,7 @@
         // Functions
         async function getApiKey(t = 'youtube') {
             try {
-                const c = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
+                const c = getLocalCache();
                 const list = Object.values(c).filter(k => (k.type || 'youtube') === t && k.active !== false);
                 if (list.length) return list[Math.floor(Math.random() * list.length)].key;
             } catch (e) { }
