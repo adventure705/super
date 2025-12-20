@@ -13,7 +13,7 @@ let globalConfig = null;
 const firebaseConfig = {
     apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
     authDomain: "template-3530f.firebaseapp.com",
-    databaseURL: "https://template-3530f-default-rtdb.firebaseio.com",
+    databaseURL: "https://template-3530f.firebaseio.com",
     projectId: "template-3530f",
     storageBucket: "template-3530f.firebasestorage.app",
     messagingSenderId: "891098188622",
