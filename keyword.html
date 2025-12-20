@@ -5,11 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube 다국어 키워드 검색기</title>
-    <!-- Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://template-3530f.firebaseio.com" crossorigin>
 
-    <!-- CSS -->
     <style>
         :root {
             --bg-color: #121212;
@@ -130,6 +128,13 @@
             background: linear-gradient(135deg, #ff5252, #ff8787);
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(255, 59, 59, 0.5);
+        }
+
+        .btn-add:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .input-dark {
@@ -504,7 +509,7 @@
             <div class="top-nav">
                 <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기</h1>
                 <div class="api-btn-container">
-                    <button id="api-btn">🔑 API 관리</button>
+                    <button id="api-btn" onclick="openModal()">🔑 API 관리</button>
                 </div>
             </div>
             <p class="subtitle">카테고리 선택 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
@@ -551,7 +556,7 @@
     <!-- API Modal -->
     <div id="api-modal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <span class="close" onclick="closeModal()">&times;</span>
             <h2>🔑 API 키 관리</h2>
 
             <!-- Key List -->
@@ -576,7 +581,6 @@
                                 list.appendChild(el);
                             });
                         } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; }
-                        // Search state restore if exists
                         const st = localStorage.getItem('search_state_temp');
                     }
                 } catch (e) { }
@@ -596,9 +600,9 @@
                 <input type="text" id="new-key-value" class="input-dark" placeholder="AIza..."
                     style="margin-bottom:15px;">
                 <div style="display:flex; gap:10px;">
-                    <button id="cancel-edit-btn" class="btn-add"
-                        style="display:none; background:#555; flex:1">취소</button>
-                    <button id="save-key-btn" class="btn-add" style="flex:2">저장하기</button>
+                    <button id="cancel-edit-btn" class="btn-add" style="display:none; background:#555; flex:1"
+                        onclick="resetForm()">취소</button>
+                    <button id="save-key-btn" class="btn-add" style="flex:2" onclick="saveApiKey()">저장하기</button>
                 </div>
             </div>
         </div>
@@ -617,13 +621,54 @@
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
 
+        // Global functions for HTML onClick binding
+        window.openModal = function () { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
+        window.closeModal = function () { document.getElementById('api-modal').style.display = "none"; };
+
+        window.resetForm = function () {
+            document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = "";
+            document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기";
+            document.getElementById('save-key-btn').disabled = false;
+            document.getElementById('cancel-edit-btn').style.display = "none";
+        };
+
+        window.saveApiKey = function () {
+            const n = document.getElementById('new-key-name').value.trim();
+            const v = document.getElementById('new-key-value').value.trim();
+            const t = document.getElementById('new-key-type').value;
+            const i = document.getElementById('edit-key-id').value;
+
+            if (!n || !v) return alert('이름과 키 값을 모두 입력해주세요.');
+            if (!db) return alert('서버 연결 중입니다. 잠시 후 다시 시도해주세요.');
+
+            const btn = document.getElementById('save-key-btn');
+            btn.innerText = "저장 중...";
+            btn.disabled = true;
+
+            const d = { name: n, key: v, type: t, updatedAt: firebase.database.ServerValue.TIMESTAMP };
+            const p = i ? db.ref(DB_KEY + "/" + i).update(d) : (d.active = true, d.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY).push(d));
+
+            p.then(() => {
+                alert('성공적으로 저장되었습니다.');
+                window.resetForm();
+            }).catch(e => {
+                alert("저장 실패: " + e.message);
+                btn.innerText = "저장하기";
+                btn.disabled = false;
+            });
+        };
+
+        window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
+        window.togK = (id, v) => db.ref(DB_KEY + "/" + id + "/active").set(v);
+        window.delK = (id) => confirm("정말 삭제하시겠습니까?") && db.ref(DB_KEY + "/" + id).remove();
+
         document.addEventListener('DOMContentLoaded', () => {
             setupUI();
 
             // Re-render from cache completely to be safe
             try {
                 const c = localStorage.getItem('cached_api_keys');
-                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨 (오프라인 모드)"; }
+                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; }
             } catch (e) { }
 
             // Init Firebase
@@ -644,16 +689,9 @@
                             const d = s.val() || {};
                             localStorage.setItem('cached_api_keys', JSON.stringify(d));
                             renderKeys(d);
-                            // Also update status if we got data
-                            if (document.getElementById('status-message').innerText === "로딩 중...") {
-                                document.getElementById('status-message').innerText = "준비됨";
-                            }
                         });
                         db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
-                    }).catch(e => {
-                        console.error("Auth", e);
-                        document.getElementById('status-message').innerText = "인증 실패 (이전 데이터 사용)";
-                    });
+                    }).catch(e => console.error("Auth", e));
                 }
             } catch (e) { console.error(e); }
         });
@@ -763,29 +801,11 @@
             });
             document.getElementById('search-btn').onclick = () => search(document.getElementById('keyword-input').value, getCurrentCat());
             document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
+
             const m = document.getElementById('api-modal');
-            document.getElementById('api-btn').onclick = () => { m.style.display = "block"; resetForm(); };
-            document.querySelector('.close').onclick = () => m.style.display = "none";
             window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
-            document.getElementById('save-key-btn').onclick = () => {
-                const n = document.getElementById('new-key-name').value;
-                const v = document.getElementById('new-key-value').value;
-                const t = document.getElementById('new-key-type').value;
-                const i = document.getElementById('edit-key-id').value;
-                if (!n || !v) return alert('입력 확인');
-                if (!db) return alert('서버 연결 중...');
-                const d = { name: n, key: v, type: t, updatedAt: firebase.database.ServerValue.TIMESTAMP };
-                const p = i ? db.ref(DB_KEY + "/" + i).update(d) : (d.active = true, d.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY).push(d));
-                p.then(() => { alert('저장됨'); resetForm(); }).catch(e => alert(e.message));
-            };
-            document.getElementById('cancel-edit-btn').onclick = resetForm;
         }
 
-        function resetForm() {
-            document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = "";
-            document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기";
-            document.getElementById('cancel-edit-btn').style.display = "none";
-        }
         function updateUI(st) {
             const inp = document.getElementById('keyword-input');
             if (st.query && inp.value !== st.query) inp.value = st.query;
@@ -809,9 +829,6 @@
             });
         }
         function getCurrentCat() { return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트"; }
-        window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        window.togK = (id, v) => db.ref(DB_KEY + "/" + id + "/active").set(v);
-        window.delK = (id) => confirm("삭제?") && db.ref(DB_KEY + "/" + id).remove();
     </script>
 </body>
 
