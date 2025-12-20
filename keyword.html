@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 다국어 키워드 검색기</title>
+    <link rel="stylesheet" href="keyword/style.css">
+    <!-- Firebase SDKs -->
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script defer src="keyword/app.js"></script>
+    <style>
+        /* API Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            background-color: #1e1e1e;
+            margin: 10% auto;
+            padding: 25px;
+            border: 1px solid #333;
+            width: 90%;
+            max-width: 600px;
+            border-radius: 12px;
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .key-list-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .key-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2d2d2d;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .key-item:hover {
+            background: #333;
+        }
+
+        .key-info {
+            flex-grow: 1;
+            margin-right: 15px;
+            overflow: hidden;
+        }
+
+        .key-value {
+            font-family: monospace;
+            color: #4dabf7;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .key-meta {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .key-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #444;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #ff3b3b;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Delete Button */
+        .btn-delete {
+            background: transparent;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-delete:hover {
+            background: #ff4444;
+            color: white;
+        }
+
+        /* Add Section */
+        .add-section {
+            border-top: 1px solid #333;
+            padding-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-dark {
+            flex: 1;
+            padding: 12px;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-dark:focus {
+            border-color: #ff3b3b;
+        }
+
+        .btn-add {
+            background: #ff3b3b;
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-add:hover {
+            background: #ff5252;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- API Key Modal -->
+    <div id="api-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>🔑 API Key 관리</h2>
+            <div class="key-list-container" id="key-list">
+                <!-- Keys will be injected here -->
+            </div>
+            <div class="add-section">
+                <input type="text" id="new-key-input" class="input-dark" placeholder="새로운 API Key를 입력하세요">
+                <button id="add-key-btn" class="btn-add">추가</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="top-nav">
+                <!-- Logo ignored as per instructions, but title is needed -->
+                <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기 (100개 키워드)</h1>
+                <div class="api-btn-container">
+                    <button id="api-btn" class="icon-btn">API</button>
+                </div>
+            </div>
+            <p class="subtitle">카테고리 선택/키워드 입력 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
+        </header>
+
+        <!-- Categories -->
+        <section class="categories-section">
+            <div class="section-title"><span class="icon">◎</span> 카테고리 선택</div>
+            <div class="categories-list" id="categories-list">
+                <!-- Categories will be injected by JS -->
+            </div>
+            <div class="category-indicator-bar">
+                <div class="indicator-progress"></div>
+            </div>
+        </section>
+
+        <!-- Search -->
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" id="keyword-input" placeholder="여기에 원하는 키워드를 직접 입력하세요 (예: 여행)">
+                <button id="search-btn">검색</button>
+            </div>
+        </section>
+
+        <!-- Results -->
+        <section class="results-section">
+            <div class="section-title"><span class="icon">●</span> 주제에 대한 연관 키워드 (100개)</div>
+            <div class="status-message" id="status-message">이전 세션의 검색 결과가 복구되었습니다.</div>
+
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>NO</th>
+                            <th>🇰🇷 한국어</th>
+                            <th>🇺🇸 영어</th>
+                            <th>🇯🇵 일본어</th>
+                            <th>🇨🇳 중국어</th>
+                            <th>🇪🇸 스페인어</th>
+                            <th>🇮🇳 인도어</th>
+                            <th>🇷🇺 러시아어</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

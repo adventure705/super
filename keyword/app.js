@@ -78,17 +78,114 @@ function setupUI() {
         }
     });
 
-    // API Button logic:
-    // 1. If key is in firebase-config.json (e.g. "custom_api_key"), use it or show it.
-    // 2. Or allow user to input and save to DB.
+    // API Button: Open Modal
+    const modal = document.getElementById('api-modal');
+    const closeBtn = document.querySelector('.close');
+
     document.getElementById('api-btn').addEventListener('click', () => {
-        const currentKey = globalConfig.custom_api_key || "설정된 키 없음";
-        const key = prompt(`현재 Config Key: ${currentKey}\n새로운 Google/Translation API Key를 입력하세요 (DB 저장):`);
+        modal.style.display = "block";
+        loadApiKeys();
+    });
+
+    closeBtn.onclick = () => {
+        modal.style.display = "none";
+    };
+
+    window.onclick = (event) => {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    };
+
+    // Add New Key
+    document.getElementById('add-key-btn').addEventListener('click', () => {
+        const input = document.getElementById('new-key-input');
+        const key = input.value.trim();
         if (key) {
-            db.ref('shared_api_key').set(key);
-            alert("API Key가 저장되었습니다.");
+            addApiKey(key);
+            input.value = "";
         }
     });
+}
+
+function loadApiKeys() {
+    const listContainer = document.getElementById('key-list');
+    listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">로딩 중...</div>';
+
+    db.ref('api_keys').once('value').then(snapshot => {
+        const keys = snapshot.val() || {};
+        renderKeys(keys);
+    });
+}
+
+function renderKeys(keysData) {
+    const listContainer = document.getElementById('key-list');
+    listContainer.innerHTML = '';
+
+    const keys = Object.entries(keysData);
+    if (keys.length === 0) {
+        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">등록된 API Key가 없습니다.</div>';
+        return;
+    }
+
+    // Sort by added time if available, or just keys
+    keys.forEach(([id, data]) => {
+        const isActive = data.active !== false; // Default true if not set
+
+        const item = document.createElement('div');
+        item.className = 'key-item';
+        item.innerHTML = `
+            <div class="key-info">
+                <div class="key-value">${data.key}</div>
+                <div class="key-meta">${new Date(data.createdAt || Date.now()).toLocaleString()}</div>
+            </div>
+            <div class="key-actions">
+                <label class="toggle-switch" title="활성화/비활성화">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleKey('${id}', this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <button class="btn-delete" onclick="deleteKey('${id}')" title="삭제">🗑️</button>
+            </div>
+        `;
+        listContainer.appendChild(item);
+    });
+}
+
+function addApiKey(keyValue) {
+    const newRef = db.ref('api_keys').push();
+    newRef.set({
+        key: keyValue,
+        active: true,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        loadApiKeys(); // Refresh list
+        alert("API Key가 추가되었습니다.");
+    }).catch(err => alert("오류 발생: " + err.message));
+}
+
+// Global scope functions for HTML event handlers
+window.toggleKey = function (id, isActive) {
+    db.ref(`api_keys/${id}/active`).set(isActive);
+};
+
+window.deleteKey = function (id) {
+    if (confirm("정말로 이 API Key를 삭제하시겠습니까?")) {
+        db.ref(`api_keys/${id}`).remove().then(() => loadApiKeys());
+    }
+};
+
+function getActiveApiKey() {
+    // Return a promise that resolves to a random active key
+    return db.ref('api_keys').orderByChild('active').equalTo(true).once('value')
+        .then(snapshot => {
+            const keysVal = snapshot.val();
+            if (!keysVal) return null;
+            const keys = Object.values(keysVal);
+            if (keys.length === 0) return null;
+            // Pick random
+            const random = keys[Math.floor(Math.random() * keys.length)];
+            return random.key;
+        });
 }
 
 function setupRealtimeListener() {
