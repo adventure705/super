@@ -183,6 +183,10 @@ function renderKeys(keysData) {
 }
 
 function saveApiKey(id, name, key) {
+    if (!db) {
+        alert("데이터베이스 연결이 되지 않았습니다. 페이지를 새로고침 하세요.");
+        return;
+    }
     const data = {
         name: name,
         key: key,
