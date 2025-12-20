@@ -1,11 +1,9 @@
 
-const CATEGORIES = [
-    "영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠",
-    "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트",
-    "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"
-];
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getDatabase, ref, onValue, update, push, set, remove, serverTimestamp, query, orderByChild, equalTo, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-// Configuration
+// --- CONFIGURATION ---
 const firebaseConfig = {
     apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
     authDomain: "template-3530f.firebaseapp.com",
@@ -18,88 +16,11 @@ const firebaseConfig = {
 
 const DB_KEY_PATH = 'shared_api_keys';
 
-// --- INITIALIZATION (Concurrent & Prioritized) ---
-
-let db;
-let auth;
-
-// 1. Initialize Firebase IMMEDIATELY (Highest Priority)
-try {
-    firebase.initializeApp(firebaseConfig);
-    auth = firebase.auth();
-    db = firebase.database();
-    console.log("Firebase Init Started");
-
-    // 2. Start Auth Immediately (Background)
-    auth.signInAnonymously().catch(e => console.warn("Auth retry needed:", e));
-
-    // 3. Start Connection Monitoring Immediately
-    db.ref(".info/connected").on("value", snap => {
-        const el = document.getElementById('status-message');
-        if (snap.val() === true) {
-            console.log("Connected!");
-            if (el) { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
-        } else {
-            console.log("Disconnected (or Connecting...)");
-            if (el && !el.innerText.includes("모드")) {
-                el.innerText = "연결 중...";
-                el.style.color = "#aaa";
-            }
-        }
-    });
-
-} catch (e) {
-    console.error("Critical Init Error:", e);
-    // Even if critical error, we can run safely in UI-only mode? No, just alert.
-}
-
-// 4. Start App Logic (Wait for DOM)
-document.addEventListener('DOMContentLoaded', () => {
-    initApp();
-});
-
-async function initApp() {
-    setupUI();
-
-    // 5. CACHE FAST LOAD (Instant UX)
-    loadCachedApiKeys();
-
-    if (auth && db) {
-        // 6. Bind Realtime Listeners (Once Auth is ready/changed)
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                console.log("User ready, syncing...");
-                syncApiKeys();
-                setupRealtimeListener();
-            }
-        });
-    } else {
-        alert("Firebase 로드 실패. 오프라인 모드로 동작합니다.");
-    }
-}
-
-// --- CORE SYNC LOGIC ---
-
-function syncApiKeys() {
-    // Priority: Cloud -> Local (Sync Down)
-    db.ref(DB_KEY_PATH).on('value', snapshot => {
-        const keys = snapshot.val() || {};
-        localStorage.setItem('cached_api_keys', JSON.stringify(keys)); // Update Cache
-        renderKeys(keys); // Render
-        const el = document.getElementById('status-message');
-        if (el) el.innerText = "동기화 완료";
-    }, err => {
-        console.warn("Sync Read Error (Offline?):", err);
-        // Do nothing, keep showing cache
-    });
-}
-
-function loadCachedApiKeys() {
-    try {
-        const cached = localStorage.getItem('cached_api_keys');
-        if (cached) renderKeys(JSON.parse(cached));
-    } catch (e) { }
-}
+const CATEGORIES = [
+    "영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠",
+    "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트",
+    "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"
+];
 
 const CATEGORY_IDS = {
     "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15",
@@ -108,105 +29,204 @@ const CATEGORY_IDS = {
     "교육": "27", "과학/기술": "28", "비영리/사회운동": "29"
 };
 
-// --- DATA LOGIC ---
+// --- STATE ---
+let db;
+let auth;
 
-// Optimistic Save
-function saveApiKey() {
+// --- INITIALIZATION ---
+async function initApp() {
+    setupUI();
+
+    // 1. INSTANT CACHE LOAD
+    loadCachedApiKeys();
+
+    try {
+        console.log("Initializing Firebase (Modular)...");
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getDatabase(app);
+
+        // 2. Connection Monitor
+        const connectedRef = ref(db, ".info/connected");
+        onValue(connectedRef, (snap) => {
+            const statusIndicator = document.getElementById('status-message');
+            if (snap.val() === true) {
+                console.log("Connected to Firebase");
+                if (statusIndicator) {
+                    statusIndicator.innerText = "서버 연결됨";
+                    statusIndicator.style.color = "#4dabf7";
+                }
+            } else {
+                console.log("Disconnected (or Connecting...)");
+                if (statusIndicator) {
+                    statusIndicator.innerText = "연결 중...";
+                    statusIndicator.style.color = "#aaa";
+                }
+            }
+        });
+
+        // 3. Auth & Sync
+        signInAnonymously(auth).catch(e => console.error("Auth Fail:", e));
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                console.log("User Authenticated:", user.uid);
+                startDataSync();
+            }
+        });
+
+    } catch (e) {
+        console.error("Init Error:", e);
+        alert("앱 초기화 오류: " + e.message);
+    }
+}
+
+// --- DATA SYNC ---
+function startDataSync() {
+    // Sync API Keys
+    const keysRef = ref(db, DB_KEY_PATH);
+    onValue(keysRef, (snapshot) => {
+        const val = snapshot.val() || {};
+        localStorage.setItem('cached_api_keys', JSON.stringify(val)); // Update Cache
+        renderKeys(val);
+    }, (err) => {
+        console.warn("Read Error:", err);
+    });
+
+    // Sync Search State
+    const searchStateRef = ref(db, 'global_search_state');
+    onValue(searchStateRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) updateUI(val);
+    });
+}
+
+function loadCachedApiKeys() {
+    try {
+        const cached = localStorage.getItem('cached_api_keys');
+        if (cached) renderKeys(JSON.parse(cached));
+    } catch { }
+}
+
+// --- DATA OPERATIONS ---
+window.saveApiKey = function () { // Modified to attach to window for HTML onclick
     const name = document.getElementById('new-key-name').value.trim();
     const key = document.getElementById('new-key-value').value.trim();
     const type = document.getElementById('new-key-type').value;
     const id = document.getElementById('edit-key-id').value;
 
-    if (!name || !key) return alert("값을 입력해주세요.");
+    if (!name || !key) return alert("입력값을 확인해주세요.");
+    if (!db) return alert("서버 연결 대기 중...");
 
     const data = {
         name, key, type,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
+        updatedAt: serverTimestamp()
     };
 
-    // 1. Attempt Cloud Save
-    const promise = id
-        ? db.ref(`${DB_KEY_PATH}/${id}`).update(data)
-        : (data.active = true, data.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY_PATH).push(data));
+    let promise;
+    if (id) {
+        // Update
+        promise = update(ref(db, `${DB_KEY_PATH}/${id}`), data);
+    } else {
+        // Create
+        data.active = true;
+        data.createdAt = serverTimestamp();
+        promise = push(ref(db, DB_KEY_PATH), data);
+    }
 
-    promise
-        .then(() => {
-            alert("저장되었습니다.");
-            resetForm();
-        })
-        .catch(e => {
-            alert("저장 실패 (네트워크 확인): " + e.message);
-        });
-}
+    promise.then(() => {
+        alert(id ? "수정됨" : "저장됨");
+        resetForm();
+    }).catch(e => alert("실패: " + e.message));
+};
 
-// Read Keys: Hybrid (Cache First)
-function getActiveApiKey(type = 'youtube') {
-    // 1. Try Cache Immediately
+window.toggleKey = function (id, isActive) {
+    if (db) set(ref(db, `${DB_KEY_PATH}/${id}/active`), isActive);
+};
+
+window.deleteKey = function (id) {
+    if (confirm("삭제?")) {
+        if (db) remove(ref(db, `${DB_KEY_PATH}/${id}`));
+    }
+};
+
+window.prepareEdit = function (id, name, key, type) {
+    document.getElementById('new-key-name').value = name;
+    document.getElementById('new-key-value').value = key;
+    document.getElementById('new-key-type').value = type;
+    document.getElementById('edit-key-id').value = id;
+    document.getElementById('save-key-btn').innerText = "수정 완료";
+    document.getElementById('cancel-edit-btn').style.display = "block";
+};
+
+// --- READ KEYS (Hybrid) ---
+async function getActiveApiKey(type = 'youtube') {
+    // 1. Cache
     try {
         const cached = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
         const keys = Object.values(cached).filter(k => (k.type || 'youtube') === type && k.active !== false);
-        if (keys.length > 0) return Promise.resolve(keys[Math.floor(Math.random() * keys.length)].key);
-    } catch (e) { }
+        if (keys.length > 0) return keys[Math.floor(Math.random() * keys.length)].key;
+    } catch { }
 
-    // 2. Fallback to Server if Cache Empty (Rare)
-    return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value').then(snap => {
+    // 2. Server
+    if (!db) return null;
+    try {
+        const q = query(ref(db, DB_KEY_PATH), orderByChild('active'), equalTo(true));
+        const snap = await get(q);
         const val = snap.val();
         if (!val) return null;
         const keys = Object.values(val).filter(k => (k.type || 'youtube') === type);
         return keys.length ? keys[Math.floor(Math.random() * keys.length)].key : null;
-    });
+    } catch (e) {
+        console.warn("DB Read Fail", e);
+        return null;
+    }
 }
 
-function setupRealtimeListener() {
-    db.ref('global_search_state').on('value', snap => {
-        const data = snap.val();
-        if (data) updateUI(data);
-    });
-}
-
-async function performSearch(query, category) {
+// --- SEARCH LOGIC ---
+async function performSearch(queryText, category) {
     const statusMsg = document.getElementById('status-message');
-
-    // Get Key
     const youtubeKey = await getActiveApiKey('youtube');
     const translateKey = await getActiveApiKey('translate');
 
     if (!youtubeKey) return alert("API 키가 없습니다.");
 
-    statusMsg.innerText = "검색 중...";
+    statusMsg.innerText = "데이터 요청 중...";
     statusMsg.style.color = "#4dabf7";
 
     try {
         let keywords = [];
 
-        if (query) {
-            // Keyword Mode
-            const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
-            keywords = part1.items.map(i => i.snippet.title);
-            if (part1.nextPageToken) {
-                const part2 = await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken);
-                keywords = keywords.concat(part2.items.map(i => i.snippet.title));
+        if (queryText) {
+            // Keyword
+            const p1 = await fetchYouTubeSearch(queryText, youtubeKey, null);
+            keywords = p1.items.map(i => i.snippet.title);
+            if (p1.nextPageToken) {
+                const p2 = await fetchYouTubeSearch(queryText, youtubeKey, p1.nextPageToken);
+                keywords = [...keywords, ...p2.items.map(i => i.snippet.title)];
             }
         } else {
-            // Category Mode
+            // Category
             const catId = CATEGORY_IDS[category];
             try {
-                if (!catId) throw new Error("NoCat");
-                const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
-                keywords = part1.items.map(i => i.snippet.title);
-                if (part1.nextPageToken) {
-                    const part2 = await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken);
-                    keywords = keywords.concat(part2.items.map(i => i.snippet.title));
+                if (!catId) throw new Error("ID Missing");
+                const p1 = await fetchYouTubePopular(catId, youtubeKey, null);
+                keywords = p1.items.map(i => i.snippet.title);
+                if (p1.nextPageToken) {
+                    const p2 = await fetchYouTubePopular(catId, youtubeKey, p1.nextPageToken);
+                    keywords = [...keywords, ...p2.items.map(i => i.snippet.title)];
                 }
             } catch (e) {
                 // Fallback
-                const part1 = await fetchYouTubeSearch(category, youtubeKey, null);
-                keywords = part1.items.map(i => i.snippet.title);
+                console.warn("Trending Fail -> Search Fallback");
+                const p1 = await fetchYouTubeSearch(category, youtubeKey, null);
+                keywords = p1.items.map(i => i.snippet.title);
             }
         }
 
         keywords = [...new Set(keywords)].slice(0, 100);
 
+        // Translate
         let translated = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
         if (translateKey) {
             statusMsg.innerText = "번역 중...";
@@ -221,7 +241,7 @@ async function performSearch(query, category) {
         }));
 
         const state = {
-            query: query || category,
+            query: queryText || category,
             selectedCategory: category,
             results: results,
             timestamp: Date.now()
@@ -231,8 +251,7 @@ async function performSearch(query, category) {
         statusMsg.innerText = "완료";
         statusMsg.style.color = "#aaa";
 
-        // Sync State
-        db.ref('global_search_state').update(state).catch(e => console.warn(e));
+        if (db) update(ref(db, 'global_search_state'), state).catch(() => { });
 
     } catch (e) {
         statusMsg.innerText = "오류: " + e.message;
@@ -241,8 +260,25 @@ async function performSearch(query, category) {
     }
 }
 
-// --- HELPERS (UI, API) ---
+// --- API FETCHERS ---
+async function fetchYouTubeSearch(q, k, pt) {
+    let u = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`;
+    if (pt) u += `&pageToken=${pt}`;
+    const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
+}
+async function fetchYouTubePopular(c, k, pt) {
+    let u = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${c}&maxResults=50&key=${k}`;
+    if (pt) u += `&pageToken=${pt}`;
+    const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
+}
+async function translateKeywords(tx, k) {
+    const rs = {};
+    const b = async (l) => { try { const r = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${k}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: tx, target: l, format: 'text' }) }); return (await r.json()).data.translations.map(t => t.translatedText); } catch { return Array(tx.length).fill('-'); } };
+    await Promise.all(['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'].map(async l => rs[l] = await b(l)));
+    return rs;
+}
 
+// --- UI HELPERS ---
 function setupUI() {
     const list = document.getElementById('categories-list');
     list.innerHTML = '';
@@ -254,17 +290,25 @@ function setupUI() {
         list.appendChild(btn);
     });
 
-    document.getElementById('search-btn').onclick = () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory());
-    document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); };
+    document.getElementById('search-btn').addEventListener('click', () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory()));
+    document.getElementById('keyword-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); });
 
-    // Modal
     const modal = document.getElementById('api-modal');
     document.getElementById('api-btn').onclick = () => { modal.style.display = "block"; resetForm(); };
     document.querySelector('.close').onclick = () => modal.style.display = "none";
     window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
 
-    document.getElementById('save-key-btn').onclick = saveApiKey;
+    document.getElementById('save-key-btn').addEventListener('click', window.saveApiKey); // Attach
     document.getElementById('cancel-edit-btn').onclick = resetForm;
+}
+
+function resetForm() {
+    document.getElementById('new-key-name').value = "";
+    document.getElementById('new-key-value').value = "";
+    document.getElementById('new-key-type').value = "youtube";
+    document.getElementById('edit-key-id').value = "";
+    document.getElementById('save-key-btn').innerText = "저장하기";
+    document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
 function renderKeys(keysData) {
@@ -313,45 +357,9 @@ function updateUI(data) {
     }
 }
 
-function resetForm() {
-    document.getElementById('new-key-name').value = "";
-    document.getElementById('new-key-value').value = "";
-    document.getElementById('new-key-type').value = "youtube";
-    document.getElementById('edit-key-id').value = "";
-    document.getElementById('save-key-btn').innerText = "저장하기";
-    document.getElementById('cancel-edit-btn').style.display = "none";
-}
-
 function getCurrentCategory() {
     return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트";
 }
 
-// Global Actions
-window.prepareEdit = (id, n, k, t) => {
-    document.getElementById('new-key-name').value = n;
-    document.getElementById('new-key-value').value = k;
-    document.getElementById('new-key-type').value = t;
-    document.getElementById('edit-key-id').value = id;
-    document.getElementById('save-key-btn').innerText = "수정 완료";
-    document.getElementById('cancel-edit-btn').style.display = "block";
-};
-window.toggleKey = (id, active) => db.ref(`${DB_KEY_PATH}/${id}/active`).set(active);
-window.deleteKey = (id) => { if (confirm("삭제하시겠습니까?")) db.ref(`${DB_KEY_PATH}/${id}`).remove(); };
-
-// API Fetchers
-async function fetchYouTubeSearch(q, k, pt) {
-    let u = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`;
-    if (pt) u += `&pageToken=${pt}`;
-    const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
-}
-async function fetchYouTubePopular(c, k, pt) {
-    let u = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${c}&maxResults=50&key=${k}`;
-    if (pt) u += `&pageToken=${pt}`;
-    const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
-}
-async function translateKeywords(tx, k) {
-    const rs = {};
-    const b = async (l) => { try { const r = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${k}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: tx, target: l, format: 'text' }) }); return (await r.json()).data.translations.map(t => t.translatedText); } catch { return Array(tx.length).fill('x'); } };
-    await Promise.all(['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'].map(async l => rs[l] = await b(l)));
-    return rs;
-}
+// Start
+initApp();
