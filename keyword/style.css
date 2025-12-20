@@ -77,18 +77,99 @@ h1 .red-dot {
 }
 
 #api-btn {
-    background: transparent;
-    border: 1px solid var(--text-secondary);
-    color: var(--text-secondary);
-    padding: 5px 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+    padding: 8px 20px;
     border-radius: 20px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 #api-btn:hover {
-    border-color: var(--text-primary);
-    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+#api-btn::before {
+    content: "🔑";
+    /* Adding icon via CSS or I can add in HTML. CSS is cleaner for now */
+    font-size: 1.1em;
+}
+
+/* Modal & Input Styles (Moved from internal HTML style for better management) */
+.btn-add {
+    background: linear-gradient(135deg, #ff3b3b, #ff6b6b);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    box-shadow: 0 4px 15px rgba(255, 59, 59, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+}
+
+.btn-add:hover {
+    background: linear-gradient(135deg, #ff5252, #ff8787);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 59, 59, 0.5);
+}
+
+.btn-add:active {
+    transform: translateY(0);
+}
+
+.input-dark {
+    width: 100%;
+    padding: 12px 15px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: white;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    font-size: 0.95rem;
+}
+
+.input-dark:focus {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 0 2px rgba(255, 59, 59, 0.2);
+}
+
+/* Delete Button Improvement */
+.btn-delete {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid #ff4444;
+    color: #ff4444;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-delete:hover {
+    background: #ff4444;
+    color: white;
+    transform: scale(1.1);
 }
 
 /* Categories */
