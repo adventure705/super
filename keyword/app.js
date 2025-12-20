@@ -280,60 +280,136 @@ function selectCategory(category) {
     performSearch(category, category);
 }
 
-function performSearch(query, category) {
-    // Mock Search with Sub-category structure
-    const results = [];
+async function performSearch(query, category) {
+    const statusMsg = document.getElementById('status-message');
 
-    // Generate realistic looking sub-topics based on category
-    const subTopics = [
-        "기초/입문", "심화/응용", "최신 트렌드", "필수 장비/도구", "유명 유튜버/사례",
-        "수익화 전략", "문제 해결 팁", "Q&A 모음", "비하인드 스토리", "관련 뉴스"
-    ];
-
-    for (let i = 1; i <= 100; i++) {
-        const subIndex = Math.floor((i - 1) / 10); // Change sub-topic every 10 items
-        const subTopic = subTopics[subIndex % subTopics.length];
-
-        results.push({
-            rank: i,
-            korean: `[${category}] ${subTopic} > ${query} 관련 주제 ${i}`, // Sub-topic emphasized
-            english: `[${category}] ${subTopic} > ${query} topic ${i}`,
-            japanese: `[${category}] ${subTopic} > ${query} トピック ${i}`,
-            chinese: `[${category}] ${subTopic} > ${query} 话题 ${i}`,
-            spanish: `[${category}] ${subTopic} > ${query} tema ${i}`,
-            hindi: `[${category}] ${subTopic} > ${query} विषय ${i}`,
-            russian: `[${category}] ${subTopic} > ${query} тема ${i}`
-        });
+    // 1. Get Active API Key
+    const apiKey = await getActiveApiKey();
+    if (!apiKey) {
+        alert("활성화된 API Key가 없습니다. 우측 상단 'API' 버튼을 눌러 키를 등록하고 활성화해주세요.");
+        return;
     }
 
-    const state = {
-        query: query,
-        selectedCategory: category,
-        results: results,
-        timestamp: Date.now()
+    statusMsg.innerText = "YouTube 데이터를 불러오는 중...";
+    statusMsg.style.color = "#4dabf7";
+
+    try {
+        // 2. Fetch Keywords from YouTube
+        // Use 'q' as combined category + query for better context
+        const searchQ = query ? `${category} ${query}` : category;
+        const keywords = await fetchYouTubeData(searchQ, apiKey);
+
+        if (keywords.length === 0) {
+            throw new Error("검색 결과가 없습니다.");
+        }
+
+        statusMsg.innerText = `키워드 ${keywords.length}개 번역 중... (시간이 걸릴 수 있습니다)`;
+
+        // 3. Translate Keywords
+        // Target Languages: EN, JP, CN(zh), ES, HI, RU
+        const translatedResults = await translateKeywords(keywords, apiKey);
+
+        // 4. Construct Final Data
+        const results = keywords.map((original, index) => {
+            return {
+                rank: index + 1,
+                korean: original,
+                english: translatedResults.en[index] || '-',
+                japanese: translatedResults.ja[index] || '-',
+                chinese: translatedResults['zh-CN'][index] || '-',
+                spanish: translatedResults.es[index] || '-',
+                hindi: translatedResults.hi[index] || '-',
+                russian: translatedResults.ru[index] || '-'
+            };
+        });
+
+        const state = {
+            query: query || category,
+            selectedCategory: category,
+            results: results,
+            timestamp: Date.now()
+        };
+
+        db.ref('global_search_state').update(state);
+        statusMsg.innerText = "검색 및 번역 완료!";
+        statusMsg.style.color = "#aaa";
+
+    } catch (err) {
+        console.error("Search Flow Error:", err);
+        statusMsg.innerText = "오류 발생: " + err.message;
+        statusMsg.style.color = "#ff4444";
+        alert("진행 중 오류가 발생했습니다: " + err.message);
+    }
+}
+
+async function fetchYouTubeData(query, apiKey) {
+    // Fetch up to 50 items (max per page) to save quota/time
+    const maxResults = 50;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "YouTube API Error");
+    }
+
+    const data = await response.json();
+    // Extract video titles as keywords, remove duplicates
+    const titles = data.items.map(item => item.snippet.title);
+    const uniqueTitles = [...new Set(titles)];
+    return uniqueTitles;
+}
+
+async function translateKeywords(texts, apiKey) {
+    const targets = ['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'];
+    const results = {};
+
+    // Initialise results arrays
+    targets.forEach(lang => results[lang] = []);
+
+    // Helper to translate a batch for ONE language
+    const translateBatch = async (lang) => {
+        const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+
+        // We might need to send multiple 'q' parameters. 
+        // fetch body can do this easily with URLSearchParams for POST
+        // But Google Translate API supports POST with JSON body too.
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                q: texts,
+                target: lang,
+                format: 'text'
+            })
+        });
+
+        if (!response.ok) {
+            // If translation fails (e.g. API not enabled), insert placeholder
+            console.warn(`Translation failed for ${lang}`);
+            return new Array(texts.length).fill("번역 실패");
+        }
+
+        const data = await response.json();
+        return data.data.translations.map(t => t.translatedText);
     };
 
-    db.ref('global_search_state').update(state);
+    // Run translations in parallel for speed
+    const promises = targets.map(async lang => {
+        const translations = await translateBatch(lang);
+        results[lang] = translations;
+    });
+
+    await Promise.all(promises);
+    return results;
 }
 
 function getCurrentCategory() {
     const active = document.querySelector('.category-pill.active');
     return active ? active.innerText : CATEGORIES[0];
-}
-
-// Ensure ./firebase-config.json is tried first or directly
-async function loadConfig() {
-    try {
-        let response = await fetch('./firebase-config.json');
-        if (!response.ok) response = await fetch('../firebase-config.json');
-
-        if (!response.ok) throw new Error("Failed to load config");
-        return await response.json();
-    } catch (e) {
-        console.error("Config error:", e);
-        console.log("Connect to a web server to load config.");
-        return null;
-    }
 }
 
 function updateUI(data) {
@@ -359,15 +435,15 @@ function updateUI(data) {
         data.results.forEach(row => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${row.rank}</td>
-                <td>${row.korean}</td>
-                <td>${row.english}</td>
-                <td>${row.japanese}</td>
-                <td>${row.chinese}</td>
-                <td>${row.spanish}</td>
-                <td>${row.hindi}</td>
-                <td>${row.russian}</td>
-            `;
+            <td>${row.rank}</td>
+            <td>${row.korean}</td>
+            <td>${row.english}</td>
+            <td>${row.japanese}</td>
+            <td>${row.chinese}</td>
+            <td>${row.spanish}</td>
+            <td>${row.hindi}</td>
+            <td>${row.russian}</td>
+        `;
             tbody.appendChild(tr);
         });
         document.getElementById('status-message').innerText = "데이터가 동기화되었습니다. (검색어: " + data.query + ")";
