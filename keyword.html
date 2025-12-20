@@ -636,6 +636,32 @@
                 <!-- Debug Console -->
                 <div id="debug-log">System Ready.</div>
             </div>
+
+            <!-- TroubleShooting Guide -->
+            <div style="margin-top:20px; text-align:center; border-top:1px dashed #333; padding-top:10px;">
+                <button onclick="window.toggleHelp()"
+                    style="background:none; border:none; color:#666; text-decoration:underline; cursor:pointer; font-size:0.8rem;">🔧
+                    동기화가 안 되나요?</button>
+                <div id="help-box"
+                    style="display:none; text-align:left; background:#111; padding:15px; margin-top:10px; border:1px solid #444; border-radius:8px; font-size:0.8rem; color:#ccc;">
+                    <p style="margin-bottom:10px;font-weight:bold;color:#ff3b3b">권한 문제 해결 방법:</p>
+                    <p>1. <a href="https://console.firebase.google.com/" target="_blank" style="color:#4dabf7">Firebase
+                            콘솔</a> 접속</p>
+                    <p>2. 프로젝트 선택 > <strong>Build</strong> > <strong>Realtime Database</strong></p>
+                    <p>3. 상단 <strong>규칙(Rules)</strong> 탭 클릭</p>
+                    <p>4. 아래 내용을 복사해서 덮어쓰고 <strong>[게시(Publish)]</strong> 버튼 누르기:</p>
+                    <textarea
+                        style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; margin-top:5px; padding:5px; font-family:monospace;"
+                        readonly onclick="this.select()">{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}</textarea>
+                    <p style="margin-top:10px; color:#888;">* 주의: 이 설정은 모든 사용자가 데이터를 읽고 쓸 수 있게 합니다.</p>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -646,8 +672,7 @@
 
     <!-- App Logic -->
     <script>
-        // Use a strictly public-sounding path to avoid rule conflicts
-        const DB_KEY = 'public_shared_keys_final';
+        const DB_KEY = 'sync_keys_v1';
 
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
@@ -670,6 +695,10 @@
                 d.scrollTop = d.scrollHeight;
             }
         }
+        window.toggleHelp = () => {
+            const el = document.getElementById('help-box');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        };
 
         function saveApiKey() {
             const n = document.getElementById('new-key-name').value.trim();
@@ -683,28 +712,27 @@
 
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // LOCAL OPTIMISTIC UPDATE FIRST
+            // Local First
             const cache = getLocalCache();
             d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
-            saveLocalCache(cache); // fast update
+            saveLocalCache(cache);
             window.resetForm();
 
-            // SERVER SYNC with TIMEOUT check
             if (db) {
                 showSync("☁️ 업로드...");
                 log(`Uploading: ${n}`);
 
-                // Timeout Race to catch Hanging connections
+                // 10s Timeout
                 const writeOp = db.ref(DB_KEY + "/" + i).set(d);
-                const timeoutOp = new Promise((_, reject) => setTimeout(() => reject(new Error("Server Timeout")), 5000));
+                const timeoutOp = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (10s)")), 10000));
 
                 Promise.race([writeOp, timeoutOp])
                     .then(() => { showSync("☁️ 완료"); log("Upload Success"); })
                     .catch(e => {
                         console.error(e);
-                        log("Upload FAIL: " + e.message);
-                        alert("⚠️ 업로드 실패: " + e.message + "\n(데이터는 로컬에 저장되었습니다)");
+                        log("Err: " + e.message);
+                        alert("⚠️ 업로드 실패: " + e.message + "\n\n계속 실패한다면 하단의 '🔧 동기화 설정'을 눌러 규칙을 확인하세요.");
                         showSync("⚠️ 로컬저장");
                     });
             } else {
@@ -714,7 +742,7 @@
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        // Optimistic toggles/deletes
+        // Toggles
         window.togK = (id, v) => {
             const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
             if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Toggle Error: " + e.message));
@@ -735,13 +763,13 @@
         };
         window.forceSync = () => {
             if (db) {
-                log("Forcing Refresh from Server...");
+                log("Forcing Refresh...");
                 db.ref(DB_KEY).once('value').then(s => {
                     const val = s.val() || {};
                     log("Force Sync Received: " + Object.keys(val).length);
                     saveLocalCache(val);
-                    alert("최신 데이터를 불러왔습니다.");
-                });
+                    alert("서버에서 불러오기 성공");
+                }).catch(e => alert("동기화 실패: " + e.message));
             }
         };
 
@@ -749,7 +777,6 @@
         function initApp() {
             setupUI();
 
-            // 2. Wait for Firebase SDK
             const maxWait = 50;
             let attempts = 0;
             const checkFirebase = setInterval(() => {
@@ -759,7 +786,7 @@
                     startFirebase();
                 } else if (attempts >= maxWait) {
                     clearInterval(checkFirebase);
-                    document.getElementById('status-message').innerText = "오프라인";
+                    document.getElementById('status-message').innerText = "오프라인 (SDK)";
                     log("SDK Load Timeout");
                 }
             }, 100);
@@ -785,25 +812,23 @@
 
                     auth.signInAnonymously().then((userCredential) => {
                         const uid = userCredential.user ? userCredential.user.uid : 'anon';
-                        log(`Auth OK [${uid.substring(0, 5)}..]`);
+                        log(`Auth OK`);
 
-                        // SMART SYNC LISTENER
                         db.ref(DB_KEY).on('value', s => {
                             const val = s.val();
                             const local = getLocalCache();
 
                             if (val) {
-                                log("Sync Received: " + Object.keys(val).length + " keys");
+                                log("Sync Update: " + Object.keys(val).length + " keys");
                                 saveLocalCache(val);
                             } else {
-                                // Server is Empty.
                                 if (Object.keys(local).length > 0) {
-                                    log("Auto-Bootstrap: Uploading Local to Server...");
+                                    log("Auto-Bootstrap: Uploading Local...");
                                     db.ref(DB_KEY).set(local)
                                         .then(() => log("Bootstrap Done"))
-                                        .catch(e => log("Bootstrap Fail: " + e.message));
+                                        .catch(e => log("Bootstrap Err: " + e.message));
                                 } else {
-                                    log("Server & Local Empty");
+                                    log("Ready (Empty)");
                                 }
                             }
                         });
@@ -839,8 +864,6 @@
 
             try {
                 let list = [];
-                // Use cache: 'no-store' to ensure we get fresh results? Maybe not needed for YouTube API
-                // but good for reliability.
                 if (q) {
                     const r1 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`);
                     list = r1.items.map(i => i.snippet.title);
@@ -862,7 +885,6 @@
                         list = r1.items.map(i => i.snippet.title);
                     }
                 }
-
                 list = [...new Set(list)].slice(0, 100);
 
                 let trans = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
