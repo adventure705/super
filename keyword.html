@@ -5,15 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube 다국어 키워드 검색기</title>
+    <!-- CSS -->
     <link rel="stylesheet" href="keyword/style.css">
-    <!-- Preconnect for Speed -->
+
+    <!-- Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com">
     <link rel="preconnect" href="https://template-3530f.firebaseio.com">
 
-    <link rel="stylesheet" href="keyword/style.css">
-    <!-- Preconnect for Speed -->
-    <link rel="preconnect" href="https://www.gstatic.com">
-    <link rel="preconnect" href="https://template-3530f.firebaseio.com">
+    <!-- Firebase SDK (Compat Version for file:// support) -->
+    <!-- Firestore 제외하여 경량화 -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
     <style>
         /* API Modal Styles */
         .modal {
@@ -96,12 +100,6 @@
             text-overflow: ellipsis;
         }
 
-        .key-meta {
-            font-size: 0.8rem;
-            color: #888;
-            margin-top: 4px;
-        }
-
         .key-actions {
             display: flex;
             gap: 10px;
@@ -109,7 +107,7 @@
             flex-shrink: 0;
         }
 
-        /* Toggle Switch */
+        /* Switch */
         .toggle-switch {
             position: relative;
             display: inline-block;
@@ -155,7 +153,7 @@
             transform: translateX(20px);
         }
 
-        /* Delete Button */
+        /* Buttons */
         .btn-delete {
             background: transparent;
             border: 1px solid #ff4444;
@@ -173,14 +171,6 @@
         .btn-delete:hover {
             background: #ff4444;
             color: white;
-        }
-
-        /* Add Section */
-        .add-section {
-            border-top: 1px solid #333;
-            padding-top: 20px;
-            display: flex;
-            gap: 10px;
         }
 
         .input-dark {
@@ -217,34 +207,31 @@
 </head>
 
 <body>
-    <!-- API Key Modal -->
+    <!-- API Modal -->
     <div id="api-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>🔑 YouTube API Key 관리</h2>
             <div class="key-list-container" id="key-list">
-                <!-- Keys will be injected here -->
                 <div style="text-align:center; color:#888; padding: 20px;">로딩 중...</div>
             </div>
-
-            <div class="add-section" style="flex-direction: column; gap: 10px;">
+            <div class="add-section"
+                style="border-top: 1px solid #333; padding-top: 20px; display: flex; flex-direction: column; gap: 10px;">
                 <h3 style="font-size: 1rem; color: #ccc; margin-bottom: 5px;">키 등록/수정</h3>
                 <input type="hidden" id="edit-key-id">
-                <div style="display: flex; gap: 10px; margin-bottom: 5px;">
-                    <input type="text" id="new-key-name" class="input-dark" placeholder="키 이름 (예: 내 계정 1)"
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="new-key-name" class="input-dark" placeholder="이름 (예: 내 키 1)"
                         style="flex: 2;">
                     <select id="new-key-type" class="input-dark" style="flex: 1; cursor: pointer;">
-                        <option value="youtube">📺 YouTube API</option>
-                        <option value="translate">🌐 Translate API</option>
+                        <option value="youtube">📺 YouTube</option>
+                        <option value="translate">🌐 Translate</option>
                     </select>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="new-key-value" class="input-dark" placeholder="API Key 입력 (AIza...)"
-                        style="width: 100%;">
-                </div>
+                <input type="text" id="new-key-value" class="input-dark" placeholder="API Key (AIza...)"
+                    style="width: 100%;">
                 <div style="margin-top: 20px; display: flex; gap: 10px;">
                     <button id="cancel-edit-btn" class="btn-add"
-                        style="display: none; flex: 1; background: #555; box-shadow:none;">취소</button>
+                        style="display: none; flex: 1; background: #555;">취소</button>
                     <button id="save-key-btn" class="btn-add"
                         style="flex: 2; width: 100%; padding: 14px; font-size: 1.1rem;">저장하기</button>
                 </div>
@@ -252,43 +239,34 @@
         </div>
     </div>
 
+    <!-- Main App -->
     <div class="app-container">
-        <!-- Header -->
         <header>
             <div class="top-nav">
-                <!-- Logo ignored as per instructions, but title is needed -->
-                <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기 (100개 키워드)</h1>
-                <div class="api-btn-container">
-                    <button id="api-btn" class="icon-btn">API</button>
-                </div>
+                <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기</h1>
+                <div class="api-btn-container"><button id="api-btn" class="icon-btn">API</button></div>
             </div>
-            <p class="subtitle">카테고리 선택/키워드 입력 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
+            <p class="subtitle">카테고리 선택 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
         </header>
 
-        <!-- Categories -->
         <section class="categories-section">
             <div class="section-title"><span class="icon">◎</span> 카테고리 선택</div>
-            <div class="categories-list" id="categories-list">
-                <!-- Categories will be injected by JS -->
-            </div>
+            <div class="categories-list" id="categories-list"></div>
             <div class="category-indicator-bar">
                 <div class="indicator-progress"></div>
             </div>
         </section>
 
-        <!-- Search -->
         <section class="search-section">
             <div class="search-box">
-                <input type="text" id="keyword-input" placeholder="여기에 원하는 키워드를 직접 입력하세요 (예: 여행)">
+                <input type="text" id="keyword-input" placeholder="키워드 직접 입력 (예: 여행)">
                 <button id="search-btn">검색</button>
             </div>
         </section>
 
-        <!-- Results -->
         <section class="results-section">
-            <div class="section-title"><span class="icon">●</span> 주제에 대한 연관 키워드 (100개)</div>
-            <div class="status-message" id="status-message">이전 세션의 검색 결과가 복구되었습니다.</div>
-
+            <div class="section-title"><span class="icon">●</span> 연관 키워드 (100개)</div>
+            <div class="status-message" id="status-message">준비됨</div>
             <div class="table-container">
                 <table id="results-table">
                     <thead>
@@ -303,20 +281,14 @@
                             <th>🇷🇺 러시아어</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <!-- Rows injected by JS -->
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
         </section>
     </div>
 
-    <!-- MAIN APP SCRIPT INLINED for file:// protocol support -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getDatabase, ref, onValue, update, push, set, remove, serverTimestamp, query, orderByChild, equalTo, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
+    <!-- Logic Script (Compat Mode for file:// support) -->
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
             authDomain: "template-3530f.firebaseapp.com",
@@ -328,13 +300,11 @@
         };
 
         const DB_KEY_PATH = 'shared_api_keys';
-
         const CATEGORIES = [
             "영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠",
             "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트",
             "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"
         ];
-
         const CATEGORY_IDS = {
             "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15",
             "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22",
@@ -342,229 +312,187 @@
             "교육": "27", "과학/기술": "28", "비영리/사회운동": "29"
         };
 
-        let db;
-        let auth;
+        let db, auth;
+
+        document.addEventListener("DOMContentLoaded", initApp);
 
         async function initApp() {
             setupUI();
-            loadCachedApiKeys();
+            loadCachedApiKeys(); // FAST LOAD
 
             try {
-                console.log("Initializing Firebase (Modular)...");
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getDatabase(app);
+                // Initialize Firebase (Compat)
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.database();
+                auth = firebase.auth();
 
-                const connectedRef = ref(db, ".info/connected");
-                onValue(connectedRef, (snap) => {
-                    const statusIndicator = document.getElementById('status-message');
+                console.log("Firebase Init (Compat)");
+
+                // Connection Monitor
+                db.ref(".info/connected").on("value", snap => {
+                    const el = document.getElementById('status-message');
                     if (snap.val() === true) {
-                        console.log("Connected to Firebase");
-                        if (statusIndicator) {
-                            statusIndicator.innerText = "서버 연결됨";
-                            statusIndicator.style.color = "#4dabf7";
-                        }
+                        if (el && el.innerText !== "완료") { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
                     } else {
-                        console.log("Disconnected (or Connecting...)");
-                        if (statusIndicator && !statusIndicator.innerText.includes("모드")) {
-                            statusIndicator.innerText = "연결 중...";
-                            statusIndicator.style.color = "#aaa";
-                        }
+                        if (el && !el.innerText.includes("모드")) { el.innerText = "연결 중..."; el.style.color = "#888"; }
                     }
                 });
 
-                signInAnonymously(auth).catch(e => console.error("Auth Fail:", e));
-                onAuthStateChanged(auth, user => {
+                // Auth
+                auth.signInAnonymously().catch(e => console.error("Auth Err:", e));
+                auth.onAuthStateChanged(user => {
                     if (user) {
-                        console.log("User Authenticated:", user.uid);
                         startDataSync();
                     }
                 });
 
             } catch (e) {
-                console.error("Init Error:", e);
-                alert("앱 초기화 오류: " + e.message);
+                console.error("Critical Error", e);
+                alert("초기화 오류: " + e.message);
             }
         }
 
         function startDataSync() {
-            const keysRef = ref(db, DB_KEY_PATH);
-            onValue(keysRef, (snapshot) => {
-                const val = snapshot.val() || {};
+            db.ref(DB_KEY_PATH).on('value', snap => {
+                const val = snap.val() || {};
                 localStorage.setItem('cached_api_keys', JSON.stringify(val));
                 renderKeys(val);
-            }, (err) => {
-                console.warn("Read Error:", err);
             });
 
-            const searchStateRef = ref(db, 'global_search_state');
-            onValue(searchStateRef, (snapshot) => {
-                const val = snapshot.val();
+            db.ref('global_search_state').on('value', snap => {
+                const val = snap.val();
                 if (val) updateUI(val);
             });
         }
 
         function loadCachedApiKeys() {
             try {
-                const cached = localStorage.getItem('cached_api_keys');
-                if (cached) renderKeys(JSON.parse(cached));
-            } catch { }
+                const c = localStorage.getItem('cached_api_keys');
+                if (c) renderKeys(JSON.parse(c));
+            } catch (e) { }
         }
 
-        // --- GLOBAL FUNCTIONS (Attached to window) ---
+        // --- GLOBAL ACTIONS ---
         window.saveApiKey = function () {
             const name = document.getElementById('new-key-name').value.trim();
             const key = document.getElementById('new-key-value').value.trim();
             const type = document.getElementById('new-key-type').value;
             const id = document.getElementById('edit-key-id').value;
 
-            if (!name || !key) return alert("입력값을 확인해주세요.");
+            if (!name || !key) return alert("값을 입력해주세요.");
+            if (!db) return alert("연결 대기 중...");
 
-            // Optimistic Local Save if DB not visible yet? No, wait for DB for safety or alert
-            if (!db) return alert("서버 연결 대기 중... (잠시 후 다시 시도)");
+            const data = { name, key, type, updatedAt: firebase.database.ServerValue.TIMESTAMP };
 
-            const data = {
-                name, key, type,
-                updatedAt: serverTimestamp()
-            };
+            const promise = id
+                ? db.ref(DB_KEY_PATH + "/" + id).update(data)
+                : (data.active = true, data.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY_PATH).push(data));
 
-            let promise;
-            if (id) {
-                promise = update(ref(db, `${DB_KEY_PATH}/${id}`), data);
-            } else {
-                data.active = true;
-                data.createdAt = serverTimestamp();
-                promise = push(ref(db, DB_KEY_PATH), data);
-            }
-
-            promise.then(() => {
-                alert(id ? "수정됨" : "저장됨");
-                resetForm();
-            }).catch(e => alert("실패: " + e.message));
+            promise.then(() => { alert("저장됨"); resetForm(); })
+                .catch(e => alert("저장 실패: " + e.message));
         };
 
-        window.toggleKey = function (id, isActive) {
-            if (db) set(ref(db, `${DB_KEY_PATH}/${id}/active`), isActive);
-        };
-
-        window.deleteKey = function (id) {
-            if (confirm("삭제?")) {
-                if (db) remove(ref(db, `${DB_KEY_PATH}/${id}`));
-            }
-        };
-
-        window.prepareEdit = function (id, name, key, type) {
-            document.getElementById('new-key-name').value = name;
-            document.getElementById('new-key-value').value = key;
-            document.getElementById('new-key-type').value = type;
+        window.toggleKey = (id, active) => db.ref(DB_KEY_PATH + "/" + id + "/active").set(active);
+        window.deleteKey = (id) => { if (confirm("삭제?")) db.ref(DB_KEY_PATH + "/" + id).remove(); };
+        window.prepareEdit = (id, n, k, t) => {
+            document.getElementById('new-key-name').value = n;
+            document.getElementById('new-key-value').value = k;
+            document.getElementById('new-key-type').value = t;
             document.getElementById('edit-key-id').value = id;
-            document.getElementById('save-key-btn').innerText = "수정 완료";
+            document.getElementById('save-key-btn').innerText = "수정";
             document.getElementById('cancel-edit-btn').style.display = "block";
         };
 
-        // --- INTERNAL HELPERS ---
+        // --- INTERNAL ---
         async function getActiveApiKey(type = 'youtube') {
+            try { return JSON.parse(localStorage.getItem('cached_api_keys'))[0].key; } catch { } // Ultra-fast failover
+
+            // Logic: Cache -> DB (Compat)
             try {
-                const cached = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
-                const keys = Object.values(cached).filter(k => (k.type || 'youtube') === type && k.active !== false);
-                if (keys.length > 0) return keys[Math.floor(Math.random() * keys.length)].key;
+                const c = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
+                const k = Object.values(c).filter(x => (x.type || 'youtube') === type && x.active !== false);
+                if (k.length) return k[Math.floor(Math.random() * k.length)].key;
             } catch { }
 
             if (!db) return null;
-            try {
-                const q = query(ref(db, DB_KEY_PATH), orderByChild('active'), equalTo(true));
-                const snap = await get(q);
-                const val = snap.val();
-                if (!val) return null;
-                const keys = Object.values(val).filter(k => (k.type || 'youtube') === type);
-                return keys.length ? keys[Math.floor(Math.random() * keys.length)].key : null;
-            } catch (e) {
-                return null;
-            }
+            const snap = await db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value');
+            const val = snap.val();
+            if (!val) return null;
+            const k = Object.values(val).filter(x => (x.type || 'youtube') === type);
+            return k.length ? k[Math.floor(Math.random() * k.length)].key : null;
         }
 
-        async function performSearch(queryText, category) {
-            const statusMsg = document.getElementById('status-message');
-            const youtubeKey = await getActiveApiKey('youtube');
-            const translateKey = await getActiveApiKey('translate');
+        async function performSearch(q, c) {
+            const msg = document.getElementById('status-message');
+            const yKey = await getActiveApiKey('youtube');
+            const tKey = await getActiveApiKey('translate');
 
-            if (!youtubeKey) return alert("API 키가 없습니다. 등록해주세요.");
-
-            statusMsg.innerText = "데이터 요청 중...";
-            statusMsg.style.color = "#4dabf7";
+            if (!yKey) return alert("API 키가 없습니다.");
+            msg.innerText = "검색 진행 중..."; msg.style.color = "#4dabf7";
 
             try {
                 let keywords = [];
-
-                if (queryText) {
-                    const p1 = await fetchYouTubeSearch(queryText, youtubeKey, null);
-                    keywords = p1.items.map(i => i.snippet.title);
-                    if (p1.nextPageToken) {
-                        const p2 = await fetchYouTubeSearch(queryText, youtubeKey, p1.nextPageToken);
-                        keywords = [...keywords, ...p2.items.map(i => i.snippet.title)];
+                if (q) {
+                    const r1 = await ytSearch(q, yKey);
+                    keywords = r1.items.map(i => i.snippet.title);
+                    if (r1.nextPageToken) {
+                        const r2 = await ytSearch(q, yKey, r1.nextPageToken);
+                        keywords = [...keywords, ...r2.items.map(i => i.snippet.title)];
                     }
                 } else {
-                    const catId = CATEGORY_IDS[category];
+                    const cid = CATEGORY_IDS[c];
                     try {
-                        if (!catId) throw new Error("ID Missing");
-                        const p1 = await fetchYouTubePopular(catId, youtubeKey, null);
-                        keywords = p1.items.map(i => i.snippet.title);
-                        if (p1.nextPageToken) {
-                            const p2 = await fetchYouTubePopular(catId, youtubeKey, p1.nextPageToken);
-                            keywords = [...keywords, ...p2.items.map(i => i.snippet.title)];
+                        const r1 = await ytPop(cid, yKey);
+                        keywords = r1.items.map(i => i.snippet.title);
+                        if (r1.nextPageToken) {
+                            const r2 = await ytPop(cid, yKey, r1.nextPageToken);
+                            keywords = [...keywords, ...r2.items.map(i => i.snippet.title)];
                         }
-                    } catch (e) {
-                        console.warn("Trending Fail -> Search Fallback");
-                        const p1 = await fetchYouTubeSearch(category, youtubeKey, null);
-                        keywords = p1.items.map(i => i.snippet.title);
+                    } catch {
+                        const r1 = await ytSearch(c, yKey);
+                        keywords = r1.items.map(i => i.snippet.title);
                     }
                 }
 
                 keywords = [...new Set(keywords)].slice(0, 100);
 
-                let translated = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
-                if (translateKey) {
-                    statusMsg.innerText = "번역 중...";
-                    translated = await translateKeywords(keywords, translateKey);
+                let tr = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
+                if (tKey) {
+                    msg.innerText = "번역 중...";
+                    tr = await doTranslate(keywords, tKey);
                 }
 
-                const results = keywords.map((k, i) => ({
+                const res = keywords.map((k, i) => ({
                     rank: i + 1, korean: k,
-                    english: translated.en[i] || '-', japanese: translated.ja[i] || '-',
-                    chinese: translated['zh-CN'][i] || '-', spanish: translated.es[i] || '-',
-                    hindi: translated.hi[i] || '-', russian: translated.ru[i] || '-'
+                    english: tr.en[i] || '-', japanese: tr.ja[i] || '-',
+                    chinese: tr['zh-CN'][i] || '-', spanish: tr.es[i] || '-',
+                    hindi: tr.hi[i] || '-', russian: tr.ru[i] || '-'
                 }));
 
-                const state = {
-                    query: queryText || category,
-                    selectedCategory: category,
-                    results: results,
-                    timestamp: Date.now()
-                };
-
+                const state = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(state);
-                statusMsg.innerText = "완료";
-                statusMsg.style.color = "#aaa";
-                if (db) update(ref(db, 'global_search_state'), state).catch(() => { });
+                msg.innerText = "완료"; msg.style.color = "#888";
+                if (db) db.ref('global_search_state').update(state).catch(() => { });
 
             } catch (e) {
-                statusMsg.innerText = "오류: " + e.message;
-                statusMsg.style.color = "#ff4444";
+                msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
                 alert(e.message);
             }
         }
 
-        async function fetchYouTubeSearch(q, k, pt) {
+        async function ytSearch(q, k, pt) {
             let u = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`;
             if (pt) u += `&pageToken=${pt}`;
-            const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
+            const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Err"); return r.json();
         }
-        async function fetchYouTubePopular(c, k, pt) {
+        async function ytPop(c, k, pt) {
             let u = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${c}&maxResults=50&key=${k}`;
             if (pt) u += `&pageToken=${pt}`;
-            const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Error"); return r.json();
+            const r = await fetch(u); if (!r.ok) throw new Error("YouTube API Err"); return r.json();
         }
-        async function translateKeywords(tx, k) {
+        async function doTranslate(tx, k) {
             const rs = {};
             const b = async (l) => { try { const r = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${k}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: tx, target: l, format: 'text' }) }); return (await r.json()).data.translations.map(t => t.translatedText); } catch { return Array(tx.length).fill('-'); } };
             await Promise.all(['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'].map(async l => rs[l] = await b(l)));
@@ -581,16 +509,15 @@
                 btn.onclick = () => performSearch(null, cat);
                 list.appendChild(btn);
             });
+            document.getElementById('search-btn').onclick = () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory());
+            document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); };
 
-            document.getElementById('search-btn').addEventListener('click', () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory()));
-            document.getElementById('keyword-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); });
+            const m = document.getElementById('api-modal');
+            document.getElementById('api-btn').onclick = () => { m.style.display = "block"; resetForm(); };
+            document.querySelector('.close').onclick = () => { m.style.display = "none"; };
+            window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
 
-            const modal = document.getElementById('api-modal');
-            document.getElementById('api-btn').onclick = () => { modal.style.display = "block"; resetForm(); };
-            document.querySelector('.close').onclick = () => modal.style.display = "none";
-            window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
-
-            document.getElementById('save-key-btn').addEventListener('click', window.saveApiKey);
+            document.getElementById('save-key-btn').onclick = window.saveApiKey;
             document.getElementById('cancel-edit-btn').onclick = resetForm;
         }
 
@@ -603,24 +530,21 @@
             document.getElementById('cancel-edit-btn').style.display = "none";
         }
 
-        function renderKeys(keysData) {
+        function renderKeys(data) {
             const list = document.getElementById('key-list');
             list.innerHTML = '';
-            const keys = Object.entries(keysData);
-            if (keys.length === 0) { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
-
+            const keys = Object.entries(data);
+            if (!keys.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">없음</div>'; return; }
             keys.sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
 
             keys.forEach(([id, d]) => {
-                const item = document.createElement('div');
-                item.className = 'key-item';
-                const vKey = d.key.length > 10 ? d.key.substring(0, 6) + "..." + d.key.substring(d.key.length - 4) : d.key;
-                item.innerHTML = `
+                const el = document.createElement('div');
+                el.className = 'key-item';
+                const v = d.key.length > 10 ? d.key.substring(0, 6) + "..." : d.key;
+                el.innerHTML = `
                     <div class="key-info">
-                        <div style="font-weight:bold;color:#fff;display:flex;align-items:center;gap:8px">
-                            ${d.type === 'translate' ? '🌐' : '📺'} ${d.name} <span style="font-size:0.8em;background:#444;border-radius:10px;padding:2px 8px;color:#ccc">${d.type || 'youtube'}</span>
-                        </div>
-                        <div class="key-value">${vKey}</div>
+                        <div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div>
+                        <div class="key-value">${v}</div>
                     </div>
                     <div class="key-actions">
                         <button class="btn-delete" style="color:#4dabf7;border-color:#4dabf7" onclick="prepareEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button>
@@ -628,32 +552,23 @@
                         <button class="btn-delete" onclick="deleteKey('${id}')">🗑️</button>
                     </div>
                 `;
-                list.appendChild(item);
+                list.appendChild(el);
             });
         }
 
         function updateUI(data) {
-            const input = document.getElementById('keyword-input');
-            if (input.value !== (data.query || "") && data.query) input.value = data.query;
-            document.querySelectorAll('.category-pill').forEach(b => {
-                b.classList.toggle('active', b.innerText === data.selectedCategory);
-            });
+            const inp = document.getElementById('keyword-input');
+            if (inp.value !== (data.query || "") && data.query) inp.value = data.query;
+            document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === data.selectedCategory));
             const tb = document.querySelector('#results-table tbody');
             tb.innerHTML = '';
-            if (data.results) {
-                data.results.forEach(row => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${row.rank}</td><td style="color:#fff">${row.korean}</td><td>${row.english}</td><td>${row.japanese}</td><td>${row.chinese}</td><td>${row.spanish}</td><td>${row.hindi}</td><td>${row.russian}</td>`;
-                    tb.appendChild(tr);
-                });
-            }
+            (data.results || []).forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${row.rank}</td><td style="color:#fff">${row.korean}</td><td>${row.english}</td><td>${row.japanese}</td><td>${row.chinese}</td><td>${row.spanish}</td><td>${row.hindi}</td><td>${row.russian}</td>`;
+                tb.appendChild(tr);
+            });
         }
-
-        function getCurrentCategory() {
-            return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트";
-        }
-
-        initApp();
+        function getCurrentCategory() { return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트"; }
     </script>
 </body>
 
