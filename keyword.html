@@ -603,7 +603,7 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>🔑 API 키 관리</h2>
-                <div style="font-size:0.8rem; color:#666">v5.0 (Auto-Config)</div>
+                <div style="font-size:0.8rem; color:#666">v6.0 (Firestore Sync)</div>
             </div>
 
             <div class="key-list-container" id="key-list">
@@ -652,15 +652,12 @@
                 <div class="diag-panel">
                     <div class="diag-row"><span>Project ID:</span> <span id="diag-project"
                             style="color:#4dabf7">Checking...</span></div>
-                    <div class="diag-row"><span>Status:</span> <span id="diag-uid"
-                            style="color:#fff">Connecting...</span></div>
-                    <div class="diag-row"><span>DB Path:</span> <span id="diag-path"
-                            style="color:#4dabf7; font-family:monospace;">global_shared_keys_prod</span></div>
-                    <div class="diag-row"><span>Last Update:</span> <span id="diag-last-rx">-</span></div>
+                    <div class="diag-row"><span>Backend:</span> <span id="diag-backend"
+                            style="color:#ff3b3b; font-weight:bold;">Firestore</span></div>
+                    <div class="diag-row"><span>Collection:</span> <span id="diag-path"
+                            style="color:#4dabf7; font-family:monospace;">global_data/keys</span></div>
+                    <div class="diag-row"><span>Last Snapshot:</span> <span id="diag-last-rx">-</span></div>
                     <div class="diag-row" style="background:#222; border:none; justify-content:center; gap:10px;">
-                        <button onclick="runConnectionTest()"
-                            style="background:#444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">📡
-                            연결 테스트</button>
                         <button onclick="forceSync()"
                             style="background:#444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🔄
                             강제 새로고침</button>
@@ -669,35 +666,36 @@
                     </div>
                 </div>
 
-                <div id="debug-log">System Ready.</div>
+                <div id="debug-log">Log Ready.</div>
             </div>
 
             <div id="help-box"
                 style="display:none; text-align:left; background:#111; padding:15px; margin-top:10px; border:1px solid #444; border-radius:8px; font-size:0.8rem; color:#ccc;">
-                <p>Firebase Rules 복사:</p>
+                <p>Firestore 규칙 (복사해서 콘솔에 적용):</p>
                 <textarea
                     style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; margin-top:5px; padding:5px; font-family:monospace;"
-                    readonly
-                    onclick="this.select()">{ "rules": { "global_shared_keys_prod": { ".read": true, ".write": true }, "connection_test": { ".read": true, ".write": true } } }</textarea>
+                    readonly onclick="this.select()">match /global_data/{doc} { allow read, write: if true; }</textarea>
             </div>
         </div>
     </div>
 
-    <!-- Firebase Scripts -->
+    <!-- Firebase Scripts (Compat + Firestore) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <!-- App Logic -->
     <script>
-        const DB_KEY = 'global_shared_keys_prod';
+        // FIRESTORE CONFIG
+        const FS_COL = 'global_data';
+        const FS_DOC = 'keyword_app_keys';
 
-        // Hardcoded backup if sync fails
-        let firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
+        // Hardcoded Default
+        let firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
 
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
-        let db, auth;
+        let db, auth; // db is Firestore instance now
 
         function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; } catch { return {}; } }
         function saveLocalCache(d) { localStorage.setItem('cached_api_keys', JSON.stringify(d)); renderKeys(d); }
@@ -705,196 +703,162 @@
         function log(msg) { console.log(msg); const d = document.getElementById('debug-log'); if (d) { d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`; d.scrollTop = d.scrollHeight; } }
         window.toggleHelp = () => { const el = document.getElementById('help-box'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
 
-        // --- DYNAMIC CONFIG & HTTP POLLING ---
+        // --- AUTH & CONFIG ---
         async function loadConfig() {
             try {
                 if (typeof __firebase_config !== 'undefined') {
-                    log("Loaded Config from Global");
+                    log("Config: Global");
                     return JSON.parse(__firebase_config);
                 }
                 const r = await fetch('firebase-config.json');
                 if (r.ok) {
-                    log("Loaded Config from JSON");
+                    log("Config: JSON");
                     return await r.json();
                 }
-            } catch (e) { log("Using Hardcoded Config"); }
-            return firebaseConfig; // Return hardcoded if fail
+            } catch (e) { log("Config: Hardcoded"); }
+            return firebaseConfig;
         }
 
-        function startHTTPFallback() {
-            log("Init HTTP Polling (3s)");
-            setInterval(async () => {
+        async function initApp() {
+            setupUI();
+
+            // 1. Config
+            const config = await loadConfig();
+            firebaseConfig = config;
+            document.getElementById('diag-project').innerText = config.projectId || 'Unknown';
+
+            // 2. Start Firebase (Firestore Mode)
+            if (window.firebase) {
                 try {
-                    const url = `${firebaseConfig.databaseURL}/${DB_KEY}.json`;
-                    const r = await fetch(url);
-                    if (r.ok) {
-                        const val = await r.json();
-                        if (val) {
-                            const current = JSON.stringify(getLocalCache());
-                            const incoming = JSON.stringify(val);
-                            if (current !== incoming) {
-                                saveLocalCache(val);
-                                document.getElementById('diag-last-rx').innerText = "HTTP " + new Date().toLocaleTimeString();
-                                log("HTTP Sync Updated");
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore(); // Use Firestore
+                    auth = firebase.auth();
+
+                    document.getElementById('status-message').innerText = "서버 연결 시도...";
+
+                    auth.signInAnonymously().then((u) => {
+                        const uid = u.user ? u.user.uid : 'anon';
+                        document.getElementById('status-message').innerText = "서버 연결됨";
+                        document.getElementById('status-message').style.color = "#4dabf7";
+                        showSync("☁️ 연결됨");
+                        log("Online (Firestore)");
+
+                        // Listen to Document
+                        const docRef = db.collection(FS_COL).doc(FS_DOC);
+                        docRef.onSnapshot((doc) => {
+                            document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
+                            if (doc.exists) {
+                                const data = doc.data();
+                                // Data structure: { keys: { id: { ... }, id2: { ... } } }
+                                // Or flat? Let's assume flat for simplicity, or wrapped.
+                                // Let's store directly: doc.data() IS the map of keys.
+                                const keys = data;
+                                log(`Snapshot: ${Object.keys(keys || {}).length} keys`);
+                                saveLocalCache(keys);
+                            } else {
+                                log("No Data (Empty Cloud)");
+                                // Bootstrap if local has keys
+                                const local = getLocalCache();
+                                if (Object.keys(local).length > 0) {
+                                    log("Uploading Local to Cloud...");
+                                    docRef.set(local).then(() => log("Bootstrap Done"));
+                                }
                             }
-                        }
-                    }
-                } catch (e) { }
-            }, 3000);
+                        }, (err) => {
+                            log("Listen Err: " + err.message);
+                            document.getElementById('status-message').innerText = "연결 끊김";
+                        });
+
+                    }).catch(e => {
+                        log("Auth Fail: " + e.message);
+                        alert("인증 실패: " + e.message);
+                    });
+
+                } catch (e) {
+                    console.error(e);
+                    log("Init Err: " + e.message);
+                }
+            }
         }
 
-        // Diagnostic Functions
-        window.runConnectionTest = () => {
-            if (!db) return alert("DB not initialized yet.");
-            log("Running Connection Test...");
-            const ts = Date.now();
-            const ref = db.ref('connection_test');
-            ref.set({ timestamp: ts, agent: navigator.userAgent }).then(() => {
-                log("Test Write OK. Verifying...");
-                ref.once('value').then(s => {
-                    const val = s.val();
-                    if (val && val.timestamp === ts) alert("✅ 연결 상태 정상!\n(쓰기/읽기 모두 성공)");
-                    else alert("⚠️ 쓰기는 성공했으나 읽기 값이 다릅니다.");
-                });
-            }).catch(e => {
-                log("Test Fail: " + e.message);
-                alert("❌ 연결 실패: " + e.message + "\n방화벽이나 규칙(Rules) 문제입니다.");
-            });
-        };
+        document.addEventListener('DOMContentLoaded', initApp);
+
+        // --- FIRESTORE ACTIONS ---
 
         function saveApiKey() {
             const n = document.getElementById('new-key-name').value.trim();
             const v = document.getElementById('new-key-value').value.trim();
             const t = document.getElementById('new-key-type').value;
             let i = document.getElementById('edit-key-id').value;
-            if (!n || !v) return alert('모든 필드를 입력해주세요.');
+            if (!n || !v) return alert('입력 확인 필요');
 
-            if (!i) i = db ? db.ref().push().key : 'temp_' + Date.now();
+            if (!i) i = 'k_' + Date.now(); // Simple ID
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
+            // Local Update (Optimistic)
             const cache = getLocalCache();
             d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
             saveLocalCache(cache);
             window.resetForm();
 
-            // DUAL WRITE
-            let pending = [];
-
             if (db) {
-                showSync("☁️ 업로드...");
-                log(`Uploading (SDK): ${n}`);
-                const writeOp = db.ref(DB_KEY + "/" + i).set(d);
-                const timeoutOp = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (10s)")), 10000));
-                pending.push(Promise.race([writeOp, timeoutOp]).catch(e => log("SDK Write Fail:" + e.message)));
+                showSync("☁️ 저장 중...");
+                log(`Saving ${n}...`);
+                // Firestore Update: using dot notation to update specific map field
+                // or just set the whole object if we want simple sync
+                // 'merge: true' with set({ [id]: d }) is best
+                const update = {};
+                update[i] = d;
+
+                db.collection(FS_COL).doc(FS_DOC).set(update, { merge: true })
+                    .then(() => { showSync("☁️ 완료"); log("Save OK"); })
+                    .catch(e => {
+                        log("Save Err: " + e.message);
+                        alert("저장 실패: " + e.message + "\n(Firestore 규칙을 확인하세요)");
+                        showSync("⚠️ 로컬저장");
+                    });
             }
-
-            // Fail-safe HTTP PUT
-            const httpUrl = `${firebaseConfig.databaseURL}/${DB_KEY}/${i}.json`;
-            log(`Uploading (HTTP): ${n}`);
-            pending.push(fetch(httpUrl, { method: 'PUT', body: JSON.stringify(d) }).then(r => { if (r.ok) log("HTTP Write OK"); }).catch(e => log("HTTP Write Err")));
-
-            Promise.allSettled(pending).then(() => { showSync("☁️ 완료"); });
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        window.togK = (id, v) => { const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); } if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Err: " + e.message)); };
-        window.delK = (id) => { if (!confirm("삭제?")) return; const c = getLocalCache(); delete c[id]; saveLocalCache(c); if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => log("Err: " + e.message)); };
 
-        window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
-        window.closeModal = () => document.getElementById('api-modal').style.display = "none";
-        window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
+        window.togK = (id, v) => {
+            const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
+            if (db) {
+                const s = {}; s[`${id}.active`] = v;
+                db.collection(FS_COL).doc(FS_DOC).update(s).catch(e => log("Err: " + e.message));
+            }
+        };
+
+        window.delK = (id) => {
+            if (!confirm("삭제?")) return;
+            const c = getLocalCache(); delete c[id]; saveLocalCache(c);
+            if (db) {
+                // Firestore delete field
+                const s = {}; s[id] = firebase.firestore.FieldValue.delete();
+                db.collection(FS_COL).doc(FS_DOC).update(s).catch(e => log("Err: " + e.message));
+            }
+        };
 
         window.forceSync = () => {
             if (db) {
                 log("Forcing Read...");
-                db.ref(DB_KEY).once('value').then(s => {
-                    const val = s.val() || {};
-                    log("Read " + Object.keys(val).length + " keys from Server");
-                    saveLocalCache(val);
-                    document.getElementById('diag-last-rx').innerText = "SDK " + new Date().toLocaleTimeString();
-                    alert("서버 데이터 불러오기 성공!\n(키 개수: " + Object.keys(val).length + ")");
-                }).catch(e => alert("실패: " + e.message));
+                db.collection(FS_COL).doc(FS_DOC).get().then(doc => {
+                    if (doc.exists) {
+                        const val = doc.data();
+                        log("Fetched " + Object.keys(val).length + " keys");
+                        saveLocalCache(val);
+                        alert("동기화 완료 (" + Object.keys(val).length + ")");
+                    } else alert("데이터 없음");
+                }).catch(e => alert("Err: " + e.message));
             }
         };
 
-        // --- INIT ---
-        async function initApp() {
-            setupUI();
-
-            // 1. Load Config
-            const config = await loadConfig();
-            firebaseConfig = config;
-            document.getElementById('diag-project').innerText = config.projectId || 'Unknown';
-            log("Config Loaded: " + config.projectId);
-
-            // 2. Start HTTP Poll
-            startHTTPFallback();
-
-            // 3. Start Firebase SDK
-            const maxWait = 50; let attempts = 0;
-            const checkFirebase = setInterval(() => {
-                attempts++;
-                if (window.firebase && window.firebase.apps) {
-                    clearInterval(checkFirebase);
-                    startFirebase();
-                } else if (attempts >= maxWait) {
-                    clearInterval(checkFirebase);
-                    document.getElementById('status-message').innerText = "오프라인 (SDK)";
-                }
-            }, 100);
-        }
-
-        function startFirebase() {
-            try {
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                    db = firebase.database();
-                    auth = firebase.auth();
-
-                    document.getElementById('diag-path').innerText = DB_KEY;
-
-                    db.ref(".info/connected").on("value", s => {
-                        const el = document.getElementById('status-message');
-                        if (s.val()) {
-                            if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
-                            showSync("☁️ 연결됨");
-                            log("Online (SDK)");
-                        } else el.innerText = "연결 중...";
-                    });
-
-                    auth.signInAnonymously().then((u) => {
-                        const uid = u.user ? u.user.uid : 'anon';
-                        document.getElementById('diag-uid').innerText = "Logged in: " + uid.substring(0, 5);
-                        log(`Auth OK`);
-
-                        // WebSocket Listener (Primary)
-                        db.ref(DB_KEY).on('value', s => {
-                            const val = s.val();
-                            const local = getLocalCache();
-                            document.getElementById('diag-last-rx').innerText = "SDK " + new Date().toLocaleTimeString();
-
-                            if (val) {
-                                log("SDK Sync Update");
-                                saveLocalCache(val);
-                            } else {
-                                if (Object.keys(local).length > 0) {
-                                    log("Bootstrap: Uploading Local...");
-                                    db.ref(DB_KEY).set(local).then(() => log("Bootstrap Done"));
-                                } else log("Ready (Empty)");
-                            }
-                        });
-                        // SearchState
-                        db.ref('global_search_state_v2').on('value', s => { if (s.val()) updateUI(s.val()); });
-                    }).catch(e => {
-                        document.getElementById('diag-uid').innerText = "Auth Fail";
-                        log("Auth Fail: " + e.message);
-                    });
-                }
-            } catch (e) { console.error(e); log("Init Fail: " + e.message); }
-        }
-
-        document.addEventListener('DOMContentLoaded', initApp);
+        // UI & TOOLS
+        window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
+        window.closeModal = () => document.getElementById('api-modal').style.display = "none";
+        window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
 
         // App Functions
         async function getApiKey(t = 'youtube') {
@@ -955,7 +919,6 @@
                 const st = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(st);
                 msg.innerText = "완료"; msg.style.color = "#888";
-                if (db) db.ref('global_search_state_v2').update(st).catch(() => { });
 
             } catch (e) {
                 msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
