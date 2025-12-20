@@ -879,38 +879,46 @@
             msg.innerText = "요청 중..."; msg.style.color = "#4dabf7";
 
             try {
-                let list = [];
+                let rawItems = [];
                 if (q) {
                     const r1 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`);
-                    list = r1.items.map(i => i.snippet.title);
+                    rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }));
                     if (r1.nextPageToken) {
                         const r2 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(q)}&type=video&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
-                        list = [...list, ...r2.items.map(i => i.snippet.title)];
+                        rawItems = [...rawItems, ...r2.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }))];
                     }
                 } else {
                     const cid = CAT_IDS[c];
                     try {
                         const r1 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${cid}&maxResults=50&key=${k}`);
-                        list = r1.items.map(i => i.snippet.title);
+                        rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id }));
                         if (r1.nextPageToken) {
                             const r2 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
-                            list = [...list, ...r2.items.map(i => i.snippet.title)];
+                            rawItems = [...rawItems, ...r2.items.map(i => ({ title: i.snippet.title, id: i.id }))];
                         }
                     } catch {
                         const r1 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(c)}&type=video&maxResults=50&key=${k}`);
-                        list = r1.items.map(i => i.snippet.title);
+                        rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }));
                     }
                 }
-                list = [...new Set(list)].slice(0, 100);
+
+                // Deduplicate
+                const seen = new Set();
+                const uniqueItems = [];
+                rawItems.forEach(i => {
+                    if (i.id && !seen.has(i.id)) { seen.add(i.id); uniqueItems.push(i); }
+                });
+                const finalItems = uniqueItems.slice(0, 100);
+                const titles = finalItems.map(i => i.title);
 
                 let trans = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
                 if (tk) {
                     msg.innerText = "번역 중...";
-                    trans = await doTrans(list, tk);
+                    trans = await doTrans(titles, tk);
                 }
 
-                const res = list.map((txt, i) => ({
-                    rank: i + 1, korean: txt,
+                const res = finalItems.map((item, i) => ({
+                    rank: i + 1, korean: item.title, id: item.id,
                     english: trans.en[i] || '-', japanese: trans.ja[i] || '-',
                     chinese: trans['zh-CN'][i] || '-', spanish: trans.es[i] || '-',
                     hindi: trans.hi[i] || '-', russian: trans.ru[i] || '-'
@@ -918,7 +926,7 @@
 
                 const st = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(st);
-                msg.innerText = "완료"; msg.style.color = "#888";
+                msg.innerText = "완료 (" + finalItems.length + "개)"; msg.style.color = "#888";
 
             } catch (e) {
                 msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
@@ -971,7 +979,8 @@
             const tb = document.querySelector('#results-table tbody'); tb.innerHTML = '';
             (st.results || []).forEach(r => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${r.rank}</td><td style="color:#fff">${r.korean}</td><td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
+                const link = r.id ? `<a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" style="color:#fff;text-decoration:none;cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.korean}</a>` : r.korean;
+                tr.innerHTML = `<td>${r.rank}</td><td style="color:#fff">${link}</td><td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
                 tb.appendChild(tr);
             });
         }
