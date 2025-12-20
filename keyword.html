@@ -603,7 +603,7 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>🔑 API 키 관리</h2>
-                <div style="font-size:0.8rem; color:#666">v4.0 (Hybrid Sync)</div>
+                <div style="font-size:0.8rem; color:#666">v5.0 (Auto-Config)</div>
             </div>
 
             <div class="key-list-container" id="key-list">
@@ -650,6 +650,8 @@
 
                 <!-- DIAGNOSTIC PANEL -->
                 <div class="diag-panel">
+                    <div class="diag-row"><span>Project ID:</span> <span id="diag-project"
+                            style="color:#4dabf7">Checking...</span></div>
                     <div class="diag-row"><span>Status:</span> <span id="diag-uid"
                             style="color:#fff">Connecting...</span></div>
                     <div class="diag-row"><span>DB Path:</span> <span id="diag-path"
@@ -690,7 +692,9 @@
     <script>
         const DB_KEY = 'global_shared_keys_prod';
 
-        const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
+        // Hardcoded backup if sync fails
+        let firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
+
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
@@ -701,12 +705,26 @@
         function log(msg) { console.log(msg); const d = document.getElementById('debug-log'); if (d) { d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`; d.scrollTop = d.scrollHeight; } }
         window.toggleHelp = () => { const el = document.getElementById('help-box'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
 
-        // --- HTTP FALLBACK POLLING ---
+        // --- DYNAMIC CONFIG & HTTP POLLING ---
+        async function loadConfig() {
+            try {
+                if (typeof __firebase_config !== 'undefined') {
+                    log("Loaded Config from Global");
+                    return JSON.parse(__firebase_config);
+                }
+                const r = await fetch('firebase-config.json');
+                if (r.ok) {
+                    log("Loaded Config from JSON");
+                    return await r.json();
+                }
+            } catch (e) { log("Using Hardcoded Config"); }
+            return firebaseConfig; // Return hardcoded if fail
+        }
+
         function startHTTPFallback() {
-            log("Init HTTP Legacy Poll (3s cycle)");
+            log("Init HTTP Polling (3s)");
             setInterval(async () => {
                 try {
-                    // Try REST API read (Bypasses WebSocket issues)
                     const url = `${firebaseConfig.databaseURL}/${DB_KEY}.json`;
                     const r = await fetch(url);
                     if (r.ok) {
@@ -722,7 +740,7 @@
                         }
                     }
                 } catch (e) { }
-            }, 3000); // 3 seconds
+            }, 3000);
         }
 
         // Diagnostic Functions
@@ -760,7 +778,7 @@
             saveLocalCache(cache);
             window.resetForm();
 
-            // DUAL WRITE STRATEGY: SDK + HTTP REST
+            // DUAL WRITE
             let pending = [];
 
             if (db) {
@@ -801,10 +819,19 @@
         };
 
         // --- INIT ---
-        function initApp() {
+        async function initApp() {
             setupUI();
-            startHTTPFallback(); // Start HTTP Polling immediately
 
+            // 1. Load Config
+            const config = await loadConfig();
+            firebaseConfig = config;
+            document.getElementById('diag-project').innerText = config.projectId || 'Unknown';
+            log("Config Loaded: " + config.projectId);
+
+            // 2. Start HTTP Poll
+            startHTTPFallback();
+
+            // 3. Start Firebase SDK
             const maxWait = 50; let attempts = 0;
             const checkFirebase = setInterval(() => {
                 attempts++;
