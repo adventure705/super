@@ -603,7 +603,7 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>🔑 API 키 관리</h2>
-                <div style="font-size:0.8rem; color:#666">v3.1 (Global Shared)</div>
+                <div style="font-size:0.8rem; color:#666">v4.0 (Hybrid Sync)</div>
             </div>
 
             <div class="key-list-container" id="key-list">
@@ -701,6 +701,30 @@
         function log(msg) { console.log(msg); const d = document.getElementById('debug-log'); if (d) { d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`; d.scrollTop = d.scrollHeight; } }
         window.toggleHelp = () => { const el = document.getElementById('help-box'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
 
+        // --- HTTP FALLBACK POLLING ---
+        function startHTTPFallback() {
+            log("Init HTTP Legacy Poll (3s cycle)");
+            setInterval(async () => {
+                try {
+                    // Try REST API read (Bypasses WebSocket issues)
+                    const url = `${firebaseConfig.databaseURL}/${DB_KEY}.json`;
+                    const r = await fetch(url);
+                    if (r.ok) {
+                        const val = await r.json();
+                        if (val) {
+                            const current = JSON.stringify(getLocalCache());
+                            const incoming = JSON.stringify(val);
+                            if (current !== incoming) {
+                                saveLocalCache(val);
+                                document.getElementById('diag-last-rx').innerText = "HTTP " + new Date().toLocaleTimeString();
+                                log("HTTP Sync Updated");
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }, 3000); // 3 seconds
+        }
+
         // Diagnostic Functions
         window.runConnectionTest = () => {
             if (!db) return alert("DB not initialized yet.");
@@ -730,22 +754,29 @@
             if (!i) i = db ? db.ref().push().key : 'temp_' + Date.now();
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // Optimistic Update
             const cache = getLocalCache();
             d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
             saveLocalCache(cache);
             window.resetForm();
 
+            // DUAL WRITE STRATEGY: SDK + HTTP REST
+            let pending = [];
+
             if (db) {
                 showSync("☁️ 업로드...");
-                log(`Uploading: ${n}`);
+                log(`Uploading (SDK): ${n}`);
                 const writeOp = db.ref(DB_KEY + "/" + i).set(d);
                 const timeoutOp = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (10s)")), 10000));
-                Promise.race([writeOp, timeoutOp])
-                    .then(() => { showSync("☁️ 완료"); log("Upload Success"); })
-                    .catch(e => { log("Err: " + e.message); alert("⚠️ 업로드 실패: " + e.message); showSync("⚠️ 로컬저장"); });
-            } else { log("Offline save"); }
+                pending.push(Promise.race([writeOp, timeoutOp]).catch(e => log("SDK Write Fail:" + e.message)));
+            }
+
+            // Fail-safe HTTP PUT
+            const httpUrl = `${firebaseConfig.databaseURL}/${DB_KEY}/${i}.json`;
+            log(`Uploading (HTTP): ${n}`);
+            pending.push(fetch(httpUrl, { method: 'PUT', body: JSON.stringify(d) }).then(r => { if (r.ok) log("HTTP Write OK"); }).catch(e => log("HTTP Write Err")));
+
+            Promise.allSettled(pending).then(() => { showSync("☁️ 완료"); });
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
@@ -763,7 +794,7 @@
                     const val = s.val() || {};
                     log("Read " + Object.keys(val).length + " keys from Server");
                     saveLocalCache(val);
-                    document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
+                    document.getElementById('diag-last-rx').innerText = "SDK " + new Date().toLocaleTimeString();
                     alert("서버 데이터 불러오기 성공!\n(키 개수: " + Object.keys(val).length + ")");
                 }).catch(e => alert("실패: " + e.message));
             }
@@ -772,6 +803,8 @@
         // --- INIT ---
         function initApp() {
             setupUI();
+            startHTTPFallback(); // Start HTTP Polling immediately
+
             const maxWait = 50; let attempts = 0;
             const checkFirebase = setInterval(() => {
                 attempts++;
@@ -799,7 +832,7 @@
                         if (s.val()) {
                             if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
                             showSync("☁️ 연결됨");
-                            log("Online");
+                            log("Online (SDK)");
                         } else el.innerText = "연결 중...";
                     });
 
@@ -808,13 +841,14 @@
                         document.getElementById('diag-uid').innerText = "Logged in: " + uid.substring(0, 5);
                         log(`Auth OK`);
 
+                        // WebSocket Listener (Primary)
                         db.ref(DB_KEY).on('value', s => {
                             const val = s.val();
                             const local = getLocalCache();
-                            document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
+                            document.getElementById('diag-last-rx').innerText = "SDK " + new Date().toLocaleTimeString();
 
                             if (val) {
-                                log("Sync Update: " + Object.keys(val).length + " keys");
+                                log("SDK Sync Update");
                                 saveLocalCache(val);
                             } else {
                                 if (Object.keys(local).length > 0) {
