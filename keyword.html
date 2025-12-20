@@ -568,9 +568,15 @@
         </section>
 
         <section class="search-section" style="flex-direction:column; align-items:center; gap:10px;">
-            <div style="display:flex; align-items:center; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center;">
                 <span class="icon" style="color:#aaa">📅 기준일:</span>
                 <input type="date" id="search-date" class="input-dark" style="width:auto; padding:8px;">
+
+                <span class="icon" style="color:#aaa; margin-left:10px;">🌏 국가:</span>
+                <select id="country-select" class="input-dark" style="width:auto; padding:8px;">
+                    <!-- Populated by JS -->
+                </select>
+
                 <span style="font-size:0.75rem; color:#666;">(과거 날짜 조회 시 API 소모량 ↑)</span>
             </div>
             <div class="search-box">
@@ -883,11 +889,13 @@
             if (!k) return alert("API 키가 없습니다. ['API 관리' > 키 추가] 먼저 해주세요.");
             msg.innerText = "요청 중..."; msg.style.color = "#4dabf7";
 
-            // Date Logic
+            // Date & Region Logic
             const dateEl = document.getElementById('search-date');
             const selectedDate = dateEl.value;
             const today = new Date().toISOString().split('T')[0];
             const isToday = (selectedDate === today);
+
+            const region = document.getElementById('country-select').value || 'KR';
 
             try {
                 let rawItems = [];
@@ -895,7 +903,7 @@
                 // --- STRATEGY: SEARCH (Past/Keyword) vs POPULAR (Today & No Keyword) ---
                 if (q || !isToday) {
                     // Use SEARCH API (Expensive: 100 units)
-                    let params = `search?part=snippet&type=video&maxResults=50&key=${k}`;
+                    let params = `search?part=snippet&type=video&maxResults=50&key=${k}&regionCode=${region}`;
                     if (q) params += `&q=${encodeURIComponent(q)}`;
 
                     if (!isToday) {
@@ -922,10 +930,10 @@
                     // Use VIDEOS API (Cheap: 1 unit) -> Only for TODAY + CATEGORY
                     const cid = CAT_IDS[c];
                     try {
-                        const r1 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${cid}&maxResults=50&key=${k}`);
+                        const r1 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&maxResults=50&key=${k}`);
                         rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id }));
                         if (r1.nextPageToken) {
-                            const r2 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
+                            const r2 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
                             rawItems = [...rawItems, ...r2.items.map(i => ({ title: i.snippet.title, id: i.id }))];
                         }
                     } catch {
@@ -992,6 +1000,21 @@
         function setupUI() {
             // Init Date Picker
             document.getElementById('search-date').valueAsDate = new Date();
+
+            // Init Country Select
+            const COUNTRIES = {
+                'KR': '대한민국', 'US': '미국', 'GB': '영국', 'JP': '일본',
+                'CN': '중국', 'ES': '스페인', 'IN': '인도', 'RU': '러시아',
+                'TW': '대만', 'HK': '홍콩', 'ID': '인도네시아'
+            };
+            const cs = document.getElementById('country-select');
+            cs.innerHTML = '';
+            for (const [code, name] of Object.entries(COUNTRIES)) {
+                const opt = document.createElement('option');
+                opt.value = code; opt.text = name;
+                if (code === 'KR') opt.selected = true;
+                cs.appendChild(opt);
+            }
 
             const l = document.getElementById('categories-list');
             l.innerHTML = '';
