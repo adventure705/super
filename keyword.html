@@ -581,8 +581,9 @@
             </div>
 
             <script>
+                // Instant Cache Render with Version Check
                 try {
-                    const saved = localStorage.getItem('cached_api_keys');
+                    const saved = localStorage.getItem('cached_api_keys_v2');
                     if (saved) {
                         const data = JSON.parse(saved);
                         const list = document.getElementById('key-list');
@@ -621,26 +622,27 @@
         </div>
     </div>
 
-    <!-- Firebase Scripts (Loaded AFTER initial render) -->
+    <!-- Firebase Scripts (Use Deferred again but handled explicitly) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
     <!-- App Logic -->
     <script>
+        // Update DB_KEY to a fresh version to force sync and clear conflicts
+        const DB_KEY = 'public_shared_keys_v2';
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
-        const DB_KEY = 'shared_api_keys';
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
 
         // --- HELPERS ---
-        function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; } catch { return {}; } }
-        function saveLocalCache(d) { localStorage.setItem('cached_api_keys', JSON.stringify(d)); renderKeys(d); }
+        function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys_v2')) || {}; } catch { return {}; } }
+        function saveLocalCache(d) { localStorage.setItem('cached_api_keys_v2', JSON.stringify(d)); renderKeys(d); }
         function showSync(msg = "☁️") {
             const el = document.getElementById('sync-icon');
             el.innerText = msg; el.style.opacity = 1;
-            setTimeout(() => el.style.opacity = 0, 2000);
+            setTimeout(() => el.style.opacity = 0, 3000);
         }
 
         // --- GLOBAL ACTIONS ---
@@ -657,34 +659,33 @@
             const v = document.getElementById('new-key-value').value.trim();
             const t = document.getElementById('new-key-type').value;
             let i = document.getElementById('edit-key-id').value;
-            if (!n || !v) return alert('입력 확인 필요');
+            if (!n || !v) return alert('모든 필드를 입력해주세요.');
 
-            // Generate stable ID if new
+            // Generate ID
             if (!i) i = db ? db.ref().push().key : 'local_' + Date.now();
 
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // Optimistic Update
+            // Optimistic
             const cache = getLocalCache();
             d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
-            saveLocalCache(cache); // Render Immediately
-            alert('성공적으로 저장되었습니다.');
+            saveLocalCache(cache);
+            alert('저장되었습니다 (동기화중...)');
             window.resetForm();
 
-            // Real Sync (Fire and Forget)
+            // Real Sync
             if (db) {
-                showSync("☁️ 저장중...");
-                // Use .update to merge safely
-                db.ref(DB_KEY + "/" + i).update(d)
-                    .then(() => showSync("☁️ 저장완료"))
+                showSync("☁️ 업로드...");
+                db.ref(DB_KEY + "/" + i).set(d)
+                    .then(() => showSync("☁️ 완료"))
                     .catch(e => {
                         console.error(e);
-                        alert("동기화 실패: " + e.message);
-                        showSync("⚠️ 오류");
+                        alert("⚠️ 서버 동기화 실패: " + e.message + "\n데이터베이스 쓰기 권한을 확인해주세요.");
+                        showSync("⚠️ 실패");
                     });
             } else {
-                showSync("📴 오프라인");
+                alert("⚠️ 서버가 연결되지 않았습니다. 로컬에만 저장됩니다.");
             }
         };
 
@@ -694,31 +695,50 @@
             if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => { });
         };
         window.delK = (id) => {
-            if (!confirm("삭제?")) return;
+            if (!confirm("삭제하시겠습니까?")) return;
             const c = getLocalCache(); delete c[id]; saveLocalCache(c);
             if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => { });
         };
         window.forceSync = () => {
             if (db) {
-                showSync("🔄 동기화...");
+                showSync("🔄 다운로드...");
                 db.ref(DB_KEY).once('value').then(s => {
                     const d = s.val() || {};
                     saveLocalCache(d);
-                    alert("서버와 동기화 완료 (" + Object.keys(d).length + "개)");
+                    alert("서버와 동기화되었습니다.\n(항목 수: " + Object.keys(d).length + ")");
                 });
-            } else alert("서버 연결 안됨");
+            } else alert("서버에 연결되지 않았습니다.");
         };
 
-        // --- INIT ---
-        document.addEventListener('DOMContentLoaded', () => {
+        // --- ROBUST INITIALIZATION ---
+        function initApp() {
             setupUI();
 
-            // Local Load
-            try { const c = localStorage.getItem('cached_api_keys'); if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; } } catch (e) { }
-
-            // Firebase Load
+            // 1. Initial Local Render
             try {
-                if (window.firebase && !firebase.apps.length) {
+                const c = localStorage.getItem('cached_api_keys_v2');
+                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; }
+            } catch (e) { }
+
+            // 2. Wait for Firebase SDK
+            const maxWait = 50; // 5 seconds
+            let attempts = 0;
+            const checkFirebase = setInterval(() => {
+                attempts++;
+                if (window.firebase && window.firebase.apps) {
+                    clearInterval(checkFirebase);
+                    startFirebase();
+                } else if (attempts >= maxWait) {
+                    clearInterval(checkFirebase);
+                    document.getElementById('status-message').innerText = "오프라인 모드";
+                    console.warn("Firebase SDK load timeout");
+                }
+            }, 100);
+        }
+
+        function startFirebase() {
+            try {
+                if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
                     db = firebase.database();
                     auth = firebase.auth();
@@ -729,18 +749,24 @@
                             if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
                             showSync("☁️ 연결됨");
                         } else {
-                            showSync("📡 연결중...");
+                            el.innerText = "연결 중...";
                         }
                     });
 
                     auth.signInAnonymously().then(() => {
-                        // Inbound Sync: Listen for ANY changes from server
+                        console.log("Logged in anonymously");
+                        // 3. Setup Listeners
                         db.ref(DB_KEY).on('value', s => saveLocalCache(s.val() || {}));
-                        db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
-                    }).catch(e => console.error(e));
+                        db.ref('global_search_state_v2').on('value', s => { if (s.val()) updateUI(s.val()); });
+                    }).catch(e => {
+                        console.error("Auth Fail", e);
+                        alert("인증 실패: " + e.message);
+                    });
                 }
-            } catch (e) { console.error(e); }
-        });
+            } catch (e) { console.error("Init Error", e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
 
         // App Functions
         async function getApiKey(t = 'youtube') {
@@ -757,11 +783,13 @@
             const k = await getApiKey('youtube');
             const tk = await getApiKey('translate');
 
-            if (!k) return alert("저장된 유튜브 API 키가 없습니다.");
-            msg.innerText = "데이터 요청 중..."; msg.style.color = "#4dabf7";
+            if (!k) return alert("API 키가 없습니다. ['API 관리' > 키 추가] 먼저 해주세요.");
+            msg.innerText = "요청 중..."; msg.style.color = "#4dabf7";
 
             try {
                 let list = [];
+                // Use cache: 'no-store' to ensure we get fresh results? Maybe not needed for YouTube API
+                // but good for reliability.
                 if (q) {
                     const r1 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${k}`);
                     list = r1.items.map(i => i.snippet.title);
@@ -802,17 +830,17 @@
                 const st = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(st);
                 msg.innerText = "완료"; msg.style.color = "#888";
-                if (db) db.ref('global_search_state').update(st).catch(() => { });
+                if (db) db.ref('global_search_state_v2').update(st).catch(() => { });
 
             } catch (e) {
                 msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
-                alert(e.message);
+                alert("YouTube API 오류: " + e.message);
             }
         }
 
         async function fetchYT(path) {
             const r = await fetch(`https://www.googleapis.com/youtube/v3/${path}`);
-            if (!r.ok) throw new Error("YouTube API Error");
+            if (!r.ok) throw new Error("YouTube API Requests Failed");
             return r.json();
         }
 
