@@ -7,27 +7,49 @@ const CATEGORIES = [
 
 let db;
 let auth;
-let currentUnsubscribe = null;
 
-// Config for Firestore (ProjectId only required)
+// Config: RESTORED RTDB URL for maximum compatibility
 const firebaseConfig = {
     apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
     authDomain: "template-3530f.firebaseapp.com",
+    databaseURL: "https://template-3530f.firebaseio.com",
     projectId: "template-3530f",
     storageBucket: "template-3530f.firebasestorage.app",
     messagingSenderId: "891098188622",
     appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
 };
 
+// Use a shared path that is likely to have open rules or we can use generic
+const DB_KEY_PATH = 'shared_api_keys';
+
 async function initApp() {
-    setupUI(); // Render UI immediately
+    setupUI();
 
     try {
         firebase.initializeApp(firebaseConfig);
         auth = firebase.auth();
-        db = firebase.firestore(); // USES FIRESTORE
-        console.log("Firebase initialized (Firestore Mode)");
+        db = firebase.database(); // Revert to Realtime Database
+        console.log("Firebase initialized (RTDB Mode)");
 
+        // 1. Connection Monitor
+        db.ref(".info/connected").on("value", (snap) => {
+            const statusIndicator = document.getElementById('status-message');
+            if (snap.val() === true) {
+                console.log("Connected to Firebase");
+                if (statusIndicator && statusIndicator.innerText.includes("재연결")) {
+                    statusIndicator.innerText = "서버에 연결되었습니다.";
+                    statusIndicator.style.color = "#4dabf7";
+                }
+            } else {
+                console.log("Disconnected");
+                if (statusIndicator) {
+                    statusIndicator.innerText = "서버 연결 끊김. 재연결 시도 중...";
+                    statusIndicator.style.color = "#ff4444";
+                }
+            }
+        });
+
+        // 2. Auth
         auth.signInAnonymously().catch(error => {
             console.error("Auth failed:", error);
             alert("로그인 오류: " + error.message);
@@ -37,7 +59,7 @@ async function initApp() {
             if (user) {
                 console.log("Logged in as:", user.uid);
                 setupRealtimeListener();
-                loadApiKeys(); // Start Listener
+                loadApiKeys();
             } else {
                 console.log("Logged out");
             }
@@ -74,13 +96,13 @@ function setupUI() {
         }
     });
 
-    // API Button: Open Modal
+    // API Button
     const modal = document.getElementById('api-modal');
     const closeBtn = document.querySelector('.close');
 
     document.getElementById('api-btn').addEventListener('click', () => {
         if (!auth || !auth.currentUser) {
-            alert("서버 연결 초기화 중입니다. 잠시 후 다시 시도해주세요.");
+            alert("서버 연결 중입니다. 잠시만 기다려주세요.");
             return;
         }
         modal.style.display = "block";
@@ -97,27 +119,17 @@ function setupUI() {
         }
     };
 
-    // Save (Add/Edit)
+    // Save
     document.getElementById('save-key-btn').addEventListener('click', () => {
         const nameInput = document.getElementById('new-key-name');
         const keyInput = document.getElementById('new-key-value');
         const typeInput = document.getElementById('new-key-type');
         const idInput = document.getElementById('edit-key-id');
 
-        const name = nameInput.value.trim();
-        const key = keyInput.value.trim();
-        const type = typeInput.value;
-        const id = idInput.value;
-
-        if (!name || !key) {
-            alert("이름과 키 값을 모두 입력해주세요.");
-            return;
-        }
-
-        saveApiKey(id, name, key, type);
+        saveApiKey(idInput.value, nameInput.value.trim(), keyInput.value.trim(), typeInput.value);
     });
 
-    // Cancel Edit
+    // Cancel
     document.getElementById('cancel-edit-btn').addEventListener('click', () => {
         resetForm();
     });
@@ -134,28 +146,20 @@ function resetForm() {
     document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
-// FIRESTORE LISTENER
+// RTDB LISTENER
 function loadApiKeys() {
     if (!db) return;
     const listContainer = document.getElementById('key-list');
 
-    // Realtime (Sorted client-side)
-    db.collection('api_keys')
-        .onSnapshot(snapshot => {
-            const keys = {};
-            snapshot.forEach(doc => {
-                keys[doc.id] = doc.data();
-            });
-            renderKeys(keys);
-        }, err => {
-            console.error("Load Error:", err);
-            // Permission error often comes first if not logged in yet or bad rules
-            if (err.code === 'permission-denied') {
-                listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">권한 오류: 데이터베이스 읽기 권한이 없습니다.<br>Firebase Console > Rules 설정을 확인하세요.</div>';
-            } else {
-                listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 로딩 실패<br>' + err.message + '</div>';
-            }
-        });
+    // Use .on('value') for robust syncing
+    // No server-side sorting to avoid index requirements
+    db.ref(DB_KEY_PATH).on('value', snapshot => {
+        const keys = snapshot.val() || {};
+        renderKeys(keys);
+    }, err => {
+        console.error("Load Error:", err);
+        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 로딩 실패<br>(' + err.code + ')<br>권한 설정을 확인해주세요.</div>';
+    });
 }
 
 function renderKeys(keysData) {
@@ -168,16 +172,16 @@ function renderKeys(keysData) {
         return;
     }
 
-    // Client-side Sorting (Safe against Index issues)
+    // Client-side Sorting
     keys.sort((a, b) => {
-        const timeA = a[1].createdAt && a[1].createdAt.seconds ? a[1].createdAt.seconds : 0;
-        const timeB = b[1].createdAt && b[1].createdAt.seconds ? b[1].createdAt.seconds : 0;
+        const timeA = a[1].createdAt || 0;
+        const timeB = b[1].createdAt || 0;
         return timeB - timeA;
     });
 
     keys.forEach(([id, data]) => {
         const isActive = data.active !== false;
-        const created = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : (data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-');
+        const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '방금 전';
         const type = data.type || 'youtube';
         const typeIcon = type === 'translate' ? '🌐' : '📺';
         const typeLabel = type === 'translate' ? 'Translate' : 'YouTube';
@@ -192,8 +196,8 @@ function renderKeys(keysData) {
                     <span>${typeIcon}</span> ${data.name || '이름 없음'} 
                     <span style="font-size:0.75em; background:#444; padding:2px 8px; border-radius:10px; color:#ccc;">${typeLabel}</span>
                 </div>
-                <div class="key-value" title="${data.key}" style="margin: 5px 0 0 28px;">${visibleKey}</div>
-                <div class="key-meta" style="margin-left: 28px;">${created}</div>
+                <div class="key-value" title="${data.key}" style="margin: 5px 0 0 0;">${visibleKey}</div>
+                <div class="key-meta" style="margin-left: 0;">${created}</div>
             </div>
             <div class="key-actions">
                 <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}', '${type}')" title="수정">✏️</button>
@@ -210,7 +214,11 @@ function renderKeys(keysData) {
 
 function saveApiKey(id, name, key, type) {
     if (!db || !auth.currentUser) {
-        alert("서버와 연결되지 않았습니다.");
+        alert("서버 연결 확인 필요");
+        return;
+    }
+    if (!name || !key) {
+        alert("이름과 키 값을 모두 입력해주세요.");
         return;
     }
 
@@ -218,22 +226,23 @@ function saveApiKey(id, name, key, type) {
         name: name,
         key: key,
         type: type || 'youtube',
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
-    const promise = id
-        ? db.collection('api_keys').doc(id).update(data)
-        : (data.active = true, data.createdAt = firebase.firestore.FieldValue.serverTimestamp(), db.collection('api_keys').add(data));
-
-    promise.then(() => {
-        alert(id ? "수정되었습니다." : "추가되었습니다.");
-        if (!id) resetForm();
-    }).catch(handleSaveError);
-}
-
-function handleSaveError(error) {
-    console.error("Save Error:", error);
-    alert("저장 실패: " + error.message + "\n(데이터베이스 권한을 확인해주세요)");
+    if (id) {
+        db.ref(`${DB_KEY_PATH}/${id}`).update(data)
+            .then(() => alert("수정되었습니다."))
+            .catch(err => alert("수정 실패: " + err.message));
+    } else {
+        data.active = true;
+        data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+        db.ref(DB_KEY_PATH).push(data)
+            .then(() => {
+                alert("추가되었습니다.");
+                resetForm();
+            })
+            .catch(err => alert("추가 실패: " + err.message));
+    }
 }
 
 window.prepareEdit = function (id, name, key, type) {
@@ -248,42 +257,35 @@ window.prepareEdit = function (id, name, key, type) {
 };
 
 window.toggleKey = function (id, isActive) {
-    db.collection('api_keys').doc(id).update({ active: isActive });
+    db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
 };
 
 window.deleteKey = function (id) {
     if (confirm("정말로 삭제하시겠습니까?")) {
-        db.collection('api_keys').doc(id).delete();
+        db.ref(`${DB_KEY_PATH}/${id}`).remove();
     }
 };
 
 function getActiveApiKey(type = 'youtube') {
-    return db.collection('api_keys')
-        .where('active', '==', true)
-        .get()
+    return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value')
         .then(snapshot => {
-            if (snapshot.empty) return null;
-            const keys = [];
-            snapshot.forEach(doc => {
-                const k = doc.data();
-                if ((k.type || 'youtube') === type) keys.push(k);
-            });
+            const keysVal = snapshot.val();
+            if (!keysVal) return null;
+            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type);
             if (keys.length === 0) return null;
             return keys[Math.floor(Math.random() * keys.length)].key;
         });
 }
 
 function setupRealtimeListener() {
-    // Shared State via Firestore Document
-    db.collection('shared').doc('search_state').onSnapshot((doc) => {
-        if (doc.exists) {
-            updateUI(doc.data());
-        }
+    db.ref('global_search_state').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) updateUI(data);
     });
 }
 
 function selectCategory(category) {
-    performSearch(null, category); // Pass null for query to indicate category-only search
+    performSearch(null, category);
 }
 
 const CATEGORY_IDS = {
@@ -304,6 +306,11 @@ const CATEGORY_IDS = {
     "비영리/사회운동": "29"
 };
 
+function getCurrentCategory() {
+    const active = document.querySelector('.category-pill.active');
+    return active ? active.innerText : "엔터테인먼트";
+}
+
 async function performSearch(query, category) {
     const statusMsg = document.getElementById('status-message');
 
@@ -317,64 +324,54 @@ async function performSearch(query, category) {
         return;
     }
 
-    statusMsg.innerText = "YouTube 데이터를 불러오는 중... (100개 항목)";
+    statusMsg.innerText = "데이터 불러오는 중...";
     statusMsg.style.color = "#4dabf7";
 
     try {
         let keywords = [];
-
-        // 2. Fetch Data (Search vs Trending)
         if (query) {
-            // Text Search Mode
-            // Fetch 100 items (2 pages of 50)
+            // Text Search
             const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
             const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
-
-            // Extract titles
-            const titles1 = part1.items.map(item => item.snippet.title);
-            const titles2 = part2.items.map(item => item.snippet.title);
-            keywords = [...titles1, ...titles2];
+            keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
         } else {
-            // Category Trending Mode
+            // Category Trending
             const catId = CATEGORY_IDS[category];
-            if (!catId) {
-                throw new Error("카테고리 ID를 찾을 수 없습니다.");
+            try {
+                if (!catId) throw new Error("No ID");
+                const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
+                const part2 = part1.nextPageToken ? await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken) : { items: [] };
+                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
+            } catch (err) {
+                console.warn("Trending failed, fallback to search", err);
+                statusMsg.innerText = "대체 검색 수행 중...";
+                const part1 = await fetchYouTubeSearch(category, youtubeKey, null);
+                const part2 = part1.nextPageToken ? await fetchYouTubeSearch(category, youtubeKey, part1.nextPageToken) : { items: [] };
+                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
             }
-            // Fetch 100 popular videos in this category
-            const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
-            const part2 = part1.nextPageToken ? await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken) : { items: [] };
-
-            const titles1 = part1.items.map(item => item.snippet.title);
-            const titles2 = part2.items.map(item => item.snippet.title);
-            keywords = [...titles1, ...titles2];
         }
 
         keywords = [...new Set(keywords)].slice(0, 100);
-        if (keywords.length === 0) throw new Error("검색 결과가 없습니다.");
+        if (keywords.length === 0) throw new Error("결과 없음");
 
-        let translatedResults = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
-
+        let translated = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
         if (translateKey) {
-            statusMsg.innerText = `키워드 ${keywords.length}개 번역 중... (시간이 걸릴 수 있습니다)`;
-            // 3. Translate Keywords
-            translatedResults = await translateKeywords(keywords, translateKey);
+            statusMsg.innerText = "번역 중...";
+            translated = await translateKeywords(keywords, translateKey);
         } else {
-            statusMsg.innerText = "번역 API 키 없음: 번역 생략됨.";
+            statusMsg.innerText = "번역 API 없음 (생략)";
         }
 
-        // 4. Construct Final Data
-        const results = keywords.map((original, index) => {
-            return {
-                rank: index + 1,
-                korean: original,
-                english: translatedResults.en[index] || '-',
-                japanese: translatedResults.ja[index] || '-',
-                chinese: translatedResults['zh-CN'][index] || '-',
-                spanish: translatedResults.es[index] || '-',
-                hindi: translatedResults.hi[index] || '-',
-                russian: translatedResults.ru[index] || '-'
-            };
-        });
+        const results = keywords.map((k, i) => ({
+            rank: i + 1,
+            korean: k,
+            english: translated.en[i] || '-',
+            japanese: translated.ja[i] || '-',
+            chinese: translated['zh-CN'][i] || '-',
+            spanish: translated.es[i] || '-',
+            hindi: translated.hi[i] || '-',
+            russian: translated.ru[i] || '-'
+        }));
 
         const state = {
             query: query || category,
@@ -383,79 +380,51 @@ async function performSearch(query, category) {
             timestamp: Date.now()
         };
 
-        db.collection('shared').doc('search_state').set(state);
-        statusMsg.innerText = translateKey ? "검색 및 번역 완료!" : "검색 완료 (번역 제외)";
+        db.ref('global_search_state').update(state);
+        statusMsg.innerText = "완료";
         statusMsg.style.color = "#aaa";
 
     } catch (err) {
-        console.error("Search Flow Error:", err);
-        statusMsg.innerText = "오류 발생: " + err.message;
+        console.error(err);
+        statusMsg.innerText = "오류: " + err.message;
         statusMsg.style.color = "#ff4444";
-        alert("진행 중 오류가 발생했습니다: " + err.message);
+        alert("오류: " + err.message);
     }
 }
 
 async function fetchYouTubeSearch(query, apiKey, pageToken) {
-    const maxResults = 50;
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    const max = 50;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${max}&key=${apiKey}`;
     if (pageToken) url += `&pageToken=${pageToken}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-        const d = await response.json();
-        throw new Error(d.error?.message || "YouTube API Error");
-    }
-    return await response.json();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error((await res.json()).error?.message || "YouTube API Error");
+    return await res.json();
 }
 
-async function fetchYouTubePopular(categoryId, apiKey, pageToken) {
-    const maxResults = 50;
-    // regionCode=KR ensures we get Korean trends
-    let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${categoryId}&maxResults=${maxResults}&key=${apiKey}`;
+async function fetchYouTubePopular(catId, apiKey, pageToken) {
+    const max = 50;
+    let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${catId}&maxResults=${max}&key=${apiKey}`;
     if (pageToken) url += `&pageToken=${pageToken}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-        const d = await response.json();
-        throw new Error(d.error?.message || "YouTube Popular API Error");
-    }
-    return await response.json();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error((await res.json()).error?.message || "YouTube API Error");
+    return await res.json();
 }
 
 async function translateKeywords(texts, apiKey) {
     const targets = ['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'];
     const results = {};
-    targets.forEach(lang => results[lang] = []);
-
-    const translateBatch = async (lang) => {
-        const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                q: texts,
-                target: lang,
-                format: 'text'
-            })
-        });
-
-        if (!response.ok) {
-            console.warn(`Translation failed for ${lang}`);
-            return new Array(texts.length).fill("번역 실패");
-        }
-
-        const data = await response.json();
-        return data.data.translations.map(t => t.translatedText);
+    const batch = async (lang) => {
+        try {
+            const res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ q: texts, target: lang, format: 'text' })
+            });
+            if (!res.ok) return new Array(texts.length).fill("실패");
+            return (await res.json()).data.translations.map(t => t.translatedText);
+        } catch { return new Array(texts.length).fill("에러"); }
     };
-
-    const promises = targets.map(async lang => {
-        results[lang] = await translateBatch(lang);
-    });
-
-    await Promise.all(promises);
+    await Promise.all(targets.map(async t => results[t] = await batch(t)));
     return results;
 }
 
@@ -463,39 +432,29 @@ function updateUI(data) {
     if (document.getElementById('keyword-input').value !== (data.query || "")) {
         document.getElementById('keyword-input').value = data.query || "";
     }
-
     document.querySelectorAll('.category-pill').forEach(btn => {
-        if (btn.innerText === data.selectedCategory) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        if (btn.innerText === data.selectedCategory) btn.classList.add('active');
+        else btn.classList.remove('active');
     });
 
     const tbody = document.querySelector('#results-table tbody');
     tbody.innerHTML = '';
-
-    if (data.results && Array.isArray(data.results)) {
-        const link = (text) => {
-            if (!text || text === '-') return text;
-            return `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(text)}" target="_blank" style="text-decoration:none; color:inherit; display:block;">${text}</a>`;
-        };
-
+    if (data.results) {
         data.results.forEach(row => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-            <td>${row.rank}</td>
-            <td style="color:#fff;">${link(row.korean)}</td>
-            <td>${link(row.english)}</td>
-            <td>${link(row.japanese)}</td>
-            <td>${link(row.chinese)}</td>
-            <td>${link(row.spanish)}</td>
-            <td>${link(row.hindi)}</td>
-            <td>${link(row.russian)}</td>
-        `;
+                <td>${row.rank}</td>
+                <td style="color:#fff;">${row.korean}</td>
+                <td>${row.english}</td>
+                <td>${row.japanese}</td>
+                <td>${row.chinese}</td>
+                <td>${row.spanish}</td>
+                <td>${row.hindi}</td>
+                <td>${row.russian}</td>
+            `;
             tbody.appendChild(tr);
         });
-        document.getElementById('status-message').innerText = "데이터가 동기화되었습니다. (검색어: " + (data.query || data.selectedCategory) + ")";
+        document.getElementById('status-message').innerText = "최신 데이터 로드됨 (" + new Date().toLocaleTimeString() + ")";
     }
 }
 
