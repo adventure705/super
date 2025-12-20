@@ -209,10 +209,6 @@ function saveApiKey(id, name, key, type) {
         return;
     }
 
-    const saveBtn = document.getElementById('save-key-btn');
-    saveBtn.innerText = "저장 중...";
-    saveBtn.disabled = true;
-
     const data = {
         name: name,
         key: key,
@@ -220,26 +216,27 @@ function saveApiKey(id, name, key, type) {
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
-    const onComplete = (error) => {
-        saveBtn.innerText = id ? "수정 완료" : "저장하기";
-        saveBtn.disabled = false;
-        if (error) {
-            console.error("Save Error:", error);
-            alert("저장 실패: " + error.message);
-        } else {
-            alert(id ? "수정되었습니다." : "추가되었습니다.");
-            loadApiKeys();
-            if (!id) resetForm(); // Only reset on create
-        }
-    };
+    // Optimistic Update: Assume success immediately for better UX
+    // Firebase handles background sync and local cache instantly.
 
     if (id) {
-        db.ref(`api_keys/${id}`).update(data, onComplete);
+        db.ref(`api_keys/${id}`).update(data).catch(handleSaveError);
+        alert("수정되었습니다.");
     } else {
         data.active = true;
         data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        db.ref('api_keys').push(data, onComplete);
+        db.ref('api_keys').push(data).catch(handleSaveError);
+        alert("추가되었습니다.");
+        resetForm();
     }
+
+    // Reload list immediately (will fetch from local cache including new write)
+    loadApiKeys();
+}
+
+function handleSaveError(error) {
+    console.error("Save Error:", error);
+    alert("동기화 중 오류가 발생했습니다. (나중에 다시 시도됩니다): " + error.message);
 }
 
 // Global scope functions
