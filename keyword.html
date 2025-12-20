@@ -218,13 +218,25 @@
     <div id="api-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h2>🔑 API Key 관리</h2>
+            <h2>🔑 YouTube API Key 관리</h2>
             <div class="key-list-container" id="key-list">
                 <!-- Keys will be injected here -->
+                <div style="text-align:center; color:#888; padding: 20px;">로딩 중...</div>
             </div>
-            <div class="add-section">
-                <input type="text" id="new-key-input" class="input-dark" placeholder="새로운 API Key를 입력하세요">
-                <button id="add-key-btn" class="btn-add">추가</button>
+
+            <div class="add-section" style="flex-direction: column; gap: 10px;">
+                <h3 style="font-size: 1rem; color: #ccc; margin-bottom: 5px;">키 등록/수정</h3>
+                <input type="hidden" id="edit-key-id">
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="new-key-name" class="input-dark" placeholder="키 이름 (예: 내 계정 1)"
+                        style="flex: 1;">
+                    <input type="text" id="new-key-value" class="input-dark" placeholder="YouTube API Key (AIza...)"
+                        style="flex: 2;">
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="cancel-edit-btn" class="btn-add" style="background: #555; display: none;">취소</button>
+                    <button id="save-key-btn" class="btn-add">저장</button>
+                </div>
             </div>
         </div>
     </div>

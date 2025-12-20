@@ -85,6 +85,7 @@ function setupUI() {
     document.getElementById('api-btn').addEventListener('click', () => {
         modal.style.display = "block";
         loadApiKeys();
+        resetForm();
     });
 
     closeBtn.onclick = () => {
@@ -97,24 +98,49 @@ function setupUI() {
         }
     };
 
-    // Add New Key
-    document.getElementById('add-key-btn').addEventListener('click', () => {
-        const input = document.getElementById('new-key-input');
-        const key = input.value.trim();
-        if (key) {
-            addApiKey(key);
-            input.value = "";
+    // Save (Add/Edit)
+    document.getElementById('save-key-btn').addEventListener('click', () => {
+        const nameInput = document.getElementById('new-key-name');
+        const keyInput = document.getElementById('new-key-value');
+        const idInput = document.getElementById('edit-key-id');
+
+        const name = nameInput.value.trim();
+        const key = keyInput.value.trim();
+        const id = idInput.value;
+
+        if (!name || !key) {
+            alert("이름과 키 값을 모두 입력해주세요.");
+            return;
         }
+
+        saveApiKey(id, name, key);
+        resetForm();
+    });
+
+    // Cancel Edit
+    document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+        resetForm();
     });
 }
 
+function resetForm() {
+    document.getElementById('new-key-name').value = "";
+    document.getElementById('new-key-value').value = "";
+    document.getElementById('edit-key-id').value = "";
+    document.getElementById('save-key-btn').innerText = "저장";
+    document.getElementById('cancel-edit-btn').style.display = "none";
+}
+
 function loadApiKeys() {
+    if (!db) return;
     const listContainer = document.getElementById('key-list');
-    listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">로딩 중...</div>';
 
     db.ref('api_keys').once('value').then(snapshot => {
         const keys = snapshot.val() || {};
         renderKeys(keys);
+    }).catch(err => {
+        console.error(err);
+        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터를 불러오지 못했습니다.<br>로그인 상태나 권한을 확인해주세요.</div>';
     });
 }
 
@@ -128,18 +154,23 @@ function renderKeys(keysData) {
         return;
     }
 
-    // Sort by added time if available, or just keys
     keys.forEach(([id, data]) => {
-        const isActive = data.active !== false; // Default true if not set
+        const isActive = data.active !== false;
+        const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-';
 
         const item = document.createElement('div');
         item.className = 'key-item';
+        // Mask key for display
+        const visibleKey = data.key.length > 10 ? data.key.substring(0, 6) + "..." + data.key.substring(data.key.length - 4) : data.key;
+
         item.innerHTML = `
             <div class="key-info">
-                <div class="key-value">${data.key}</div>
-                <div class="key-meta">${new Date(data.createdAt || Date.now()).toLocaleString()}</div>
+                <div style="font-weight:bold; color:#fff; font-size:1rem;">${data.name || '이름 없음'}</div>
+                <div class="key-value" title="${data.key}">${visibleKey}</div>
+                <div class="key-meta">${created}</div>
             </div>
             <div class="key-actions">
+                <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}')" title="수정">✏️</button>
                 <label class="toggle-switch" title="활성화/비활성화">
                     <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleKey('${id}', this.checked)">
                     <span class="slider"></span>
@@ -151,25 +182,45 @@ function renderKeys(keysData) {
     });
 }
 
-function addApiKey(keyValue) {
-    const newRef = db.ref('api_keys').push();
-    newRef.set({
-        key: keyValue,
-        active: true,
-        createdAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        loadApiKeys(); // Refresh list
-        alert("API Key가 추가되었습니다.");
-    }).catch(err => alert("오류 발생: " + err.message));
+function saveApiKey(id, name, key) {
+    const data = {
+        name: name,
+        key: key,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    if (id) {
+        // Update
+        db.ref(`api_keys/${id}`).update(data).then(() => {
+            alert("수정되었습니다.");
+            loadApiKeys();
+        });
+    } else {
+        // Create
+        data.active = true;
+        data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+        db.ref('api_keys').push(data).then(() => {
+            alert("추가되었습니다.");
+            loadApiKeys();
+        });
+    }
 }
 
-// Global scope functions for HTML event handlers
+// Global scope functions
+window.prepareEdit = function (id, name, key) {
+    document.getElementById('new-key-name').value = name;
+    document.getElementById('new-key-value').value = key;
+    document.getElementById('edit-key-id').value = id;
+    document.getElementById('save-key-btn').innerText = "수정 완료";
+    document.getElementById('cancel-edit-btn').style.display = "block";
+};
+
 window.toggleKey = function (id, isActive) {
-    db.ref(`api_keys/${id}/active`).set(isActive);
+    db.ref(`api_keys/${id}/active`).set(isActive).then(() => loadApiKeys());
 };
 
 window.deleteKey = function (id) {
-    if (confirm("정말로 이 API Key를 삭제하시겠습니까?")) {
+    if (confirm("정말로 삭제하시겠습니까?")) {
         db.ref(`api_keys/${id}`).remove().then(() => loadApiKeys());
     }
 };
@@ -212,22 +263,28 @@ function selectCategory(category) {
 }
 
 function performSearch(query, category) {
-    // 1. Generate mocking data (100 items)
-    // In a real app, we would call an API here using the key from db.ref('shared_api_key')
-
+    // Mock Search with Sub-category structure
     const results = [];
 
-    // Create somewhat dynamic mock data based on query/category
+    // Generate realistic looking sub-topics based on category
+    const subTopics = [
+        "기초/입문", "심화/응용", "최신 트렌드", "필수 장비/도구", "유명 유튜버/사례",
+        "수익화 전략", "문제 해결 팁", "Q&A 모음", "비하인드 스토리", "관련 뉴스"
+    ];
+
     for (let i = 1; i <= 100; i++) {
+        const subIndex = Math.floor((i - 1) / 10); // Change sub-topic every 10 items
+        const subTopic = subTopics[subIndex % subTopics.length];
+
         results.push({
             rank: i,
-            korean: `[${category}] ${query} 관련 주제 ${i}`,
-            english: `[${category}] ${query} topic ${i}`,
-            japanese: `[${category}] ${query} トピック ${i}`,
-            chinese: `[${category}] ${query} 话题 ${i}`,
-            spanish: `[${category}] ${query} tema ${i}`,
-            hindi: `[${category}] ${query} विषय ${i}`,
-            russian: `[${category}] ${query} тема ${i}`
+            korean: `[${category}] ${subTopic} > ${query} 관련 주제 ${i}`, // Sub-topic emphasized
+            english: `[${category}] ${subTopic} > ${query} topic ${i}`,
+            japanese: `[${category}] ${subTopic} > ${query} トピック ${i}`,
+            chinese: `[${category}] ${subTopic} > ${query} 话题 ${i}`,
+            spanish: `[${category}] ${subTopic} > ${query} tema ${i}`,
+            hindi: `[${category}] ${subTopic} > ${query} विषय ${i}`,
+            russian: `[${category}] ${subTopic} > ${query} тема ${i}`
         });
     }
 
@@ -238,13 +295,27 @@ function performSearch(query, category) {
         timestamp: Date.now()
     };
 
-    // Save to DB -> triggers listener -> updates UI everywhere
     db.ref('global_search_state').update(state);
 }
 
 function getCurrentCategory() {
     const active = document.querySelector('.category-pill.active');
     return active ? active.innerText : CATEGORIES[0];
+}
+
+// Ensure ./firebase-config.json is tried first or directly
+async function loadConfig() {
+    try {
+        let response = await fetch('./firebase-config.json');
+        if (!response.ok) response = await fetch('../firebase-config.json');
+
+        if (!response.ok) throw new Error("Failed to load config");
+        return await response.json();
+    } catch (e) {
+        console.error("Config error:", e);
+        console.log("Connect to a web server to load config.");
+        return null;
+    }
 }
 
 function updateUI(data) {
