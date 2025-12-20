@@ -139,8 +139,8 @@ function loadApiKeys() {
     if (!db) return;
     const listContainer = document.getElementById('key-list');
 
-    // Realtime, Ordered
-    db.collection('api_keys').orderBy('createdAt', 'desc')
+    // Realtime (Sorted client-side)
+    db.collection('api_keys')
         .onSnapshot(snapshot => {
             const keys = {};
             snapshot.forEach(doc => {
@@ -150,8 +150,11 @@ function loadApiKeys() {
         }, err => {
             console.error("Load Error:", err);
             // Permission error often comes first if not logged in yet or bad rules
-            if (listContainer.innerHTML.includes('text-align:center'))
+            if (err.code === 'permission-denied') {
+                listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">권한 오류: 데이터베이스 읽기 권한이 없습니다.<br>Firebase Console > Rules 설정을 확인하세요.</div>';
+            } else {
                 listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 로딩 실패<br>' + err.message + '</div>';
+            }
         });
 }
 
@@ -164,6 +167,13 @@ function renderKeys(keysData) {
         listContainer.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">등록된 API Key가 없습니다.<br>아래에서 키를 추가해주세요.</div>';
         return;
     }
+
+    // Client-side Sorting (Safe against Index issues)
+    keys.sort((a, b) => {
+        const timeA = a[1].createdAt && a[1].createdAt.seconds ? a[1].createdAt.seconds : 0;
+        const timeB = b[1].createdAt && b[1].createdAt.seconds ? b[1].createdAt.seconds : 0;
+        return timeB - timeA;
+    });
 
     keys.forEach(([id, data]) => {
         const isActive = data.active !== false;
