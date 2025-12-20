@@ -97,10 +97,12 @@ function setupUI() {
     document.getElementById('save-key-btn').addEventListener('click', () => {
         const nameInput = document.getElementById('new-key-name');
         const keyInput = document.getElementById('new-key-value');
+        const typeInput = document.getElementById('new-key-type');
         const idInput = document.getElementById('edit-key-id');
 
         const name = nameInput.value.trim();
         const key = keyInput.value.trim();
+        const type = typeInput.value;
         const id = idInput.value;
 
         if (!name || !key) {
@@ -108,7 +110,7 @@ function setupUI() {
             return;
         }
 
-        saveApiKey(id, name, key);
+        saveApiKey(id, name, key, type);
         resetForm();
     });
 
@@ -121,6 +123,7 @@ function setupUI() {
 function resetForm() {
     document.getElementById('new-key-name').value = "";
     document.getElementById('new-key-value').value = "";
+    document.getElementById('new-key-type').value = "youtube"; // Default
     document.getElementById('edit-key-id').value = "";
     document.getElementById('save-key-btn').innerText = "저장";
     document.getElementById('cancel-edit-btn').style.display = "none";
@@ -152,6 +155,9 @@ function renderKeys(keysData) {
     keys.forEach(([id, data]) => {
         const isActive = data.active !== false;
         const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-';
+        const type = data.type || 'youtube'; // Default for old data
+        const typeIcon = type === 'translate' ? '🌐' : '📺';
+        const typeLabel = type === 'translate' ? 'Translate' : 'YouTube';
 
         const item = document.createElement('div');
         item.className = 'key-item';
@@ -160,12 +166,15 @@ function renderKeys(keysData) {
 
         item.innerHTML = `
             <div class="key-info">
-                <div style="font-weight:bold; color:#fff; font-size:1rem;">${data.name || '이름 없음'}</div>
+                <div style="font-weight:bold; color:#fff; font-size:1rem; display:flex; gap:8px; align-items:center;">
+                    <span>${typeIcon}</span> ${data.name || '이름 없음'} 
+                    <span style="font-size:0.7em; background:#444; padding:2px 6px; border-radius:4px; color:#ccc;">${typeLabel}</span>
+                </div>
                 <div class="key-value" title="${data.key}">${visibleKey}</div>
                 <div class="key-meta">${created}</div>
             </div>
             <div class="key-actions">
-                <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}')" title="수정">✏️</button>
+                <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}', '${type}')" title="수정">✏️</button>
                 <label class="toggle-switch" title="활성화/비활성화">
                     <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleKey('${id}', this.checked)">
                     <span class="slider"></span>
@@ -177,7 +186,7 @@ function renderKeys(keysData) {
     });
 }
 
-function saveApiKey(id, name, key) {
+function saveApiKey(id, name, key, type) {
     if (!db) {
         alert("데이터베이스 연결 실패. 새로고침 해주세요.");
         return;
@@ -191,6 +200,7 @@ function saveApiKey(id, name, key) {
     const data = {
         name: name,
         key: key,
+        type: type || 'youtube',
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
@@ -225,9 +235,10 @@ function saveApiKey(id, name, key) {
 }
 
 // Global scope functions
-window.prepareEdit = function (id, name, key) {
+window.prepareEdit = function (id, name, key, type) {
     document.getElementById('new-key-name').value = name;
     document.getElementById('new-key-value').value = key;
+    document.getElementById('new-key-type').value = type || 'youtube';
     document.getElementById('edit-key-id').value = id;
     document.getElementById('save-key-btn').innerText = "수정 완료";
     document.getElementById('cancel-edit-btn').style.display = "block";
@@ -243,13 +254,16 @@ window.deleteKey = function (id) {
     }
 };
 
-function getActiveApiKey() {
-    // Return a promise that resolves to a random active key
+function getActiveApiKey(type = 'youtube') {
+    // Return a promise that resolves to a random active key of specific type
     return db.ref('api_keys').orderByChild('active').equalTo(true).once('value')
         .then(snapshot => {
             const keysVal = snapshot.val();
             if (!keysVal) return null;
-            const keys = Object.values(keysVal);
+
+            // Filter by type
+            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type);
+
             if (keys.length === 0) return null;
             // Pick random
             const random = keys[Math.floor(Math.random() * keys.length)];
@@ -283,11 +297,24 @@ function selectCategory(category) {
 async function performSearch(query, category) {
     const statusMsg = document.getElementById('status-message');
 
-    // 1. Get Active API Key
-    const apiKey = await getActiveApiKey();
-    if (!apiKey) {
-        alert("활성화된 API Key가 없습니다. 우측 상단 'API' 버튼을 눌러 키를 등록하고 활성화해주세요.");
+    // 1. Get Active API Keys
+    const youtubeKey = await getActiveApiKey('youtube');
+    const translateKey = await getActiveApiKey('translate');
+
+    // Validate Keys
+    if (!youtubeKey) {
+        alert("활성화된 [YouTube Data API] 키가 없습니다. API 메뉴에서 등록해주세요.");
         return;
+    }
+
+    // Logic: Translate key is optional? Or mandatory? 
+    // User wants to see translations. If missing, maybe just show original? 
+    // Or warn. Let's warn and return for now, or proceed?
+    // Let's prompt user.
+    if (!translateKey) {
+        if (!confirm("활성화된 [Google Translate API] 키가 없습니다. 번역 없이 진행하시겠습니까?")) {
+            return;
+        }
     }
 
     statusMsg.innerText = "YouTube 데이터를 불러오는 중...";
@@ -297,17 +324,21 @@ async function performSearch(query, category) {
         // 2. Fetch Keywords from YouTube
         // Use 'q' as combined category + query for better context
         const searchQ = query ? `${category} ${query}` : category;
-        const keywords = await fetchYouTubeData(searchQ, apiKey);
+        const keywords = await fetchYouTubeData(searchQ, youtubeKey);
 
         if (keywords.length === 0) {
             throw new Error("검색 결과가 없습니다.");
         }
 
-        statusMsg.innerText = `키워드 ${keywords.length}개 번역 중... (시간이 걸릴 수 있습니다)`;
+        let translatedResults = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
 
-        // 3. Translate Keywords
-        // Target Languages: EN, JP, CN(zh), ES, HI, RU
-        const translatedResults = await translateKeywords(keywords, apiKey);
+        if (translateKey) {
+            statusMsg.innerText = `키워드 ${keywords.length}개 번역 중... (시간이 걸릴 수 있습니다)`;
+            // 3. Translate Keywords
+            translatedResults = await translateKeywords(keywords, translateKey);
+        } else {
+            statusMsg.innerText = "번역 API 키 없음: 번역 생략됨.";
+        }
 
         // 4. Construct Final Data
         const results = keywords.map((original, index) => {
@@ -331,7 +362,7 @@ async function performSearch(query, category) {
         };
 
         db.ref('global_search_state').update(state);
-        statusMsg.innerText = "검색 및 번역 완료!";
+        statusMsg.innerText = translateKey ? "검색 및 번역 완료!" : "검색 완료 (번역 제외)";
         statusMsg.style.color = "#aaa";
 
     } catch (err) {
