@@ -341,11 +341,11 @@
 
         .modal-content {
             background-color: #1e1e1e;
-            margin: 5% auto;
+            margin: 3% auto;
             padding: 25px;
             border: 1px solid #333;
-            width: 90%;
-            max-width: 600px;
+            width: 95%;
+            max-width: 650px;
             border-radius: 12px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
@@ -362,7 +362,7 @@
         }
 
         .key-list-container {
-            max-height: 300px;
+            max-height: 250px;
             overflow-y: auto;
             margin-bottom: 20px;
             background: #181818;
@@ -476,6 +476,23 @@
             border-radius: 4px;
         }
 
+        .diag-panel {
+            background: #1a1a1a;
+            padding: 10px;
+            border: 1px solid #333;
+            font-size: 0.8rem;
+            margin-top: 20px;
+            color: #888;
+            border-radius: 5px;
+        }
+
+        .diag-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            border-bottom: 1px solid #222;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -586,9 +603,7 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>🔑 API 키 관리</h2>
-                <button onclick="forceSync()"
-                    style="background:none; border:1px solid #444; color:#888; border-radius:5px; padding:2px 8px; cursor:pointer;"
-                    title="서버 데이터 강제 동기화">🔄 동기화</button>
+                <div style="font-size:0.8rem; color:#666">v3.1 (Global Shared)</div>
             </div>
 
             <div class="key-list-container" id="key-list">
@@ -596,7 +611,7 @@
             </div>
 
             <script>
-                // FAST SYNC: Render Local Cache IMMEDIATELY
+                // FAST RENDER
                 try {
                     const saved = localStorage.getItem('cached_api_keys');
                     if (saved) {
@@ -616,9 +631,8 @@
             </script>
 
             <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
-                <h3 style="font-size:1rem;color:#ccc;margin-bottom:10px">새 키 등록</h3>
-                <input type="hidden" id="edit-key-id">
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="hidden" id="edit-key-id">
                     <input type="text" id="new-key-name" class="input-dark" placeholder="키 이름 (예: 구글계정1)"
                         style="flex:2">
                     <select id="new-key-type" class="input-dark" style="flex:1">
@@ -633,35 +647,37 @@
                         onclick="resetForm()">취소</button>
                     <button id="save-key-btn" class="btn-add" style="flex:2" onclick="saveApiKey()">저장하기</button>
                 </div>
-                <!-- Debug Console -->
+
+                <!-- DIAGNOSTIC PANEL -->
+                <div class="diag-panel">
+                    <div class="diag-row"><span>Status:</span> <span id="diag-uid"
+                            style="color:#fff">Connecting...</span></div>
+                    <div class="diag-row"><span>DB Path:</span> <span id="diag-path"
+                            style="color:#4dabf7; font-family:monospace;">global_shared_keys_prod</span></div>
+                    <div class="diag-row"><span>Last Update:</span> <span id="diag-last-rx">-</span></div>
+                    <div class="diag-row" style="background:#222; border:none; justify-content:center; gap:10px;">
+                        <button onclick="runConnectionTest()"
+                            style="background:#444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">📡
+                            연결 테스트</button>
+                        <button onclick="forceSync()"
+                            style="background:#444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🔄
+                            강제 새로고침</button>
+                        <button onclick="window.toggleHelp()"
+                            style="background:none; border:none; color:#666; text-decoration:underline; cursor:pointer;">Rules?</button>
+                    </div>
+                </div>
+
                 <div id="debug-log">System Ready.</div>
             </div>
 
-            <!-- TroubleShooting Guide -->
-            <div style="margin-top:20px; text-align:center; border-top:1px dashed #333; padding-top:10px;">
-                <button onclick="window.toggleHelp()"
-                    style="background:none; border:none; color:#666; text-decoration:underline; cursor:pointer; font-size:0.8rem;">🔧
-                    동기화가 안 되나요?</button>
-                <div id="help-box"
-                    style="display:none; text-align:left; background:#111; padding:15px; margin-top:10px; border:1px solid #444; border-radius:8px; font-size:0.8rem; color:#ccc;">
-                    <p style="margin-bottom:10px;font-weight:bold;color:#ff3b3b">권한 문제 해결 방법:</p>
-                    <p>1. <a href="https://console.firebase.google.com/" target="_blank" style="color:#4dabf7">Firebase
-                            콘솔</a> 접속</p>
-                    <p>2. 프로젝트 선택 > <strong>Build</strong> > <strong>Realtime Database</strong></p>
-                    <p>3. 상단 <strong>규칙(Rules)</strong> 탭 클릭</p>
-                    <p>4. 아래 내용을 복사해서 덮어쓰고 <strong>[게시(Publish)]</strong> 버튼 누르기:</p>
-                    <textarea
-                        style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; margin-top:5px; padding:5px; font-family:monospace;"
-                        readonly onclick="this.select()">{
-  "rules": {
-    ".read": true,
-    ".write": true
-  }
-}</textarea>
-                    <p style="margin-top:10px; color:#888;">* 주의: 이 설정은 모든 사용자가 데이터를 읽고 쓸 수 있게 합니다.</p>
-                </div>
+            <div id="help-box"
+                style="display:none; text-align:left; background:#111; padding:15px; margin-top:10px; border:1px solid #444; border-radius:8px; font-size:0.8rem; color:#ccc;">
+                <p>Firebase Rules 복사:</p>
+                <textarea
+                    style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; margin-top:5px; padding:5px; font-family:monospace;"
+                    readonly
+                    onclick="this.select()">{ "rules": { "global_shared_keys_prod": { ".read": true, ".write": true }, "connection_test": { ".read": true, ".write": true } } }</textarea>
             </div>
-
         </div>
     </div>
 
@@ -672,32 +688,36 @@
 
     <!-- App Logic -->
     <script>
-        const DB_KEY = 'sync_keys_v1';
+        const DB_KEY = 'global_shared_keys_prod';
 
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
 
-        // --- HELPERS ---
         function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; } catch { return {}; } }
         function saveLocalCache(d) { localStorage.setItem('cached_api_keys', JSON.stringify(d)); renderKeys(d); }
-        function showSync(msg = "☁️") {
-            const el = document.getElementById('sync-icon');
-            el.innerText = msg; el.style.opacity = 1;
-            setTimeout(() => el.style.opacity = 0, 3000);
-        }
-        function log(msg) {
-            console.log(msg);
-            const d = document.getElementById('debug-log');
-            if (d) {
-                d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`;
-                d.scrollTop = d.scrollHeight;
-            }
-        }
-        window.toggleHelp = () => {
-            const el = document.getElementById('help-box');
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        function showSync(msg = "☁️") { const el = document.getElementById('sync-icon'); el.innerText = msg; el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 3000); }
+        function log(msg) { console.log(msg); const d = document.getElementById('debug-log'); if (d) { d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`; d.scrollTop = d.scrollHeight; } }
+        window.toggleHelp = () => { const el = document.getElementById('help-box'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
+
+        // Diagnostic Functions
+        window.runConnectionTest = () => {
+            if (!db) return alert("DB not initialized yet.");
+            log("Running Connection Test...");
+            const ts = Date.now();
+            const ref = db.ref('connection_test');
+            ref.set({ timestamp: ts, agent: navigator.userAgent }).then(() => {
+                log("Test Write OK. Verifying...");
+                ref.once('value').then(s => {
+                    const val = s.val();
+                    if (val && val.timestamp === ts) alert("✅ 연결 상태 정상!\n(쓰기/읽기 모두 성공)");
+                    else alert("⚠️ 쓰기는 성공했으나 읽기 값이 다릅니다.");
+                });
+            }).catch(e => {
+                log("Test Fail: " + e.message);
+                alert("❌ 연결 실패: " + e.message + "\n방화벽이나 규칙(Rules) 문제입니다.");
+            });
         };
 
         function saveApiKey() {
@@ -707,12 +727,10 @@
             let i = document.getElementById('edit-key-id').value;
             if (!n || !v) return alert('모든 필드를 입력해주세요.');
 
-            // Generate ID
             if (!i) i = db ? db.ref().push().key : 'temp_' + Date.now();
-
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // Local First
+            // Optimistic Update
             const cache = getLocalCache();
             d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
@@ -722,63 +740,39 @@
             if (db) {
                 showSync("☁️ 업로드...");
                 log(`Uploading: ${n}`);
-
-                // 10s Timeout
                 const writeOp = db.ref(DB_KEY + "/" + i).set(d);
                 const timeoutOp = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (10s)")), 10000));
-
                 Promise.race([writeOp, timeoutOp])
                     .then(() => { showSync("☁️ 완료"); log("Upload Success"); })
-                    .catch(e => {
-                        console.error(e);
-                        log("Err: " + e.message);
-                        alert("⚠️ 업로드 실패: " + e.message + "\n\n계속 실패한다면 하단의 '🔧 동기화 설정'을 눌러 규칙을 확인하세요.");
-                        showSync("⚠️ 로컬저장");
-                    });
-            } else {
-                log("Offline: Saved locally only");
-                alert("오프라인 상태입니다. 로컬에 저장되었습니다.");
-            }
+                    .catch(e => { log("Err: " + e.message); alert("⚠️ 업로드 실패: " + e.message); showSync("⚠️ 로컬저장"); });
+            } else { log("Offline save"); }
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        // Toggles
-        window.togK = (id, v) => {
-            const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
-            if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Toggle Error: " + e.message));
-        };
-        window.delK = (id) => {
-            if (!confirm("삭제하시겠습니까?")) return;
-            const c = getLocalCache(); delete c[id]; saveLocalCache(c);
-            if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => log("Del Error: " + e.message));
-        };
+        window.togK = (id, v) => { const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); } if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Err: " + e.message)); };
+        window.delK = (id) => { if (!confirm("삭제?")) return; const c = getLocalCache(); delete c[id]; saveLocalCache(c); if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => log("Err: " + e.message)); };
 
-        // --- GLOBAL ACTIONS ---
         window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
         window.closeModal = () => document.getElementById('api-modal').style.display = "none";
-        window.resetForm = () => {
-            document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = "";
-            document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기";
-            document.getElementById('save-key-btn').disabled = false; document.getElementById('cancel-edit-btn').style.display = "none";
-        };
+        window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
+
         window.forceSync = () => {
             if (db) {
-                log("Forcing Refresh...");
+                log("Forcing Read...");
                 db.ref(DB_KEY).once('value').then(s => {
                     const val = s.val() || {};
-                    log("Force Sync Received: " + Object.keys(val).length);
+                    log("Read " + Object.keys(val).length + " keys from Server");
                     saveLocalCache(val);
-                    alert("서버에서 불러오기 성공");
-                }).catch(e => alert("동기화 실패: " + e.message));
+                    document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
+                    alert("서버 데이터 불러오기 성공!\n(키 개수: " + Object.keys(val).length + ")");
+                }).catch(e => alert("실패: " + e.message));
             }
         };
 
         // --- INIT ---
         function initApp() {
             setupUI();
-
-            const maxWait = 50;
-            let attempts = 0;
+            const maxWait = 50; let attempts = 0;
             const checkFirebase = setInterval(() => {
                 attempts++;
                 if (window.firebase && window.firebase.apps) {
@@ -787,7 +781,6 @@
                 } else if (attempts >= maxWait) {
                     clearInterval(checkFirebase);
                     document.getElementById('status-message').innerText = "오프라인 (SDK)";
-                    log("SDK Load Timeout");
                 }
             }, 100);
         }
@@ -799,43 +792,41 @@
                     db = firebase.database();
                     auth = firebase.auth();
 
+                    document.getElementById('diag-path').innerText = DB_KEY;
+
                     db.ref(".info/connected").on("value", s => {
                         const el = document.getElementById('status-message');
                         if (s.val()) {
                             if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
                             showSync("☁️ 연결됨");
                             log("Online");
-                        } else {
-                            el.innerText = "연결 중...";
-                        }
+                        } else el.innerText = "연결 중...";
                     });
 
-                    auth.signInAnonymously().then((userCredential) => {
-                        const uid = userCredential.user ? userCredential.user.uid : 'anon';
+                    auth.signInAnonymously().then((u) => {
+                        const uid = u.user ? u.user.uid : 'anon';
+                        document.getElementById('diag-uid').innerText = "Logged in: " + uid.substring(0, 5);
                         log(`Auth OK`);
 
                         db.ref(DB_KEY).on('value', s => {
                             const val = s.val();
                             const local = getLocalCache();
+                            document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
 
                             if (val) {
                                 log("Sync Update: " + Object.keys(val).length + " keys");
                                 saveLocalCache(val);
                             } else {
                                 if (Object.keys(local).length > 0) {
-                                    log("Auto-Bootstrap: Uploading Local...");
-                                    db.ref(DB_KEY).set(local)
-                                        .then(() => log("Bootstrap Done"))
-                                        .catch(e => log("Bootstrap Err: " + e.message));
-                                } else {
-                                    log("Ready (Empty)");
-                                }
+                                    log("Bootstrap: Uploading Local...");
+                                    db.ref(DB_KEY).set(local).then(() => log("Bootstrap Done"));
+                                } else log("Ready (Empty)");
                             }
                         });
-
+                        // SearchState
                         db.ref('global_search_state_v2').on('value', s => { if (s.val()) updateUI(s.val()); });
                     }).catch(e => {
-                        console.error(e);
+                        document.getElementById('diag-uid').innerText = "Auth Fail";
                         log("Auth Fail: " + e.message);
                     });
                 }
