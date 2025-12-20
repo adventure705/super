@@ -85,6 +85,17 @@
             right: 0;
             top: 50%;
             transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sync-indicator {
+            font-size: 0.8rem;
+            color: #4dabf7;
+            opacity: 0;
+            transition: opacity 0.5s;
+            font-weight: 600;
         }
 
         #api-btn {
@@ -509,6 +520,7 @@
             <div class="top-nav">
                 <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기</h1>
                 <div class="api-btn-container">
+                    <span id="sync-icon" class="sync-indicator">☁️</span>
                     <button id="api-btn" onclick="openModal()">🔑 API 관리</button>
                 </div>
             </div>
@@ -557,16 +569,18 @@
     <div id="api-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
-            <h2>🔑 API 키 관리</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>🔑 API 키 관리</h2>
+                <button onclick="forceSync()"
+                    style="background:none; border:1px solid #444; color:#888; border-radius:5px; padding:2px 8px; cursor:pointer;"
+                    title="서버 데이터 강제 동기화">🔄 동기화</button>
+            </div>
 
-            <!-- Key List -->
             <div class="key-list-container" id="key-list">
                 <div style="text-align:center;color:#666;padding:20px">로딩 중...</div>
             </div>
 
-            <!-- Immediate Local Render Script -->
             <script>
-                // This script runs INSTANTLY after 'key-list' is in DOM, before page finish.
                 try {
                     const saved = localStorage.getItem('cached_api_keys');
                     if (saved) {
@@ -581,7 +595,6 @@
                                 list.appendChild(el);
                             });
                         } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; }
-                        const st = localStorage.getItem('search_state_temp');
                     }
                 } catch (e) { }
             </script>
@@ -621,101 +634,89 @@
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth;
 
-        // --- OPTIMISTIC UI HELPERS ---
-        function getLocalCache() {
-            try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; }
-            catch { return {}; }
+        // --- HELPERS ---
+        function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; } catch { return {}; } }
+        function saveLocalCache(d) { localStorage.setItem('cached_api_keys', JSON.stringify(d)); renderKeys(d); }
+        function showSync(msg = "☁️") {
+            const el = document.getElementById('sync-icon');
+            el.innerText = msg; el.style.opacity = 1;
+            setTimeout(() => el.style.opacity = 0, 2000);
         }
-        function saveLocalCache(d) {
-            localStorage.setItem('cached_api_keys', JSON.stringify(d));
-            renderKeys(d); // Instant Render
-        }
-        // -----------------------------
 
-        // Global functions for HTML onClick binding
-        window.openModal = function () { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
-        window.closeModal = function () { document.getElementById('api-modal').style.display = "none"; };
-
-        window.resetForm = function () {
+        // --- GLOBAL ACTIONS ---
+        window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
+        window.closeModal = () => document.getElementById('api-modal').style.display = "none";
+        window.resetForm = () => {
             document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = "";
             document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기";
-            document.getElementById('save-key-btn').disabled = false;
-            document.getElementById('cancel-edit-btn').style.display = "none";
+            document.getElementById('save-key-btn').disabled = false; document.getElementById('cancel-edit-btn').style.display = "none";
         };
 
-        window.saveApiKey = function () {
+        window.saveApiKey = () => {
             const n = document.getElementById('new-key-name').value.trim();
             const v = document.getElementById('new-key-value').value.trim();
             const t = document.getElementById('new-key-type').value;
             let i = document.getElementById('edit-key-id').value;
+            if (!n || !v) return alert('입력 확인 필요');
 
-            if (!n || !v) return alert('이름과 키 값을 모두 입력해주세요.');
+            // Generate stable ID if new
+            if (!i) i = db ? db.ref().push().key : 'local_' + Date.now();
 
-            // 1. Generate ID if new
-            if (!i) {
-                // If DB connected, get key. If not, make temp key that will be overwritten by sync (or use timestamp)
-                // Actually to avoid collisions and sync issues, best to use push id if possible.
-                // If offline, we can use a timestamp-based ID, but firebase push IDs are better.
-                // If db is not ready, we use timestamp.
-                if (db) i = db.ref().push().key;
-                else i = 'local_' + Date.now();
-            }
+            const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // 2. Prepare Data
-            const d = { name: n, key: v, type: t, active: true, createdAt: Date.now(), updatedAt: Date.now() };
-
-            // 3. OPTIMISTIC UPDATE (Cache & UI First)
+            // Optimistic Update
             const cache = getLocalCache();
-            if (cache[i] && cache[i].createdAt) d.createdAt = cache[i].createdAt; // keep created time
+            d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
             cache[i] = d;
-            saveLocalCache(cache); // Saves to LS & Renders UI
-
-            // 4. Feedback
+            saveLocalCache(cache); // Render Immediately
             alert('성공적으로 저장되었습니다.');
             window.resetForm();
 
-            // 5. Background Sync to DB
+            // Real Sync (Fire and Forget)
             if (db) {
-                // Use .set/update in background without waiting
-                db.ref(DB_KEY + "/" + i).update(d).catch(e => console.error("BG Sync Fail", e));
+                showSync("☁️ 저장중...");
+                // Use .update to merge safely
+                db.ref(DB_KEY + "/" + i).update(d)
+                    .then(() => showSync("☁️ 저장완료"))
+                    .catch(e => {
+                        console.error(e);
+                        alert("동기화 실패: " + e.message);
+                        showSync("⚠️ 오류");
+                    });
             } else {
-                console.warn("DB offline, saved locally only");
+                showSync("📴 오프라인");
             }
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-
         window.togK = (id, v) => {
-            // Optimistic
-            const cache = getLocalCache();
-            if (cache[id]) {
-                cache[id].active = v;
-                saveLocalCache(cache);
-                // BG Sync
-                if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => console.error(e));
-            }
+            const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
+            if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => { });
         };
-
         window.delK = (id) => {
-            if (!confirm("정말 삭제하시겠습니까?")) return;
-            // Optimistic
-            const cache = getLocalCache();
-            delete cache[id];
-            saveLocalCache(cache);
-            // BG Sync
-            if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => console.error(e));
+            if (!confirm("삭제?")) return;
+            const c = getLocalCache(); delete c[id]; saveLocalCache(c);
+            if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => { });
+        };
+        window.forceSync = () => {
+            if (db) {
+                showSync("🔄 동기화...");
+                db.ref(DB_KEY).once('value').then(s => {
+                    const d = s.val() || {};
+                    saveLocalCache(d);
+                    alert("서버와 동기화 완료 (" + Object.keys(d).length + "개)");
+                });
+            } else alert("서버 연결 안됨");
         };
 
+        // --- INIT ---
         document.addEventListener('DOMContentLoaded', () => {
             setupUI();
 
-            // Initial Render
-            try {
-                const c = localStorage.getItem('cached_api_keys');
-                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; }
-            } catch (e) { }
+            // Local Load
+            try { const c = localStorage.getItem('cached_api_keys'); if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨"; } } catch (e) { }
 
-            // Init Firebase
+            // Firebase Load
             try {
                 if (window.firebase && !firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
@@ -724,35 +725,31 @@
 
                     db.ref(".info/connected").on("value", s => {
                         const el = document.getElementById('status-message');
-                        if (s.val()) { if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; } }
-                        else { if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; } }
+                        if (s.val()) {
+                            if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
+                            showSync("☁️ 연결됨");
+                        } else {
+                            showSync("📡 연결중...");
+                        }
                     });
 
                     auth.signInAnonymously().then(() => {
-                        // Inbound Sync (Server -> Local)
-                        db.ref(DB_KEY).on('value', s => {
-                            const d = s.val() || {};
-                            // Merge/Overwrite local cache with server truth
-                            saveLocalCache(d);
-                        });
+                        // Inbound Sync: Listen for ANY changes from server
+                        db.ref(DB_KEY).on('value', s => saveLocalCache(s.val() || {}));
                         db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
-                    }).catch(e => console.error("Auth", e));
+                    }).catch(e => console.error(e));
                 }
             } catch (e) { console.error(e); }
         });
 
-        // Functions
+        // App Functions
         async function getApiKey(t = 'youtube') {
             try {
                 const c = getLocalCache();
                 const list = Object.values(c).filter(k => (k.type || 'youtube') === t && k.active !== false);
                 if (list.length) return list[Math.floor(Math.random() * list.length)].key;
             } catch (e) { }
-            if (!db) return null;
-            const s = await db.ref(DB_KEY).orderByChild('active').equalTo(true).once('value');
-            if (!s.val()) return null;
-            const list = Object.values(s.val()).filter(k => (k.type || 'youtube') === t);
-            return list.length ? list[Math.floor(Math.random() * list.length)].key : null;
+            return null; // Local First
         }
 
         async function search(q, c) {
@@ -760,7 +757,7 @@
             const k = await getApiKey('youtube');
             const tk = await getApiKey('translate');
 
-            if (!k) return alert("API 키가 없습니다.");
+            if (!k) return alert("저장된 유튜브 API 키가 없습니다.");
             msg.innerText = "데이터 요청 중..."; msg.style.color = "#4dabf7";
 
             try {
@@ -864,12 +861,13 @@
         }
         function renderKeys(obj) {
             const l = document.getElementById('key-list'); l.innerHTML = '';
-            if (!obj) return;
+            if (!obj) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
             const arr = Object.entries(obj).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
-            if (!arr.length) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">키 없음</div>'; return; }
+            if (!arr.length) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
+            const typeMap = { 'youtube': '📺 YouTube', 'translate': '🌐 Translate' };
             arr.forEach(([id, d]) => {
                 const el = document.createElement('div'); el.className = 'key-item';
-                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
+                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${typeMap[d.type] || 'Unknown'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
                 l.appendChild(el);
             });
         }
