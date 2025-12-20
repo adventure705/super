@@ -1,117 +1,35 @@
 
+// 100% LOCAL STORAGE MODE (Reliability First)
 const CATEGORIES = [
     "영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠",
     "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트",
     "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"
 ];
 
-let db;
-let auth;
-
-// Config: RESTORED RTDB URL for maximum compatibility
-const firebaseConfig = {
-    apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
-    authDomain: "template-3530f.firebaseapp.com",
-    databaseURL: "https://template-3530f.firebaseio.com",
-    projectId: "template-3530f",
-    storageBucket: "template-3530f.firebasestorage.app",
-    messagingSenderId: "891098188622",
-    appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
+const STORAGE_KEY = 'api_keys_v1';
+const CATEGORY_IDS = {
+    "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15",
+    "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22",
+    "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26",
+    "교육": "27", "과학/기술": "28", "비영리/사회운동": "29"
 };
 
-// Use a shared path that is likely to have open rules or we can use generic
-const DB_KEY_PATH = 'shared_api_keys';
-
-async function initApp() {
+// Initialize App
+function initApp() {
     setupUI();
+    loadApiKeys();
 
-    // [CRITICAL] 1. FAST LOAD: Load from LocalStorage Cache immediately
-    // This ensures keys appear INSTANTLY even if server is slow/disconnected
-    loadCachedApiKeys();
-
-    try {
-        firebase.initializeApp(firebaseConfig);
-        auth = firebase.auth();
-        db = firebase.database();
-
-        // 2. Connection Monitor
-        db.ref(".info/connected").on("value", (snap) => {
-            const statusIndicator = document.getElementById('status-message');
-            if (snap.val() === true) {
-                console.log("Connected to Firebase");
-                if (statusIndicator) {
-                    // Only show "Connected" if it was previously disconnected or empty
-                    if (statusIndicator.innerText.includes("끊김") || statusIndicator.innerText === "") {
-                        statusIndicator.innerText = "서버 연결됨";
-                        statusIndicator.style.color = "#4dabf7";
-                    }
-                }
-            } else {
-                console.log("Disconnected - Using Offline Cache");
-                if (statusIndicator) {
-                    statusIndicator.innerText = "오프라인 모드 (캐시 사용 중)";
-                    statusIndicator.style.color = "#ffbb33"; // Warning color
-                }
-            }
-        });
-
-        // 3. Auth & Sync
-        // We use anonymous auth, but we don't block the UI waiting for it.
-        auth.signInAnonymously().catch(error => {
-            console.error("Auth failed:", error);
-            // Even if auth fails, we have cache!
-        });
-
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                console.log("Logged in:", user.uid);
-                setupRealtimeListener();
-                syncApiKeys(); // Start syncing with Server in background
-            }
-        });
-    } catch (e) {
-        console.error("Init Error:", e);
-        // Even if Firebase fails, app works in read-only mode from cache
-        alert("서버 연결 실패 (오프라인 모드로 동작합니다): " + e.message);
+    // Status Indicator
+    const statusMsg = document.getElementById('status-message');
+    if (statusMsg) {
+        statusMsg.innerText = "단독 실행 모드 (빠른 속도)";
+        statusMsg.style.color = "#4dabf7";
     }
-}
-
-// --- OFFLINE-FIRST CACHING STRATEGY ---
-function loadCachedApiKeys() {
-    try {
-        const cached = localStorage.getItem('cached_api_keys');
-        if (cached) {
-            console.log("Loaded keys from LocalStorage cache");
-            renderKeys(JSON.parse(cached));
-        }
-    } catch (e) { console.warn("Cache load failed", e); }
-}
-
-function syncApiKeys() {
-    if (!db) return;
-    const listContainer = document.getElementById('key-list');
-
-    // Listen for Server Updates
-    db.ref(DB_KEY_PATH).on('value', snapshot => {
-        const keys = snapshot.val() || {};
-
-        // 1. Update Cache
-        localStorage.setItem('cached_api_keys', JSON.stringify(keys));
-
-        // 2. Render Fresh Data
-        renderKeys(keys);
-    }, err => {
-        console.error("Sync Error:", err);
-        // Do NOT clear list on error. Keep showing cached data!
-        // Only show error if list is empty (no cache)
-        if (!localStorage.getItem('cached_api_keys')) {
-            listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 동기화 실패<br>(' + err.code + ')</div>';
-        }
-    });
+    console.log("App initialized in Local Mode");
 }
 
 function setupUI() {
-    // Render Categories
+    // 1. Categories
     const catList = document.getElementById('categories-list');
     catList.innerHTML = '';
     CATEGORIES.forEach(cat => {
@@ -122,7 +40,7 @@ function setupUI() {
         catList.appendChild(btn);
     });
 
-    // Search Action
+    // 2. Search
     document.getElementById('search-btn').addEventListener('click', () => {
         const query = document.getElementById('keyword-input').value;
         if (!query) return;
@@ -136,40 +54,152 @@ function setupUI() {
         }
     });
 
-    // API Button
+    // 3. API Modal
     const modal = document.getElementById('api-modal');
-    const closeBtn = document.querySelector('.close');
-
     document.getElementById('api-btn').addEventListener('click', () => {
         modal.style.display = "block";
         resetForm();
     });
+    document.querySelector('.close').onclick = () => modal.style.display = "none";
+    window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
 
-    closeBtn.onclick = () => {
-        modal.style.display = "none";
-    };
+    // 4. Save/Cancel
+    document.getElementById('save-key-btn').addEventListener('click', saveApiKey);
+    document.getElementById('cancel-edit-btn').addEventListener('click', resetForm);
+}
 
-    window.onclick = (event) => {
-        if (event.target == modal) {
-            modal.style.display = "none";
-        }
-    };
+// --- LOCAL DATA MANAGEMENT ---
 
-    // Save
-    document.getElementById('save-key-btn').addEventListener('click', () => {
-        const nameInput = document.getElementById('new-key-name');
-        const keyInput = document.getElementById('new-key-value');
-        const typeInput = document.getElementById('new-key-type');
-        const idInput = document.getElementById('edit-key-id');
+function getLocalKeys() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+        return [];
+    }
+}
 
-        saveApiKey(idInput.value, nameInput.value.trim(), keyInput.value.trim(), typeInput.value);
-    });
+function saveLocalKeys(keys) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+    renderKeys(keys);
+}
 
-    // Cancel
-    document.getElementById('cancel-edit-btn').addEventListener('click', () => {
-        resetForm();
+function loadApiKeys() {
+    const keys = getLocalKeys();
+    renderKeys(keys);
+}
+
+function renderKeys(keys) {
+    const listContainer = document.getElementById('key-list');
+    listContainer.innerHTML = '';
+
+    if (keys.length === 0) {
+        listContainer.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">등록된 API Key가 없습니다.<br>아래에서 키를 추가해주세요.</div>';
+        return;
+    }
+
+    // Sort by Date Desc
+    keys.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    keys.forEach(data => {
+        const isActive = data.active !== false;
+        const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '방금 전';
+        const typeIcon = data.type === 'translate' ? '🌐' : '📺';
+        const typeLabel = data.type === 'translate' ? 'Translate' : 'YouTube';
+        // Mask Key
+        const visibleKey = data.key.length > 10 ? data.key.substring(0, 6) + "..." + data.key.substring(data.key.length - 4) : data.key;
+
+        const item = document.createElement('div');
+        item.className = 'key-item';
+        item.innerHTML = `
+            <div class="key-info">
+                <div style="font-weight:bold; color:#fff; font-size:1rem; display:flex; gap:8px; align-items:center;">
+                    <span>${typeIcon}</span> ${data.name} 
+                    <span style="font-size:0.75em; background:#444; padding:2px 8px; border-radius:10px; color:#ccc;">${typeLabel}</span>
+                </div>
+                <div class="key-value" title="${data.key}" style="margin: 5px 0 0 0;">${visibleKey}</div>
+                <div class="key-meta" style="margin-left: 0;">${created}</div>
+            </div>
+            <div class="key-actions">
+                <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${data.id}')" title="수정">✏️</button>
+                <label class="toggle-switch" title="활성화/비활성화">
+                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleKey('${data.id}', this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <button class="btn-delete" onclick="deleteKey('${data.id}')" title="삭제">🗑️</button>
+            </div>
+        `;
+        listContainer.appendChild(item);
     });
 }
+
+function saveApiKey() {
+    const name = document.getElementById('new-key-name').value.trim();
+    const key = document.getElementById('new-key-value').value.trim();
+    const type = document.getElementById('new-key-type').value;
+    const id = document.getElementById('edit-key-id').value;
+
+    if (!name || !key) {
+        alert("이름과 키 값을 모두 입력해주세요.");
+        return;
+    }
+
+    let keys = getLocalKeys();
+
+    if (id) {
+        // Update
+        const idx = keys.findIndex(k => k.id === id);
+        if (idx !== -1) {
+            keys[idx] = { ...keys[idx], name, key, type, updatedAt: Date.now() };
+            alert("수정되었습니다.");
+        }
+    } else {
+        // Add New
+        keys.push({
+            id: 'key_' + Date.now(),
+            name,
+            key,
+            type,
+            active: true,
+            createdAt: Date.now()
+        });
+        alert("추가되었습니다.");
+    }
+
+    saveLocalKeys(keys);
+    resetForm();
+}
+
+// Global functions for HTML onclick
+window.prepareEdit = function (id) {
+    const keys = getLocalKeys();
+    const data = keys.find(k => k.id === id);
+    if (!data) return;
+
+    document.getElementById('new-key-name').value = data.name;
+    document.getElementById('new-key-value').value = data.key;
+    document.getElementById('new-key-type').value = data.type || 'youtube';
+    document.getElementById('edit-key-id').value = data.id;
+
+    const saveBtn = document.getElementById('save-key-btn');
+    saveBtn.innerText = "수정 완료";
+    document.getElementById('cancel-edit-btn').style.display = "block";
+};
+
+window.toggleKey = function (id, isActive) {
+    const keys = getLocalKeys();
+    const idx = keys.findIndex(k => k.id === id);
+    if (idx !== -1) {
+        keys[idx].active = isActive;
+        saveLocalKeys(keys);
+    }
+};
+
+window.deleteKey = function (id) {
+    if (confirm("정말로 삭제하시겠습니까?")) {
+        const keys = getLocalKeys().filter(k => k.id !== id);
+        saveLocalKeys(keys);
+    }
+};
 
 function resetForm() {
     document.getElementById('new-key-name').value = "";
@@ -178,186 +208,34 @@ function resetForm() {
     document.getElementById('edit-key-id').value = "";
     const saveBtn = document.getElementById('save-key-btn');
     saveBtn.innerText = "저장하기";
-    saveBtn.disabled = false;
     document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
-function renderKeys(keysData) {
-    const listContainer = document.getElementById('key-list');
-    listContainer.innerHTML = '';
-
-    const keys = Object.entries(keysData);
-    if (keys.length === 0) {
-        listContainer.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">등록된 API Key가 없습니다.<br>아래에서 키를 추가해주세요.</div>';
-        return;
-    }
-
-    // Client-side Sorting
-    keys.sort((a, b) => {
-        const timeA = a[1].createdAt || 0;
-        const timeB = b[1].createdAt || 0;
-        return timeB - timeA;
-    });
-
-    keys.forEach(([id, data]) => {
-        const isActive = data.active !== false;
-        const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '방금 전';
-        const type = data.type || 'youtube';
-        const typeIcon = type === 'translate' ? '🌐' : '📺';
-        const typeLabel = type === 'translate' ? 'Translate' : 'YouTube';
-
-        const item = document.createElement('div');
-        item.className = 'key-item';
-        const visibleKey = data.key.length > 10 ? data.key.substring(0, 6) + "..." + data.key.substring(data.key.length - 4) : data.key;
-
-        item.innerHTML = `
-            <div class="key-info">
-                <div style="font-weight:bold; color:#fff; font-size:1rem; display:flex; gap:8px; align-items:center;">
-                    <span>${typeIcon}</span> ${data.name || '이름 없음'} 
-                    <span style="font-size:0.75em; background:#444; padding:2px 8px; border-radius:10px; color:#ccc;">${typeLabel}</span>
-                </div>
-                <div class="key-value" title="${data.key}" style="margin: 5px 0 0 0;">${visibleKey}</div>
-                <div class="key-meta" style="margin-left: 0;">${created}</div>
-            </div>
-            <div class="key-actions">
-                <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}', '${type}')" title="수정">✏️</button>
-                <label class="toggle-switch" title="활성화/비활성화">
-                    <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleKey('${id}', this.checked)">
-                    <span class="slider"></span>
-                </label>
-                <button class="btn-delete" onclick="deleteKey('${id}')" title="삭제">🗑️</button>
-            </div>
-        `;
-        listContainer.appendChild(item);
-    });
-}
-
-function saveApiKey(id, name, key, type) {
-    // Optimistic Save: Don't block UI if offline.
-    // Firebase SDK handles offline writesQueue.
-    if (!name || !key) {
-        alert("이름과 키 값을 모두 입력해주세요.");
-        return;
-    }
-
-    const data = {
-        name: name,
-        key: key,
-        type: type || 'youtube',
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    let promise;
-    if (id) {
-        promise = db ? db.ref(`${DB_KEY_PATH}/${id}`).update(data) : Promise.reject("DB 미연결");
-    } else {
-        data.active = true;
-        data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        promise = db ? db.ref(DB_KEY_PATH).push(data) : Promise.reject("DB 미연결");
-    }
-
-    promise
-        .then(() => {
-            alert(id ? "수정되었습니다." : "추가되었습니다.");
-            if (!id) resetForm();
-            // Note: Listener will trigger cache update
-        })
-        .catch(err => {
-            // Even if failed, try to save logic? No, inform user.
-            alert("저장 실패 (연결 상태 확인 필요): " + err.message);
-        });
-}
-
-
-window.prepareEdit = function (id, name, key, type) {
-    document.getElementById('new-key-name').value = name;
-    document.getElementById('new-key-value').value = key;
-    document.getElementById('new-key-type').value = type || 'youtube';
-    document.getElementById('edit-key-id').value = id;
-    const saveBtn = document.getElementById('save-key-btn');
-    saveBtn.innerText = "수정 완료";
-    saveBtn.disabled = false;
-    document.getElementById('cancel-edit-btn').style.display = "block";
-};
-
-window.toggleKey = function (id, isActive) {
-    if (db) db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
-};
-
-window.deleteKey = function (id) {
-    if (confirm("정말로 삭제하시겠습니까?")) {
-        if (db) db.ref(`${DB_KEY_PATH}/${id}`).remove();
-    }
-};
+// --- SEARCH LOGIC ---
 
 function getActiveApiKey(type = 'youtube') {
-    // 1. Try Cache First for Speed
-    try {
-        const cached = localStorage.getItem('cached_api_keys');
-        if (cached) {
-            const keysVal = JSON.parse(cached);
-            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type && k.active !== false);
-            if (keys.length > 0) {
-                // Return cached key instantly
-                return Promise.resolve(keys[Math.floor(Math.random() * keys.length)].key);
-            }
-        }
-    } catch (e) { /* Fallback to DB if cache fails */ }
-
-    // 2. If no cache or empty, try DB
-    return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value')
-        .then(snapshot => {
-            const keysVal = snapshot.val();
-            if (!keysVal) return null;
-            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type);
-            if (keys.length === 0) return null;
-            return keys[Math.floor(Math.random() * keys.length)].key;
-        });
+    const keys = getLocalKeys().filter(k => (k.type || 'youtube') === type && k.active !== false);
+    if (keys.length === 0) return null;
+    return keys[Math.floor(Math.random() * keys.length)].key;
 }
-
-function setupRealtimeListener() {
-    db.ref('global_search_state').on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) updateUI(data);
-    });
-}
-
-function selectCategory(category) {
-    performSearch(null, category);
-}
-
-const CATEGORY_IDS = {
-    "영화/애니메이션": "1",
-    "자동차/교통": "2",
-    "음악": "10",
-    "애완동물/동물": "15",
-    "스포츠": "17",
-    "여행/이벤트": "19",
-    "게임": "20",
-    "인물/블로그": "22",
-    "코미디": "23",
-    "엔터테인먼트": "24",
-    "뉴스/정치": "25",
-    "노하우/스타일": "26",
-    "교육": "27",
-    "과학/기술": "28",
-    "비영리/사회운동": "29"
-};
 
 function getCurrentCategory() {
     const active = document.querySelector('.category-pill.active');
     return active ? active.innerText : "엔터테인먼트";
 }
 
+function selectCategory(category) {
+    performSearch(null, category);
+}
+
+// Main Search Function
 async function performSearch(query, category) {
     const statusMsg = document.getElementById('status-message');
-
-    // 1. Check API Keys
-    const youtubeKey = await getActiveApiKey('youtube');
-    const translateKey = await getActiveApiKey('translate');
+    const youtubeKey = getActiveApiKey('youtube');
+    const translateKey = getActiveApiKey('translate');
 
     if (!youtubeKey) {
-        alert("API 키가 없습니다. 설정에서 YouTube API 키를 추가해주세요.");
+        alert("활성화된 [YouTube Data API] 키가 없습니다. API 메뉴에서 등록해주세요.");
         return;
     }
 
@@ -367,85 +245,82 @@ async function performSearch(query, category) {
     try {
         let keywords = [];
 
+        // 1. Fetch Keywords
         if (query) {
-            // --- KEYWORD SEARCH MODE ---
-            try {
-                const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
-                const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
-                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-            } catch (e) {
-                // If search fails, throw to outer catch
-                throw new Error("검색 요청 실패: " + e.message);
-            }
+            keywords = await getKeywordsBySearch(query, youtubeKey);
         } else {
-            // --- CATEGORY TRENDING MODE ---
-            const catId = CATEGORY_IDS[category];
-            try {
-                if (!catId) throw new Error("No Category ID");
-
-                // Try Trending First
-                const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
-                const part2 = part1.nextPageToken ? await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken) : { items: [] };
-                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-
-            } catch (trendingErr) {
-                console.warn("Trending failed, using fallback:", trendingErr);
-                statusMsg.innerText = `'${category}' 인기 영상이 없어 검색으로 대체합니다...`;
-
-                // Fallback: Search by Category Name
-                const part1 = await fetchYouTubeSearch(category, youtubeKey, null);
-                const part2 = part1.nextPageToken ? await fetchYouTubeSearch(category, youtubeKey, part1.nextPageToken) : { items: [] };
-                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-            }
+            keywords = await getKeywordsByTrending(category, youtubeKey);
         }
 
-        // Deduplicate & Limit
         keywords = [...new Set(keywords)].slice(0, 100);
         if (keywords.length === 0) throw new Error("검색 결과가 없습니다.");
 
-        // Translation
+        // 2. Translate
         let translated = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
         if (translateKey) {
-            statusMsg.innerText = `키워드 번역 중... (${keywords.length}개)`;
+            statusMsg.innerText = `번역 중... (${keywords.length}개)`;
             translated = await translateKeywords(keywords, translateKey);
-        } else {
-            statusMsg.innerText = "번역 API 없음 (생략)";
         }
 
-        // Build Results
-        const state = {
+        // 3. Build State
+        const results = keywords.map((k, i) => ({
+            rank: i + 1,
+            korean: k,
+            english: translated.en[i] || '-',
+            japanese: translated.ja[i] || '-',
+            chinese: translated['zh-CN'][i] || '-',
+            spanish: translated.es[i] || '-',
+            hindi: translated.hi[i] || '-',
+            russian: translated.ru[i] || '-'
+        }));
+
+        updateUI({
             query: query || category,
             selectedCategory: category,
-            results: keywords.map((k, i) => ({
-                rank: i + 1,
-                korean: k,
-                english: translated.en[i] || '-',
-                japanese: translated.ja[i] || '-',
-                chinese: translated['zh-CN'][i] || '-',
-                spanish: translated.es[i] || '-',
-                hindi: translated.hi[i] || '-',
-                russian: translated.ru[i] || '-'
-            })),
-            timestamp: Date.now()
-        };
+            results: results
+        });
 
-        // IMMEDIATE LOCAL UPDATE (Fast UI)
-        updateUI(state);
-        statusMsg.innerText = "검색 완료!";
+        statusMsg.innerText = "검색 및 번역 완료!";
         statusMsg.style.color = "#aaa";
-
-        // SYNC TO DB (Background)
-        if (db) { // Only sync if DB is connected
-            db.ref('global_search_state').update(state).catch(e => console.error("Sync failed:", e));
-        } else {
-            console.warn("DB not connected, search state not synced.");
-        }
 
     } catch (err) {
         console.error(err);
         statusMsg.innerText = "오류: " + err.message;
         statusMsg.style.color = "#ff4444";
         alert("오류 발생: " + err.message);
+    }
+}
+
+// --- API HELPERS ---
+
+async function getKeywordsBySearch(query, apiKey) {
+    try {
+        const part1 = await fetchYouTubeSearch(query, apiKey, null);
+        let items = part1.items;
+        if (part1.nextPageToken) {
+            const part2 = await fetchYouTubeSearch(query, apiKey, part1.nextPageToken);
+            items = items.concat(part2.items);
+        }
+        return items.map(i => i.snippet.title);
+    } catch (e) {
+        throw new Error("검색 실패: " + e.message);
+    }
+}
+
+async function getKeywordsByTrending(category, apiKey) {
+    const catId = CATEGORY_IDS[category];
+    try {
+        if (!catId) throw new Error("No Cat ID");
+        const part1 = await fetchYouTubePopular(catId, apiKey, null);
+        let items = part1.items;
+        if (part1.nextPageToken) {
+            const part2 = await fetchYouTubePopular(catId, apiKey, part1.nextPageToken);
+            items = items.concat(part2.items);
+        }
+        return items.map(i => i.snippet.title);
+    } catch (err) {
+        console.warn("Trending failed, fallback to search", err);
+        return await getKeywordsBySearch(category, apiKey);
     }
 }
 
@@ -486,22 +361,28 @@ async function translateKeywords(texts, apiKey) {
 }
 
 function updateUI(data) {
-    if (document.getElementById('keyword-input').value !== (data.query || "")) {
-        document.getElementById('keyword-input').value = data.query || "";
+    // 1. Input Update
+    const input = document.getElementById('keyword-input');
+    if (input.value !== (data.query || "") && data.query) {
+        input.value = data.query;
     }
+
+    // 2. Category Update
     document.querySelectorAll('.category-pill').forEach(btn => {
         if (btn.innerText === data.selectedCategory) btn.classList.add('active');
         else btn.classList.remove('active');
     });
 
+    // 3. Table Update
     const tbody = document.querySelector('#results-table tbody');
     tbody.innerHTML = '';
-    if (data.results) {
+
+    if (data.results && data.results.length > 0) {
         data.results.forEach(row => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${row.rank}</td>
-                <td style="color:#fff;">${row.korean}</td>
+                <td style="color:#fff; font-weight:bold;">${row.korean}</td>
                 <td>${row.english}</td>
                 <td>${row.japanese}</td>
                 <td>${row.chinese}</td>
@@ -511,8 +392,10 @@ function updateUI(data) {
             `;
             tbody.appendChild(tr);
         });
-        document.getElementById('status-message').innerText = "최신 데이터 로드됨 (" + new Date().toLocaleTimeString() + ")";
+    } else {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">검색 결과가 없습니다.</td></tr>`;
     }
 }
 
+// Start
 initApp();
