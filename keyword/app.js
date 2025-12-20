@@ -25,49 +25,89 @@ const DB_KEY_PATH = 'shared_api_keys';
 async function initApp() {
     setupUI();
 
+    // [CRITICAL] 1. FAST LOAD: Load from LocalStorage Cache immediately
+    // This ensures keys appear INSTANTLY even if server is slow/disconnected
+    loadCachedApiKeys();
+
     try {
         firebase.initializeApp(firebaseConfig);
         auth = firebase.auth();
-        db = firebase.database(); // Revert to Realtime Database
-        console.log("Firebase initialized (RTDB Mode)");
+        db = firebase.database();
 
-        // 1. Connection Monitor
+        // 2. Connection Monitor
         db.ref(".info/connected").on("value", (snap) => {
             const statusIndicator = document.getElementById('status-message');
             if (snap.val() === true) {
                 console.log("Connected to Firebase");
-                if (statusIndicator && statusIndicator.innerText.includes("재연결")) {
-                    statusIndicator.innerText = "서버에 연결되었습니다.";
-                    statusIndicator.style.color = "#4dabf7";
+                if (statusIndicator) {
+                    // Only show "Connected" if it was previously disconnected or empty
+                    if (statusIndicator.innerText.includes("끊김") || statusIndicator.innerText === "") {
+                        statusIndicator.innerText = "서버 연결됨";
+                        statusIndicator.style.color = "#4dabf7";
+                    }
                 }
             } else {
-                console.log("Disconnected");
+                console.log("Disconnected - Using Offline Cache");
                 if (statusIndicator) {
-                    statusIndicator.innerText = "서버 연결 끊김. 재연결 시도 중...";
-                    statusIndicator.style.color = "#ff4444";
+                    statusIndicator.innerText = "오프라인 모드 (캐시 사용 중)";
+                    statusIndicator.style.color = "#ffbb33"; // Warning color
                 }
             }
         });
 
-        // 2. Auth
+        // 3. Auth & Sync
+        // We use anonymous auth, but we don't block the UI waiting for it.
         auth.signInAnonymously().catch(error => {
             console.error("Auth failed:", error);
-            alert("로그인 오류: " + error.message);
+            // Even if auth fails, we have cache!
         });
 
         auth.onAuthStateChanged(user => {
             if (user) {
-                console.log("Logged in as:", user.uid);
+                console.log("Logged in:", user.uid);
                 setupRealtimeListener();
-                loadApiKeys();
-            } else {
-                console.log("Logged out");
+                syncApiKeys(); // Start syncing with Server in background
             }
         });
     } catch (e) {
         console.error("Init Error:", e);
-        alert("앱 초기화 오류: " + e.message);
+        // Even if Firebase fails, app works in read-only mode from cache
+        alert("서버 연결 실패 (오프라인 모드로 동작합니다): " + e.message);
     }
+}
+
+// --- OFFLINE-FIRST CACHING STRATEGY ---
+function loadCachedApiKeys() {
+    try {
+        const cached = localStorage.getItem('cached_api_keys');
+        if (cached) {
+            console.log("Loaded keys from LocalStorage cache");
+            renderKeys(JSON.parse(cached));
+        }
+    } catch (e) { console.warn("Cache load failed", e); }
+}
+
+function syncApiKeys() {
+    if (!db) return;
+    const listContainer = document.getElementById('key-list');
+
+    // Listen for Server Updates
+    db.ref(DB_KEY_PATH).on('value', snapshot => {
+        const keys = snapshot.val() || {};
+
+        // 1. Update Cache
+        localStorage.setItem('cached_api_keys', JSON.stringify(keys));
+
+        // 2. Render Fresh Data
+        renderKeys(keys);
+    }, err => {
+        console.error("Sync Error:", err);
+        // Do NOT clear list on error. Keep showing cached data!
+        // Only show error if list is empty (no cache)
+        if (!localStorage.getItem('cached_api_keys')) {
+            listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 동기화 실패<br>(' + err.code + ')</div>';
+        }
+    });
 }
 
 function setupUI() {
@@ -101,10 +141,6 @@ function setupUI() {
     const closeBtn = document.querySelector('.close');
 
     document.getElementById('api-btn').addEventListener('click', () => {
-        if (!auth || !auth.currentUser) {
-            alert("서버 연결 중입니다. 잠시만 기다려주세요.");
-            return;
-        }
         modal.style.display = "block";
         resetForm();
     });
@@ -144,22 +180,6 @@ function resetForm() {
     saveBtn.innerText = "저장하기";
     saveBtn.disabled = false;
     document.getElementById('cancel-edit-btn').style.display = "none";
-}
-
-// RTDB LISTENER
-function loadApiKeys() {
-    if (!db) return;
-    const listContainer = document.getElementById('key-list');
-
-    // Use .on('value') for robust syncing
-    // No server-side sorting to avoid index requirements
-    db.ref(DB_KEY_PATH).on('value', snapshot => {
-        const keys = snapshot.val() || {};
-        renderKeys(keys);
-    }, err => {
-        console.error("Load Error:", err);
-        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 로딩 실패<br>(' + err.code + ')<br>권한 설정을 확인해주세요.</div>';
-    });
 }
 
 function renderKeys(keysData) {
@@ -213,10 +233,8 @@ function renderKeys(keysData) {
 }
 
 function saveApiKey(id, name, key, type) {
-    if (!db || !auth.currentUser) {
-        alert("서버 연결 확인 필요");
-        return;
-    }
+    // Optimistic Save: Don't block UI if offline.
+    // Firebase SDK handles offline writesQueue.
     if (!name || !key) {
         alert("이름과 키 값을 모두 입력해주세요.");
         return;
@@ -229,21 +247,27 @@ function saveApiKey(id, name, key, type) {
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
+    let promise;
     if (id) {
-        db.ref(`${DB_KEY_PATH}/${id}`).update(data)
-            .then(() => alert("수정되었습니다."))
-            .catch(err => alert("수정 실패: " + err.message));
+        promise = db ? db.ref(`${DB_KEY_PATH}/${id}`).update(data) : Promise.reject("DB 미연결");
     } else {
         data.active = true;
         data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        db.ref(DB_KEY_PATH).push(data)
-            .then(() => {
-                alert("추가되었습니다.");
-                resetForm();
-            })
-            .catch(err => alert("추가 실패: " + err.message));
+        promise = db ? db.ref(DB_KEY_PATH).push(data) : Promise.reject("DB 미연결");
     }
+
+    promise
+        .then(() => {
+            alert(id ? "수정되었습니다." : "추가되었습니다.");
+            if (!id) resetForm();
+            // Note: Listener will trigger cache update
+        })
+        .catch(err => {
+            // Even if failed, try to save logic? No, inform user.
+            alert("저장 실패 (연결 상태 확인 필요): " + err.message);
+        });
 }
+
 
 window.prepareEdit = function (id, name, key, type) {
     document.getElementById('new-key-name').value = name;
@@ -257,16 +281,30 @@ window.prepareEdit = function (id, name, key, type) {
 };
 
 window.toggleKey = function (id, isActive) {
-    db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
+    if (db) db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
 };
 
 window.deleteKey = function (id) {
     if (confirm("정말로 삭제하시겠습니까?")) {
-        db.ref(`${DB_KEY_PATH}/${id}`).remove();
+        if (db) db.ref(`${DB_KEY_PATH}/${id}`).remove();
     }
 };
 
 function getActiveApiKey(type = 'youtube') {
+    // 1. Try Cache First for Speed
+    try {
+        const cached = localStorage.getItem('cached_api_keys');
+        if (cached) {
+            const keysVal = JSON.parse(cached);
+            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type && k.active !== false);
+            if (keys.length > 0) {
+                // Return cached key instantly
+                return Promise.resolve(keys[Math.floor(Math.random() * keys.length)].key);
+            }
+        }
+    } catch (e) { /* Fallback to DB if cache fails */ }
+
+    // 2. If no cache or empty, try DB
     return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value')
         .then(snapshot => {
             const keysVal = snapshot.val();
@@ -331,18 +369,17 @@ async function performSearch(query, category) {
 
         if (query) {
             // --- KEYWORD SEARCH MODE ---
-            // Fetch 2 pages for ~100 results
             try {
                 const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
                 const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
                 keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-            } catch (searchErr) {
-                throw new Error("검색 실패: " + searchErr.message);
+            } catch (e) {
+                // If search fails, throw to outer catch
+                throw new Error("검색 요청 실패: " + e.message);
             }
         } else {
             // --- CATEGORY TRENDING MODE ---
             const catId = CATEGORY_IDS[category];
-
             try {
                 if (!catId) throw new Error("No Category ID");
 
@@ -376,21 +413,19 @@ async function performSearch(query, category) {
         }
 
         // Build Results
-        const results = keywords.map((k, i) => ({
-            rank: i + 1,
-            korean: k,
-            english: translated.en[i] || '-',
-            japanese: translated.ja[i] || '-',
-            chinese: translated['zh-CN'][i] || '-',
-            spanish: translated.es[i] || '-',
-            hindi: translated.hi[i] || '-',
-            russian: translated.ru[i] || '-'
-        }));
-
         const state = {
             query: query || category,
             selectedCategory: category,
-            results: results,
+            results: keywords.map((k, i) => ({
+                rank: i + 1,
+                korean: k,
+                english: translated.en[i] || '-',
+                japanese: translated.ja[i] || '-',
+                chinese: translated['zh-CN'][i] || '-',
+                spanish: translated.es[i] || '-',
+                hindi: translated.hi[i] || '-',
+                russian: translated.ru[i] || '-'
+            })),
             timestamp: Date.now()
         };
 
@@ -400,7 +435,11 @@ async function performSearch(query, category) {
         statusMsg.style.color = "#aaa";
 
         // SYNC TO DB (Background)
-        db.ref('global_search_state').update(state).catch(e => console.error("Sync failed:", e));
+        if (db) { // Only sync if DB is connected
+            db.ref('global_search_state').update(state).catch(e => console.error("Sync failed:", e));
+        } else {
+            console.warn("DB not connected, search state not synced.");
+        }
 
     } catch (err) {
         console.error(err);
