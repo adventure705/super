@@ -78,6 +78,10 @@ function setupUI() {
     const closeBtn = document.querySelector('.close');
 
     document.getElementById('api-btn').addEventListener('click', () => {
+        if (!auth || !auth.currentUser) {
+            alert("서버 연결 초기화 중입니다. 잠시 후 다시 시도해주세요.");
+            return;
+        }
         modal.style.display = "block";
         loadApiKeys();
         resetForm();
@@ -111,7 +115,6 @@ function setupUI() {
         }
 
         saveApiKey(id, name, key, type);
-        resetForm();
     });
 
     // Cancel Edit
@@ -125,20 +128,32 @@ function resetForm() {
     document.getElementById('new-key-value').value = "";
     document.getElementById('new-key-type').value = "youtube"; // Default
     document.getElementById('edit-key-id').value = "";
-    document.getElementById('save-key-btn').innerText = "저장";
+    const saveBtn = document.getElementById('save-key-btn');
+    saveBtn.innerText = "저장하기";
+    saveBtn.disabled = false;
     document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
 function loadApiKeys() {
     if (!db) return;
     const listContainer = document.getElementById('key-list');
+    listContainer.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">데이터를 불러오는 중...</div>';
+
+    // Add a 5s timeout to avoid infinite loading
+    const timeout = setTimeout(() => {
+        if (listContainer.innerHTML.includes('불러오는 중')) {
+            listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">응답이 지연되고 있습니다.<br>네트워크를 확인해주세요.</div>';
+        }
+    }, 8000);
 
     db.ref('api_keys').once('value').then(snapshot => {
-        const keys = snapshot.val() || {};
-        renderKeys(keys);
+        clearTimeout(timeout);
+        const keys = snapshot.val();
+        renderKeys(keys || {});
     }).catch(err => {
+        clearTimeout(timeout);
         console.error(err);
-        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터를 불러오지 못했습니다.<br>로그인 상태나 권한을 확인해주세요.</div>';
+        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터를 불러오지 못했습니다.<br>' + err.message + '</div>';
     });
 }
 
@@ -148,30 +163,32 @@ function renderKeys(keysData) {
 
     const keys = Object.entries(keysData);
     if (keys.length === 0) {
-        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">등록된 API Key가 없습니다.</div>';
+        listContainer.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">등록된 API Key가 없습니다.<br>아래에서 키를 추가해주세요.</div>';
         return;
     }
+
+    // Sort by createdAt desc
+    keys.sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
 
     keys.forEach(([id, data]) => {
         const isActive = data.active !== false;
         const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-';
-        const type = data.type || 'youtube'; // Default for old data
+        const type = data.type || 'youtube';
         const typeIcon = type === 'translate' ? '🌐' : '📺';
         const typeLabel = type === 'translate' ? 'Translate' : 'YouTube';
 
         const item = document.createElement('div');
         item.className = 'key-item';
-        // Mask key for display
         const visibleKey = data.key.length > 10 ? data.key.substring(0, 6) + "..." + data.key.substring(data.key.length - 4) : data.key;
 
         item.innerHTML = `
             <div class="key-info">
                 <div style="font-weight:bold; color:#fff; font-size:1rem; display:flex; gap:8px; align-items:center;">
                     <span>${typeIcon}</span> ${data.name || '이름 없음'} 
-                    <span style="font-size:0.7em; background:#444; padding:2px 6px; border-radius:4px; color:#ccc;">${typeLabel}</span>
+                    <span style="font-size:0.75em; background:#444; padding:2px 8px; border-radius:10px; color:#ccc;">${typeLabel}</span>
                 </div>
-                <div class="key-value" title="${data.key}">${visibleKey}</div>
-                <div class="key-meta">${created}</div>
+                <div class="key-value" title="${data.key}" style="margin: 5px 0 0 28px;">${visibleKey}</div>
+                <div class="key-meta" style="margin-left: 28px;">${created}</div>
             </div>
             <div class="key-actions">
                 <button class="btn-delete" style="border-color:#4dabf7; color:#4dabf7;" onclick="prepareEdit('${id}', '${data.name || ''}', '${data.key}', '${type}')" title="수정">✏️</button>
@@ -187,15 +204,14 @@ function renderKeys(keysData) {
 }
 
 function saveApiKey(id, name, key, type) {
-    if (!db) {
-        alert("데이터베이스 연결 실패. 새로고침 해주세요.");
+    if (!db || !auth.currentUser) {
+        alert("서버와 연결되지 않았습니다.");
         return;
     }
 
-    if (!auth.currentUser) {
-        alert("로그인되지 않았습니다. 잠시 기다린 후 다시 시도하거나 새로고침 하세요.");
-        return;
-    }
+    const saveBtn = document.getElementById('save-key-btn');
+    saveBtn.innerText = "저장 중...";
+    saveBtn.disabled = true;
 
     const data = {
         name: name,
@@ -204,33 +220,25 @@ function saveApiKey(id, name, key, type) {
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
-    console.log("Saving API Key...", id ? "Update" : "Create", data);
+    const onComplete = (error) => {
+        saveBtn.innerText = id ? "수정 완료" : "저장하기";
+        saveBtn.disabled = false;
+        if (error) {
+            console.error("Save Error:", error);
+            alert("저장 실패: " + error.message);
+        } else {
+            alert(id ? "수정되었습니다." : "추가되었습니다.");
+            loadApiKeys();
+            if (!id) resetForm(); // Only reset on create
+        }
+    };
 
     if (id) {
-        // Update
-        db.ref(`api_keys/${id}`).update(data)
-            .then(() => {
-                alert("수정되었습니다.");
-                loadApiKeys();
-            })
-            .catch(error => {
-                console.error("Save Error:", error);
-                alert("저장 실패: " + error.message + "\n(데이터베이스 규칙을 확인하세요)");
-            });
+        db.ref(`api_keys/${id}`).update(data, onComplete);
     } else {
-        // Create
         data.active = true;
         data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-
-        db.ref('api_keys').push(data)
-            .then(() => {
-                alert("추가되었습니다.");
-                loadApiKeys();
-            })
-            .catch(error => {
-                console.error("Save Error:", error);
-                alert("저장 실패: " + error.message + "\n(데이터베이스 규칙을 확인하세요)");
-            });
+        db.ref('api_keys').push(data, onComplete);
     }
 }
 
