@@ -314,54 +314,68 @@ function getCurrentCategory() {
 async function performSearch(query, category) {
     const statusMsg = document.getElementById('status-message');
 
-    // 1. Get Active API Keys
+    // 1. Check API Keys
     const youtubeKey = await getActiveApiKey('youtube');
     const translateKey = await getActiveApiKey('translate');
 
-    // Validate YouTube Key
     if (!youtubeKey) {
-        alert("활성화된 [YouTube Data API] 키가 없습니다. API 메뉴에서 등록해주세요.");
+        alert("API 키가 없습니다. 설정에서 YouTube API 키를 추가해주세요.");
         return;
     }
 
-    statusMsg.innerText = "데이터 불러오는 중...";
+    statusMsg.innerText = "데이터 검색 중...";
     statusMsg.style.color = "#4dabf7";
 
     try {
         let keywords = [];
+
         if (query) {
-            // Text Search
-            const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
-            const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
-            keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-        } else {
-            // Category Trending
-            const catId = CATEGORY_IDS[category];
+            // --- KEYWORD SEARCH MODE ---
+            // Fetch 2 pages for ~100 results
             try {
-                if (!catId) throw new Error("No ID");
+                const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
+                const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
+                keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
+            } catch (searchErr) {
+                throw new Error("검색 실패: " + searchErr.message);
+            }
+        } else {
+            // --- CATEGORY TRENDING MODE ---
+            const catId = CATEGORY_IDS[category];
+
+            try {
+                if (!catId) throw new Error("No Category ID");
+
+                // Try Trending First
                 const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
                 const part2 = part1.nextPageToken ? await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken) : { items: [] };
                 keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
-            } catch (err) {
-                console.warn("Trending failed, fallback to search", err);
-                statusMsg.innerText = "대체 검색 수행 중...";
+
+            } catch (trendingErr) {
+                console.warn("Trending failed, using fallback:", trendingErr);
+                statusMsg.innerText = `'${category}' 인기 영상이 없어 검색으로 대체합니다...`;
+
+                // Fallback: Search by Category Name
                 const part1 = await fetchYouTubeSearch(category, youtubeKey, null);
                 const part2 = part1.nextPageToken ? await fetchYouTubeSearch(category, youtubeKey, part1.nextPageToken) : { items: [] };
                 keywords = [...part1.items, ...part2.items].map(i => i.snippet.title);
             }
         }
 
+        // Deduplicate & Limit
         keywords = [...new Set(keywords)].slice(0, 100);
-        if (keywords.length === 0) throw new Error("결과 없음");
+        if (keywords.length === 0) throw new Error("검색 결과가 없습니다.");
 
+        // Translation
         let translated = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
         if (translateKey) {
-            statusMsg.innerText = "번역 중...";
+            statusMsg.innerText = `키워드 번역 중... (${keywords.length}개)`;
             translated = await translateKeywords(keywords, translateKey);
         } else {
             statusMsg.innerText = "번역 API 없음 (생략)";
         }
 
+        // Build Results
         const results = keywords.map((k, i) => ({
             rank: i + 1,
             korean: k,
@@ -380,15 +394,19 @@ async function performSearch(query, category) {
             timestamp: Date.now()
         };
 
-        db.ref('global_search_state').update(state);
-        statusMsg.innerText = "완료";
+        // IMMEDIATE LOCAL UPDATE (Fast UI)
+        updateUI(state);
+        statusMsg.innerText = "검색 완료!";
         statusMsg.style.color = "#aaa";
+
+        // SYNC TO DB (Background)
+        db.ref('global_search_state').update(state).catch(e => console.error("Sync failed:", e));
 
     } catch (err) {
         console.error(err);
         statusMsg.innerText = "오류: " + err.message;
         statusMsg.style.color = "#ff4444";
-        alert("오류: " + err.message);
+        alert("오류 발생: " + err.message);
     }
 }
 
