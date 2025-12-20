@@ -5,11 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube 다국어 키워드 검색기</title>
-    <!-- Preconnect: 네트워크 연결 최적화 -->
+    <!-- Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://template-3530f.firebaseio.com" crossorigin>
 
-    <!-- CSS (Inlined for Performance) -->
+    <!-- CSS -->
     <style>
         :root {
             --bg-color: #121212;
@@ -49,7 +49,6 @@
             gap: 30px;
         }
 
-        /* Header & Nav */
         header {
             text-align: center;
             padding: 20px 0;
@@ -114,7 +113,6 @@
             transform: translateY(-2px);
         }
 
-        /* UI Components */
         .btn-add {
             background: linear-gradient(135deg, #ff3b3b, #ff6b6b);
             color: white;
@@ -313,7 +311,6 @@
             background-color: #252525;
         }
 
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -499,10 +496,10 @@
         }
     </style>
 
-    <!-- 1. Firebase Scripts (Standard Compat - FASTEST LOADING) -->
-    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <!-- Scripts (Compat Mode) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 
 <body>
@@ -535,7 +532,7 @@
 
         <section class="results-section">
             <div class="section-title"><span class="icon">●</span> 키워드 결과 (100개)</div>
-            <div class="status-message" id="status-message">로딩 완료</div>
+            <div class="status-message" id="status-message">시스템 준비 중...</div>
             <div class="table-container">
                 <table id="results-table">
                     <thead>
@@ -564,7 +561,6 @@
             <div class="key-list-container" id="key-list">
                 <div style="text-align:center;color:#666;padding:20px">저장된 키 불러오는 중...</div>
             </div>
-
             <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
                 <h3 style="font-size:1rem;color:#ccc;margin-bottom:10px">새 키 등록</h3>
                 <input type="hidden" id="edit-key-id">
@@ -587,7 +583,6 @@
         </div>
     </div>
 
-    <!-- 2. Logic Script -->
     <script>
         // CONFIG
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
@@ -595,61 +590,63 @@
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
 
-        // VARS
         let db, auth;
 
-        // INIT
         document.addEventListener('DOMContentLoaded', () => {
             setupUI();
-            loadCache(); // 0ms UI load
 
-            // Lazy Init Firebase
-            setTimeout(() => {
-                if (!window.firebase) return; // Wait for script load
-                try {
-                    firebase.initializeApp(firebaseConfig);
-                    db = firebase.database();
-                    auth = firebase.auth();
+            // 1. FAST RESTORE from 'cached_api_keys' (Corrected Key Name)
+            try {
+                const c = localStorage.getItem('cached_api_keys');
+                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "캐시 로드됨"; }
+            } catch (e) { }
 
-                    // Connected Status
-                    db.ref(".info/connected").on("value", s => {
-                        const el = document.getElementById('status-message');
-                        if (s.val()) { if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; } }
-                        else { if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; } }
+            // 2. Init Firebase
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                auth = firebase.auth();
+
+                // Monitor
+                db.ref(".info/connected").on("value", s => {
+                    const el = document.getElementById('status-message');
+                    if (s.val()) {
+                        if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
+                    } else {
+                        if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; }
+                    }
+                });
+
+                // Auth & Sync
+                auth.signInAnonymously().then(() => {
+                    db.ref(DB_KEY).on('value', s => {
+                        const d = s.val() || {};
+                        localStorage.setItem('cached_api_keys', JSON.stringify(d)); // Save Sync
+                        renderKeys(d); // Update UI
                     });
+                    // Search State Sync
+                    db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
+                }).catch(e => {
+                    console.error("Auth Fail", e);
+                    document.getElementById('status-message').innerText = "인증 실패 (오프라인?)";
+                });
 
-                    // Sync
-                    auth.signInAnonymously().then(() => {
-                        // Data Sync
-                        db.ref(DB_KEY).on('value', s => {
-                            const d = s.val() || {};
-                            localStorage.setItem('cached_keys', JSON.stringify(d));
-                            renderKeys(d);
-                        });
-                        db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
-                    });
-
-                } catch (e) { console.error(e); }
-            }, 50);
+            } catch (e) {
+                console.error("Firebase Init Error", e);
+                alert("서버 연결 실패. 인터넷을 확인하세요.");
+            }
         });
 
-        // CORE
-        function loadCache() {
-            try {
-                const c = localStorage.getItem('cached_keys');
-                if (c) renderKeys(JSON.parse(c));
-            } catch (e) { }
-        }
-
         async function getApiKey(t = 'youtube') {
-            try { // Fast Cache
-                const c = JSON.parse(localStorage.getItem('cached_keys') || '{}');
+            // Priority: Cache
+            try {
+                const c = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
                 const list = Object.values(c).filter(k => (k.type || 'youtube') === t && k.active !== false);
                 if (list.length) return list[Math.floor(Math.random() * list.length)].key;
             } catch (e) { }
 
-            // Server fallback
             if (!db) return null;
+            // Fallback: DB
             const s = await db.ref(DB_KEY).orderByChild('active').equalTo(true).once('value');
             if (!s.val()) return null;
             const list = Object.values(s.val()).filter(k => (k.type || 'youtube') === t);
@@ -661,7 +658,7 @@
             const k = await getApiKey('youtube');
             const tk = await getApiKey('translate');
 
-            if (!k) return alert("API 키가 없습니다.");
+            if (!k) return alert("API 키가 없습니다. [API 관리] 버튼을 눌러 키를 추가해주세요.");
             msg.innerText = "데이터 요청 중..."; msg.style.color = "#4dabf7";
 
             try {
@@ -736,7 +733,6 @@
             return out;
         }
 
-        // UI
         function setupUI() {
             const l = document.getElementById('categories-list');
             l.innerHTML = '';
@@ -763,7 +759,7 @@
                 const t = document.getElementById('new-key-type').value;
                 const i = document.getElementById('edit-key-id').value;
                 if (!n || !v) return alert('입력 확인');
-                if (!db) return alert('연결 중...');
+                if (!db) return alert('서버 연결 중...');
                 const d = { name: n, key: v, type: t, updatedAt: firebase.database.ServerValue.TIMESTAMP };
                 const p = i ? db.ref(DB_KEY + "/" + i).update(d) : (d.active = true, d.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY).push(d));
                 p.then(() => { alert('저장됨'); resetForm(); }).catch(e => alert(e.message));
@@ -806,9 +802,9 @@
                         <div class="key-value">${(d.key || "").substring(0, 8)}...</div>
                     </div>
                     <div class="key-actions">
-                        <button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button>
-                        <label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="togK('${id}',this.checked)"><span class="slider"></span></label>
-                        <button class="btn-delete" onclick="delK('${id}')">🗑️</button>
+                        <button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button>
+                        <label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label>
+                        <button class="btn-delete" onclick="window.delK('${id}')">🗑️</button>
                     </div>`;
                 l.appendChild(el);
             });
