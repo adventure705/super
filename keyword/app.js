@@ -299,8 +299,26 @@ function selectCategory(category) {
     //    The prompt says "Each selection -> 100 related keywords".
     //    So we will trigger a search using the Category name itself as the 'query' context.
 
-    performSearch(category, category);
+    performSearch(null, category); // Pass null for query to indicate category-only search
 }
+
+const CATEGORY_IDS = {
+    "영화/애니메이션": "1",
+    "자동차/교통": "2",
+    "음악": "10",
+    "애완동물/동물": "15",
+    "스포츠": "17",
+    "여행/이벤트": "19",
+    "게임": "20",
+    "인물/블로그": "22",
+    "코미디": "23",
+    "엔터테인먼트": "24",
+    "뉴스/정치": "25",
+    "노하우/스타일": "26",
+    "교육": "27",
+    "과학/기술": "28",
+    "비영리/사회운동": "29"
+};
 
 async function performSearch(query, category) {
     const statusMsg = document.getElementById('status-message');
@@ -309,30 +327,52 @@ async function performSearch(query, category) {
     const youtubeKey = await getActiveApiKey('youtube');
     const translateKey = await getActiveApiKey('translate');
 
-    // Validate Keys
+    // Validate YouTube Key
     if (!youtubeKey) {
         alert("활성화된 [YouTube Data API] 키가 없습니다. API 메뉴에서 등록해주세요.");
         return;
     }
 
-    // Logic: Translate key is optional? Or mandatory? 
-    // User wants to see translations. If missing, maybe just show original? 
-    // Or warn. Let's warn and return for now, or proceed?
-    // Let's prompt user.
+    // Validate Translate Key (Optional but warned)
     if (!translateKey) {
-        if (!confirm("활성화된 [Google Translate API] 키가 없습니다. 번역 없이 진행하시겠습니까?")) {
-            return;
-        }
+        // Only warn once per session ideally, but alert is fine for now
+        // Checking if we already warned could be good, but simple logic for now
     }
 
-    statusMsg.innerText = "YouTube 데이터를 불러오는 중...";
+    statusMsg.innerText = "YouTube 데이터를 불러오는 중... (100개 항목)";
     statusMsg.style.color = "#4dabf7";
 
     try {
-        // 2. Fetch Keywords from YouTube
-        // Use 'q' as combined category + query for better context
-        const searchQ = query ? `${category} ${query}` : category;
-        const keywords = await fetchYouTubeData(searchQ, youtubeKey);
+        let keywords = [];
+
+        // 2. Fetch Data (Search vs Trending)
+        if (query) {
+            // Text Search Mode
+            // Fetch 100 items (2 pages of 50)
+            const part1 = await fetchYouTubeSearch(query, youtubeKey, null);
+            const part2 = part1.nextPageToken ? await fetchYouTubeSearch(query, youtubeKey, part1.nextPageToken) : { items: [] };
+
+            // Extract titles
+            const titles1 = part1.items.map(item => item.snippet.title);
+            const titles2 = part2.items.map(item => item.snippet.title);
+            keywords = [...titles1, ...titles2];
+        } else {
+            // Category Trending Mode
+            const catId = CATEGORY_IDS[category];
+            if (!catId) {
+                throw new Error("카테고리 ID를 찾을 수 없습니다.");
+            }
+            // Fetch 100 popular videos in this category
+            const part1 = await fetchYouTubePopular(catId, youtubeKey, null);
+            const part2 = part1.nextPageToken ? await fetchYouTubePopular(catId, youtubeKey, part1.nextPageToken) : { items: [] };
+
+            const titles1 = part1.items.map(item => item.snippet.title);
+            const titles2 = part2.items.map(item => item.snippet.title);
+            keywords = [...titles1, ...titles2];
+        }
+
+        // Deduplicate and limit to 100
+        keywords = [...new Set(keywords)].slice(0, 100);
 
         if (keywords.length === 0) {
             throw new Error("검색 결과가 없습니다.");
@@ -363,7 +403,7 @@ async function performSearch(query, category) {
         });
 
         const state = {
-            query: query || category,
+            query: query || category, // Use query if present, else category name
             selectedCategory: category,
             results: results,
             timestamp: Date.now()
@@ -381,22 +421,31 @@ async function performSearch(query, category) {
     }
 }
 
-async function fetchYouTubeData(query, apiKey) {
-    // Fetch up to 50 items (max per page) to save quota/time
+async function fetchYouTubeSearch(query, apiKey, pageToken) {
     const maxResults = 50;
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    if (pageToken) url += `&pageToken=${pageToken}`;
 
     const response = await fetch(url);
     if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || "YouTube API Error");
+        throw new Error(errorData.error?.message || "YouTube Search API Error");
     }
+    return await response.json();
+}
 
-    const data = await response.json();
-    // Extract video titles as keywords, remove duplicates
-    const titles = data.items.map(item => item.snippet.title);
-    const uniqueTitles = [...new Set(titles)];
-    return uniqueTitles;
+async function fetchYouTubePopular(categoryId, apiKey, pageToken) {
+    const maxResults = 50;
+    // regionCode=KR ensures we get Korean trends
+    let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=KR&videoCategoryId=${categoryId}&maxResults=${maxResults}&key=${apiKey}`;
+    if (pageToken) url += `&pageToken=${pageToken}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "YouTube Popular API Error");
+    }
+    return await response.json();
 }
 
 async function translateKeywords(texts, apiKey) {
@@ -453,7 +502,7 @@ function getCurrentCategory() {
 
 function updateUI(data) {
     // Update Input
-    if (document.getElementById('keyword-input').value !== data.query) {
+    if (document.getElementById('keyword-input').value !== (data.query || "")) {
         document.getElementById('keyword-input').value = data.query || "";
     }
 
@@ -471,17 +520,23 @@ function updateUI(data) {
     tbody.innerHTML = '';
 
     if (data.results && Array.isArray(data.results)) {
+        // Helper to create link
+        const link = (text) => {
+            if (!text || text === '-') return text;
+            return `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(text)}" target="_blank" style="text-decoration:none; color:inherit; display:block;">${text}</a>`;
+        };
+
         data.results.forEach(row => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
             <td>${row.rank}</td>
-            <td>${row.korean}</td>
-            <td>${row.english}</td>
-            <td>${row.japanese}</td>
-            <td>${row.chinese}</td>
-            <td>${row.spanish}</td>
-            <td>${row.hindi}</td>
-            <td>${row.russian}</td>
+            <td style="color:#fff;">${link(row.korean)}</td>
+            <td>${link(row.english)}</td>
+            <td>${link(row.japanese)}</td>
+            <td>${link(row.chinese)}</td>
+            <td>${link(row.spanish)}</td>
+            <td>${link(row.hindi)}</td>
+            <td>${link(row.russian)}</td>
         `;
             tbody.appendChild(tr);
         });
