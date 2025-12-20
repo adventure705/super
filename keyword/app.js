@@ -26,8 +26,19 @@ async function initApp() {
     try {
         firebase.initializeApp(firebaseConfig);
         auth = firebase.auth();
-        db = firebase.database(); // Reverted to Realtime Database
+        db = firebase.database();
         console.log("Firebase initialized (RTDB Mode)");
+
+        // Connection Status Monitor
+        db.ref(".info/connected").on("value", (snap) => {
+            const statusIndicator = document.getElementById('status-message');
+            if (snap.val() === true) {
+                console.log("Connected to Firebase Realtime Database");
+            } else {
+                console.log("Disconnected from Firebase");
+                if (statusIndicator) statusIndicator.innerText = "서버 연결 끊김. 재연결 시도 중...";
+            }
+        });
 
         auth.signInAnonymously().catch(error => {
             console.error("Auth failed:", error);
@@ -38,6 +49,7 @@ async function initApp() {
             if (user) {
                 console.log("Logged in as:", user.uid);
                 setupRealtimeListener();
+                loadApiKeys(); // Pre-load keys
             } else {
                 console.log("Logged out");
             }
@@ -135,16 +147,22 @@ function resetForm() {
     document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
+// USE SHARED PATH
+const DB_KEY_PATH = 'shared_api_keys';
+
 function loadApiKeys() {
     if (!db) return;
     const listContainer = document.getElementById('key-list');
-    listContainer.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">데이터를 불러오는 중...</div>';
 
-    // RTDB Fetch
-    db.ref('api_keys').once('value').then(snapshot => {
+    if (!listContainer.innerHTML.includes('key-item')) {
+        listContainer.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">데이터를 불러오는 중...</div>';
+    }
+
+    // Listen for realtime updates to LIST
+    db.ref(DB_KEY_PATH).on('value', snapshot => {
         const keys = snapshot.val() || {};
         renderKeys(keys);
-    }).catch(err => {
+    }, err => {
         console.error(err);
         listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터를 불러오지 못했습니다.<br>' + err.message + '</div>';
     });
@@ -211,18 +229,15 @@ function saveApiKey(id, name, key, type) {
     };
 
     if (id) {
-        db.ref(`api_keys/${id}`).update(data).catch(handleSaveError);
+        db.ref(`${DB_KEY_PATH}/${id}`).update(data).catch(handleSaveError);
         alert("수정되었습니다.");
     } else {
         data.active = true;
         data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        db.ref('api_keys').push(data).catch(handleSaveError);
+        db.ref(DB_KEY_PATH).push(data).catch(handleSaveError);
         alert("추가되었습니다.");
         resetForm();
     }
-
-    // Immediate reload (Local events usually trigger, but explicit check implies 'once' usage)
-    setTimeout(loadApiKeys, 100);
 }
 
 function handleSaveError(error) {
@@ -242,17 +257,17 @@ window.prepareEdit = function (id, name, key, type) {
 };
 
 window.toggleKey = function (id, isActive) {
-    db.ref(`api_keys/${id}/active`).set(isActive).then(() => loadApiKeys());
+    db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
 };
 
 window.deleteKey = function (id) {
     if (confirm("정말로 삭제하시겠습니까?")) {
-        db.ref(`api_keys/${id}`).remove().then(() => loadApiKeys());
+        db.ref(`${DB_KEY_PATH}/${id}`).remove();
     }
 };
 
 function getActiveApiKey(type = 'youtube') {
-    return db.ref('api_keys').orderByChild('active').equalTo(true).once('value')
+    return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value')
         .then(snapshot => {
             const keysVal = snapshot.val();
             if (!keysVal) return null;
@@ -302,12 +317,6 @@ async function performSearch(query, category) {
     if (!youtubeKey) {
         alert("활성화된 [YouTube Data API] 키가 없습니다. API 메뉴에서 등록해주세요.");
         return;
-    }
-
-    // Validate Translate Key (Optional but warned)
-    if (!translateKey) {
-        // Only warn once per session ideally, but alert is fine for now
-        // Checking if we already warned could be good, but simple logic for now
     }
 
     statusMsg.innerText = "YouTube 데이터를 불러오는 중... (100개 항목)";
