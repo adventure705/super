@@ -179,29 +179,48 @@ function renderKeys(keysData) {
 
 function saveApiKey(id, name, key) {
     if (!db) {
-        alert("데이터베이스 연결이 되지 않았습니다. 페이지를 새로고침 하세요.");
+        alert("데이터베이스 연결 실패. 새로고침 해주세요.");
         return;
     }
+
+    if (!auth.currentUser) {
+        alert("로그인되지 않았습니다. 잠시 기다린 후 다시 시도하거나 새로고침 하세요.");
+        return;
+    }
+
     const data = {
         name: name,
         key: key,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
 
+    console.log("Saving API Key...", id ? "Update" : "Create", data);
+
     if (id) {
         // Update
-        db.ref(`api_keys/${id}`).update(data).then(() => {
-            alert("수정되었습니다.");
-            loadApiKeys();
-        });
+        db.ref(`api_keys/${id}`).update(data)
+            .then(() => {
+                alert("수정되었습니다.");
+                loadApiKeys();
+            })
+            .catch(error => {
+                console.error("Save Error:", error);
+                alert("저장 실패: " + error.message + "\n(데이터베이스 규칙을 확인하세요)");
+            });
     } else {
         // Create
         data.active = true;
         data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        db.ref('api_keys').push(data).then(() => {
-            alert("추가되었습니다.");
-            loadApiKeys();
-        });
+
+        db.ref('api_keys').push(data)
+            .then(() => {
+                alert("추가되었습니다.");
+                loadApiKeys();
+            })
+            .catch(error => {
+                console.error("Save Error:", error);
+                alert("저장 실패: " + error.message + "\n(데이터베이스 규칙을 확인하세요)");
+            });
     }
 }
 
