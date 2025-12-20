@@ -592,10 +592,28 @@
             </div>
 
             <div class="key-list-container" id="key-list">
-                <div style="text-align:center;color:#666;padding:20px">서버에서 불러오는 중...</div>
+                <div style="text-align:center;color:#666;padding:20px">로딩 중...</div>
             </div>
 
-            <!-- Removed Inline Script to prevent usage of stale local data -->
+            <script>
+                // FAST SYNC: Render Local Cache IMMEDIATELY
+                try {
+                    const saved = localStorage.getItem('cached_api_keys');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        const list = document.getElementById('key-list');
+                        list.innerHTML = '';
+                        const arr = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+                        if (arr.length) {
+                            arr.forEach(([id, d]) => {
+                                const el = document.createElement('div'); el.className = 'key-item';
+                                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
+                                list.appendChild(el);
+                            });
+                        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; }
+                    }
+                } catch (e) { }
+            </script>
 
             <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
                 <h3 style="font-size:1rem;color:#ccc;margin-bottom:10px">새 키 등록</h3>
@@ -616,7 +634,7 @@
                     <button id="save-key-btn" class="btn-add" style="flex:2" onclick="saveApiKey()">저장하기</button>
                 </div>
                 <!-- Debug Console -->
-                <div id="debug-log">Connection Initialized. Waiting for Server...</div>
+                <div id="debug-log">System Ready.</div>
             </div>
         </div>
     </div>
@@ -665,7 +683,14 @@
 
             const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
 
-            // SERVER FIRST with TIMEOUT check
+            // LOCAL OPTIMISTIC UPDATE FIRST
+            const cache = getLocalCache();
+            d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
+            cache[i] = d;
+            saveLocalCache(cache); // fast update
+            window.resetForm();
+
+            // SERVER SYNC with TIMEOUT check
             if (db) {
                 showSync("☁️ 업로드...");
                 log(`Uploading: ${n}`);
@@ -679,20 +704,26 @@
                     .catch(e => {
                         console.error(e);
                         log("Upload FAIL: " + e.message);
-                        alert("⚠️ 업로드 실패: " + e.message + "\n(방화벽이나 권한 문제입니다. 네트워크를 확인하세요.)");
-                        showSync("⚠️ 실패");
+                        alert("⚠️ 업로드 실패: " + e.message + "\n(데이터는 로컬에 저장되었습니다)");
+                        showSync("⚠️ 로컬저장");
                     });
-
-                window.resetForm();
             } else {
-                alert("⚠️ 서버에 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
+                log("Offline: Saved locally only");
+                alert("오프라인 상태입니다. 로컬에 저장되었습니다.");
             }
         };
 
         window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
-        // Server First toggles/deletes
-        window.togK = (id, v) => { if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Toggle Error: " + e.message)); };
-        window.delK = (id) => { if (!confirm("삭제하시겠습니까?")) return; if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => log("Del Error: " + e.message)); };
+        // Optimistic toggles/deletes
+        window.togK = (id, v) => {
+            const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
+            if (db) db.ref(DB_KEY + "/" + id + "/active").set(v).catch(e => log("Toggle Error: " + e.message));
+        };
+        window.delK = (id) => {
+            if (!confirm("삭제하시겠습니까?")) return;
+            const c = getLocalCache(); delete c[id]; saveLocalCache(c);
+            if (db) db.ref(DB_KEY + "/" + id).remove().catch(e => log("Del Error: " + e.message));
+        };
 
         // --- GLOBAL ACTIONS ---
         window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
@@ -718,10 +749,7 @@
         function initApp() {
             setupUI();
 
-            // Wait for Server.
-            document.getElementById('status-message').innerText = "서버 연결 대기중...";
-
-            // Wait for Firebase SDK
+            // 2. Wait for Firebase SDK
             const maxWait = 50;
             let attempts = 0;
             const checkFirebase = setInterval(() => {
@@ -731,8 +759,8 @@
                     startFirebase();
                 } else if (attempts >= maxWait) {
                     clearInterval(checkFirebase);
-                    document.getElementById('status-message').innerText = "오프라인 (연결 실패)";
-                    log("SDK Load Timeout - Check Network");
+                    document.getElementById('status-message').innerText = "오프라인";
+                    log("SDK Load Timeout");
                 }
             }, 100);
         }
@@ -757,17 +785,26 @@
 
                     auth.signInAnonymously().then((userCredential) => {
                         const uid = userCredential.user ? userCredential.user.uid : 'anon';
-                        log(`Auth OK [${uid.substring(0, 5)}..]. Fetching Data...`);
+                        log(`Auth OK [${uid.substring(0, 5)}..]`);
 
-                        // STRICT LISTENER: Server -> Client Only
+                        // SMART SYNC LISTENER
                         db.ref(DB_KEY).on('value', s => {
                             const val = s.val();
+                            const local = getLocalCache();
+
                             if (val) {
-                                log("Data Received: " + Object.keys(val).length + " keys");
+                                log("Sync Received: " + Object.keys(val).length + " keys");
                                 saveLocalCache(val);
                             } else {
-                                log("Server Data is Empty.");
-                                saveLocalCache({});
+                                // Server is Empty.
+                                if (Object.keys(local).length > 0) {
+                                    log("Auto-Bootstrap: Uploading Local to Server...");
+                                    db.ref(DB_KEY).set(local)
+                                        .then(() => log("Bootstrap Done"))
+                                        .catch(e => log("Bootstrap Fail: " + e.message));
+                                } else {
+                                    log("Server & Local Empty");
+                                }
                             }
                         });
 
