@@ -9,48 +9,43 @@ let auth;
 let currentUnsubscribe = null;
 let globalConfig = null;
 
-async function loadConfig() {
-    try {
-        // Try loading from root first (GitHub Pages structure) or fallback to current dir
-        let response = await fetch('../firebase-config.json');
-        if (!response.ok) {
-            response = await fetch('./firebase-config.json');
-        }
-        if (!response.ok) throw new Error("Failed to load config");
-        return await response.json();
-    } catch (e) {
-        console.error("Error loading config:", e);
-        // Alert suppress or helpful message
-        console.log("Connect to a web server to load config.");
-        return null;
-    }
-}
+// Hardcoded Config to prevent loading errors
+const firebaseConfig = {
+    apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
+    authDomain: "template-3530f.firebaseapp.com",
+    projectId: "template-3530f",
+    storageBucket: "template-3530f.firebasestorage.app",
+    messagingSenderId: "891098188622",
+    appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
+};
 
 async function initApp() {
-    setupUI(); // Render UI immediately regardless of config status
+    setupUI(); // Render UI immediately
 
-    globalConfig = await loadConfig();
-    if (!globalConfig) {
-        console.warn("Config not loaded. Some features may not work.");
-        return;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.database();
+        console.log("Firebase initialized");
+
+        // Anonymous Auth
+        auth.signInAnonymously().catch(error => {
+            console.error("Auth failed:", error);
+            alert("로그인 오류: " + error.message);
+        });
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                console.log("Logged in as:", user.uid);
+                setupRealtimeListener();
+            } else {
+                console.log("Logged out");
+            }
+        });
+    } catch (e) {
+        console.error("Init Error:", e);
+        alert("앱 초기화 오류: " + e.message);
     }
-
-    firebase.initializeApp(globalConfig);
-    auth = firebase.auth();
-    db = firebase.database();
-
-    // Anonymous Auth
-    auth.signInAnonymously().catch(error => {
-        console.error("Auth failed:", error);
-    });
-
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            console.log("Logged in as:", user.uid);
-            // Start listening to data
-            setupRealtimeListener();
-        }
-    });
 }
 
 function setupUI() {
