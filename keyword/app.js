@@ -9,11 +9,10 @@ let db;
 let auth;
 let currentUnsubscribe = null;
 
-// Hardcoded Config with Database URL (Critical for RTDB Speed)
+// Config for Firestore (ProjectId only required)
 const firebaseConfig = {
     apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
     authDomain: "template-3530f.firebaseapp.com",
-    databaseURL: "https://template-3530f.firebaseio.com",
     projectId: "template-3530f",
     storageBucket: "template-3530f.firebasestorage.app",
     messagingSenderId: "891098188622",
@@ -26,19 +25,8 @@ async function initApp() {
     try {
         firebase.initializeApp(firebaseConfig);
         auth = firebase.auth();
-        db = firebase.database();
-        console.log("Firebase initialized (RTDB Mode)");
-
-        // Connection Status Monitor
-        db.ref(".info/connected").on("value", (snap) => {
-            const statusIndicator = document.getElementById('status-message');
-            if (snap.val() === true) {
-                console.log("Connected to Firebase Realtime Database");
-            } else {
-                console.log("Disconnected from Firebase");
-                if (statusIndicator) statusIndicator.innerText = "서버 연결 끊김. 재연결 시도 중...";
-            }
-        });
+        db = firebase.firestore(); // USES FIRESTORE
+        console.log("Firebase initialized (Firestore Mode)");
 
         auth.signInAnonymously().catch(error => {
             console.error("Auth failed:", error);
@@ -49,7 +37,7 @@ async function initApp() {
             if (user) {
                 console.log("Logged in as:", user.uid);
                 setupRealtimeListener();
-                loadApiKeys(); // Pre-load keys
+                loadApiKeys(); // Start Listener
             } else {
                 console.log("Logged out");
             }
@@ -96,7 +84,6 @@ function setupUI() {
             return;
         }
         modal.style.display = "block";
-        loadApiKeys();
         resetForm();
     });
 
@@ -147,44 +134,40 @@ function resetForm() {
     document.getElementById('cancel-edit-btn').style.display = "none";
 }
 
-// USE SHARED PATH
-const DB_KEY_PATH = 'shared_api_keys';
-
+// FIRESTORE LISTENER
 function loadApiKeys() {
     if (!db) return;
     const listContainer = document.getElementById('key-list');
 
-    if (!listContainer.innerHTML.includes('key-item')) {
-        listContainer.innerHTML = '<div style="text-align:center; color:#888; padding: 20px;">데이터를 불러오는 중...</div>';
-    }
-
-    // Listen for realtime updates to LIST
-    db.ref(DB_KEY_PATH).on('value', snapshot => {
-        const keys = snapshot.val() || {};
-        renderKeys(keys);
-    }, err => {
-        console.error(err);
-        listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터를 불러오지 못했습니다.<br>' + err.message + '</div>';
-    });
+    // Realtime, Ordered
+    db.collection('api_keys').orderBy('createdAt', 'desc')
+        .onSnapshot(snapshot => {
+            const keys = {};
+            snapshot.forEach(doc => {
+                keys[doc.id] = doc.data();
+            });
+            renderKeys(keys);
+        }, err => {
+            console.error("Load Error:", err);
+            // Permission error often comes first if not logged in yet or bad rules
+            if (listContainer.innerHTML.includes('text-align:center'))
+                listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#ff4444;">데이터 로딩 실패<br>' + err.message + '</div>';
+        });
 }
 
 function renderKeys(keysData) {
     const listContainer = document.getElementById('key-list');
     listContainer.innerHTML = '';
 
-    // Convert object to array
     const keys = Object.entries(keysData);
     if (keys.length === 0) {
         listContainer.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">등록된 API Key가 없습니다.<br>아래에서 키를 추가해주세요.</div>';
         return;
     }
 
-    // Sort by createdAt desc
-    keys.sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
-
     keys.forEach(([id, data]) => {
         const isActive = data.active !== false;
-        const created = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-';
+        const created = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate().toLocaleDateString() : (data.createdAt ? new Date(data.createdAt).toLocaleDateString() : '-');
         const type = data.type || 'youtube';
         const typeIcon = type === 'translate' ? '🌐' : '📺';
         const typeLabel = type === 'translate' ? 'Translate' : 'YouTube';
@@ -225,24 +208,22 @@ function saveApiKey(id, name, key, type) {
         name: name,
         key: key,
         type: type || 'youtube',
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    if (id) {
-        db.ref(`${DB_KEY_PATH}/${id}`).update(data).catch(handleSaveError);
-        alert("수정되었습니다.");
-    } else {
-        data.active = true;
-        data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        db.ref(DB_KEY_PATH).push(data).catch(handleSaveError);
-        alert("추가되었습니다.");
-        resetForm();
-    }
+    const promise = id
+        ? db.collection('api_keys').doc(id).update(data)
+        : (data.active = true, data.createdAt = firebase.firestore.FieldValue.serverTimestamp(), db.collection('api_keys').add(data));
+
+    promise.then(() => {
+        alert(id ? "수정되었습니다." : "추가되었습니다.");
+        if (!id) resetForm();
+    }).catch(handleSaveError);
 }
 
 function handleSaveError(error) {
     console.error("Save Error:", error);
-    alert("오류 발생: " + error.message);
+    alert("저장 실패: " + error.message + "\n(데이터베이스 권한을 확인해주세요)");
 }
 
 window.prepareEdit = function (id, name, key, type) {
@@ -257,35 +238,42 @@ window.prepareEdit = function (id, name, key, type) {
 };
 
 window.toggleKey = function (id, isActive) {
-    db.ref(`${DB_KEY_PATH}/${id}/active`).set(isActive);
+    db.collection('api_keys').doc(id).update({ active: isActive });
 };
 
 window.deleteKey = function (id) {
     if (confirm("정말로 삭제하시겠습니까?")) {
-        db.ref(`${DB_KEY_PATH}/${id}`).remove();
+        db.collection('api_keys').doc(id).delete();
     }
 };
 
 function getActiveApiKey(type = 'youtube') {
-    return db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value')
+    return db.collection('api_keys')
+        .where('active', '==', true)
+        .get()
         .then(snapshot => {
-            const keysVal = snapshot.val();
-            if (!keysVal) return null;
-            const keys = Object.values(keysVal).filter(k => (k.type || 'youtube') === type);
+            if (snapshot.empty) return null;
+            const keys = [];
+            snapshot.forEach(doc => {
+                const k = doc.data();
+                if ((k.type || 'youtube') === type) keys.push(k);
+            });
             if (keys.length === 0) return null;
             return keys[Math.floor(Math.random() * keys.length)].key;
         });
 }
 
 function setupRealtimeListener() {
-    db.ref('global_search_state').on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) updateUI(data);
+    // Shared State via Firestore Document
+    db.collection('shared').doc('search_state').onSnapshot((doc) => {
+        if (doc.exists) {
+            updateUI(doc.data());
+        }
     });
 }
 
 function selectCategory(category) {
-    performSearch(null, category);
+    performSearch(null, category); // Pass null for query to indicate category-only search
 }
 
 const CATEGORY_IDS = {
@@ -351,12 +339,8 @@ async function performSearch(query, category) {
             keywords = [...titles1, ...titles2];
         }
 
-        // Deduplicate and limit to 100
         keywords = [...new Set(keywords)].slice(0, 100);
-
-        if (keywords.length === 0) {
-            throw new Error("검색 결과가 없습니다.");
-        }
+        if (keywords.length === 0) throw new Error("검색 결과가 없습니다.");
 
         let translatedResults = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
 
@@ -383,13 +367,13 @@ async function performSearch(query, category) {
         });
 
         const state = {
-            query: query || category, // Use query if present, else category name
+            query: query || category,
             selectedCategory: category,
             results: results,
             timestamp: Date.now()
         };
 
-        db.ref('global_search_state').update(state);
+        db.collection('shared').doc('search_state').set(state);
         statusMsg.innerText = translateKey ? "검색 및 번역 완료!" : "검색 완료 (번역 제외)";
         statusMsg.style.color = "#aaa";
 
@@ -436,10 +420,6 @@ async function translateKeywords(texts, apiKey) {
     const translateBatch = async (lang) => {
         const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
 
-        // We might need to send multiple 'q' parameters. 
-        // fetch body can do this easily with URLSearchParams for POST
-        // But Google Translate API supports POST with JSON body too.
-
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -453,7 +433,6 @@ async function translateKeywords(texts, apiKey) {
         });
 
         if (!response.ok) {
-            // If translation fails (e.g. API not enabled), insert placeholder
             console.warn(`Translation failed for ${lang}`);
             return new Array(texts.length).fill("번역 실패");
         }
@@ -462,7 +441,6 @@ async function translateKeywords(texts, apiKey) {
         return data.data.translations.map(t => t.translatedText);
     };
 
-    // Run translations in parallel for speed
     const promises = targets.map(async lang => {
         results[lang] = await translateBatch(lang);
     });
@@ -472,12 +450,10 @@ async function translateKeywords(texts, apiKey) {
 }
 
 function updateUI(data) {
-    // Update Input
     if (document.getElementById('keyword-input').value !== (data.query || "")) {
         document.getElementById('keyword-input').value = data.query || "";
     }
 
-    // Update Category Selection
     document.querySelectorAll('.category-pill').forEach(btn => {
         if (btn.innerText === data.selectedCategory) {
             btn.classList.add('active');
@@ -486,12 +462,10 @@ function updateUI(data) {
         }
     });
 
-    // Update Results Table
     const tbody = document.querySelector('#results-table tbody');
     tbody.innerHTML = '';
 
     if (data.results && Array.isArray(data.results)) {
-        // Helper to create link
         const link = (text) => {
             if (!text || text === '-') return text;
             return `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(text)}" target="_blank" style="text-decoration:none; color:inherit; display:block;">${text}</a>`;
@@ -515,5 +489,4 @@ function updateUI(data) {
     }
 }
 
-// Start
 initApp();
