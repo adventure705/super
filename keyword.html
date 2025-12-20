@@ -215,12 +215,6 @@
             background: linear-gradient(90deg, var(--accent-red), transparent);
         }
 
-        .search-section {
-            display: flex;
-            justify-content: center;
-            padding: 20px 0;
-        }
-
         .search-box {
             display: flex;
             border: 2px solid var(--accent-red);
@@ -228,6 +222,12 @@
             overflow: hidden;
             width: 600px;
             max-width: 100%;
+        }
+
+        .search-section {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
         }
 
         #keyword-input {
@@ -495,11 +495,6 @@
             }
         }
     </style>
-
-    <!-- Scripts (Compat Mode) -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 </head>
 
 <body>
@@ -532,7 +527,7 @@
 
         <section class="results-section">
             <div class="section-title"><span class="icon">●</span> 키워드 결과 (100개)</div>
-            <div class="status-message" id="status-message">시스템 준비 중...</div>
+            <div class="status-message" id="status-message">로딩 중...</div>
             <div class="table-container">
                 <table id="results-table">
                     <thead>
@@ -558,9 +553,35 @@
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>🔑 API 키 관리</h2>
+
+            <!-- Key List -->
             <div class="key-list-container" id="key-list">
-                <div style="text-align:center;color:#666;padding:20px">저장된 키 불러오는 중...</div>
+                <div style="text-align:center;color:#666;padding:20px">로딩 중...</div>
             </div>
+
+            <!-- Immediate Local Render Script -->
+            <script>
+                // This script runs INSTANTLY after 'key-list' is in DOM, before page finish.
+                try {
+                    const saved = localStorage.getItem('cached_api_keys');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        const list = document.getElementById('key-list');
+                        list.innerHTML = '';
+                        const arr = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+                        if (arr.length) {
+                            arr.forEach(([id, d]) => {
+                                const el = document.createElement('div'); el.className = 'key-item';
+                                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
+                                list.appendChild(el);
+                            });
+                        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; }
+                        // Search state restore if exists
+                        const st = localStorage.getItem('search_state_temp');
+                    }
+                } catch (e) { }
+            </script>
+
             <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
                 <h3 style="font-size:1rem;color:#ccc;margin-bottom:10px">새 키 등록</h3>
                 <input type="hidden" id="edit-key-id">
@@ -583,70 +604,68 @@
         </div>
     </div>
 
+    <!-- Firebase Scripts (Loaded AFTER initial render) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <!-- App Logic -->
     <script>
-        // CONFIG
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
         const DB_KEY = 'shared_api_keys';
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
-
         let db, auth;
 
         document.addEventListener('DOMContentLoaded', () => {
             setupUI();
 
-            // 1. FAST RESTORE from 'cached_api_keys' (Corrected Key Name)
+            // Re-render from cache completely to be safe
             try {
                 const c = localStorage.getItem('cached_api_keys');
-                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "캐시 로드됨"; }
+                if (c) { renderKeys(JSON.parse(c)); document.getElementById('status-message').innerText = "준비됨 (오프라인 모드)"; }
             } catch (e) { }
 
-            // 2. Init Firebase
+            // Init Firebase
             try {
-                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-                db = firebase.database();
-                auth = firebase.auth();
+                if (window.firebase && !firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.database();
+                    auth = firebase.auth();
 
-                // Monitor
-                db.ref(".info/connected").on("value", s => {
-                    const el = document.getElementById('status-message');
-                    if (s.val()) {
-                        if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
-                    } else {
-                        if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; }
-                    }
-                });
-
-                // Auth & Sync
-                auth.signInAnonymously().then(() => {
-                    db.ref(DB_KEY).on('value', s => {
-                        const d = s.val() || {};
-                        localStorage.setItem('cached_api_keys', JSON.stringify(d)); // Save Sync
-                        renderKeys(d); // Update UI
+                    db.ref(".info/connected").on("value", s => {
+                        const el = document.getElementById('status-message');
+                        if (s.val()) { if (el.innerText !== '완료') { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; } }
+                        else { if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; } }
                     });
-                    // Search State Sync
-                    db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
-                }).catch(e => {
-                    console.error("Auth Fail", e);
-                    document.getElementById('status-message').innerText = "인증 실패 (오프라인?)";
-                });
 
-            } catch (e) {
-                console.error("Firebase Init Error", e);
-                alert("서버 연결 실패. 인터넷을 확인하세요.");
-            }
+                    auth.signInAnonymously().then(() => {
+                        db.ref(DB_KEY).on('value', s => {
+                            const d = s.val() || {};
+                            localStorage.setItem('cached_api_keys', JSON.stringify(d));
+                            renderKeys(d);
+                            // Also update status if we got data
+                            if (document.getElementById('status-message').innerText === "로딩 중...") {
+                                document.getElementById('status-message').innerText = "준비됨";
+                            }
+                        });
+                        db.ref('global_search_state').on('value', s => { if (s.val()) updateUI(s.val()); });
+                    }).catch(e => {
+                        console.error("Auth", e);
+                        document.getElementById('status-message').innerText = "인증 실패 (이전 데이터 사용)";
+                    });
+                }
+            } catch (e) { console.error(e); }
         });
 
+        // Functions
         async function getApiKey(t = 'youtube') {
-            // Priority: Cache
             try {
                 const c = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
                 const list = Object.values(c).filter(k => (k.type || 'youtube') === t && k.active !== false);
                 if (list.length) return list[Math.floor(Math.random() * list.length)].key;
             } catch (e) { }
-
             if (!db) return null;
-            // Fallback: DB
             const s = await db.ref(DB_KEY).orderByChild('active').equalTo(true).once('value');
             if (!s.val()) return null;
             const list = Object.values(s.val()).filter(k => (k.type || 'youtube') === t);
@@ -658,7 +677,7 @@
             const k = await getApiKey('youtube');
             const tk = await getApiKey('translate');
 
-            if (!k) return alert("API 키가 없습니다. [API 관리] 버튼을 눌러 키를 추가해주세요.");
+            if (!k) return alert("API 키가 없습니다.");
             msg.innerText = "데이터 요청 중..."; msg.style.color = "#4dabf7";
 
             try {
@@ -742,17 +761,12 @@
                 b.onclick = () => search(null, c);
                 l.appendChild(b);
             });
-
             document.getElementById('search-btn').onclick = () => search(document.getElementById('keyword-input').value, getCurrentCat());
             document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
-
-            // Modal
             const m = document.getElementById('api-modal');
             document.getElementById('api-btn').onclick = () => { m.style.display = "block"; resetForm(); };
             document.querySelector('.close').onclick = () => m.style.display = "none";
             window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
-
-            // Actions
             document.getElementById('save-key-btn').onclick = () => {
                 const n = document.getElementById('new-key-name').value;
                 const v = document.getElementById('new-key-value').value;
@@ -768,61 +782,36 @@
         }
 
         function resetForm() {
-            document.getElementById('new-key-name').value = "";
-            document.getElementById('new-key-value').value = "";
-            document.getElementById('edit-key-id').value = "";
-            document.getElementById('save-key-btn').innerText = "저장하기";
+            document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = "";
+            document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기";
             document.getElementById('cancel-edit-btn').style.display = "none";
         }
-
         function updateUI(st) {
             const inp = document.getElementById('keyword-input');
             if (st.query && inp.value !== st.query) inp.value = st.query;
             document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === st.selectedCategory));
-            const tb = document.querySelector('#results-table tbody');
-            tb.innerHTML = '';
+            const tb = document.querySelector('#results-table tbody'); tb.innerHTML = '';
             (st.results || []).forEach(r => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${r.rank}</td><td style="color:#fff">${r.korean}</td><td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
                 tb.appendChild(tr);
             });
         }
-
         function renderKeys(obj) {
-            const l = document.getElementById('key-list');
-            l.innerHTML = '';
+            const l = document.getElementById('key-list'); l.innerHTML = '';
+            if (!obj) return;
             const arr = Object.entries(obj).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
             if (!arr.length) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">키 없음</div>'; return; }
             arr.forEach(([id, d]) => {
-                const el = document.createElement('div');
-                el.className = 'key-item';
-                el.innerHTML = `
-                    <div class="key-info">
-                        <div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div>
-                        <div class="key-value">${(d.key || "").substring(0, 8)}...</div>
-                    </div>
-                    <div class="key-actions">
-                        <button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button>
-                        <label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label>
-                        <button class="btn-delete" onclick="window.delK('${id}')">🗑️</button>
-                    </div>`;
+                const el = document.createElement('div'); el.className = 'key-item';
+                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
                 l.appendChild(el);
             });
         }
         function getCurrentCat() { return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트"; }
-
-        // GLOBAL (Window Bindings)
-        window.prepEdit = (id, n, k, t) => {
-            document.getElementById('new-key-name').value = n;
-            document.getElementById('new-key-value').value = k;
-            document.getElementById('new-key-type').value = t;
-            document.getElementById('edit-key-id').value = id;
-            document.getElementById('save-key-btn').innerText = "수정";
-            document.getElementById('cancel-edit-btn').style.display = "block";
-        };
+        window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
         window.togK = (id, v) => db.ref(DB_KEY + "/" + id + "/active").set(v);
         window.delK = (id) => confirm("삭제?") && db.ref(DB_KEY + "/" + id).remove();
-
     </script>
 </body>
 
