@@ -5,21 +5,347 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube 다국어 키워드 검색기</title>
-    <!-- CSS -->
-    <link rel="stylesheet" href="keyword/style.css">
-
     <!-- Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com">
     <link rel="preconnect" href="https://template-3530f.firebaseio.com">
 
-    <!-- Firebase SDK (Compat Version for file:// support) -->
-    <!-- Firestore 제외하여 경량화 -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-
+    <!-- CSS (Inlined) -->
     <style>
-        /* API Modal Styles */
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --accent-red: #ff3b3b;
+            --accent-red-hover: #ff5252;
+            --border-color: #333333;
+            --table-header-bg: #2d2d2d;
+            --table-row-even: #1e1e1e;
+            --table-row-odd: #181818;
+            --link-blue: #4dabf7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--accent-red);
+        }
+
+        h1 .red-dot {
+            font-size: 1.2rem;
+            color: var(--accent-red);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .top-nav {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .api-btn-container {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #api-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #api-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-add {
+            background: linear-gradient(135deg, #ff3b3b, #ff6b6b);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(255, 59, 59, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+
+        .btn-add:hover {
+            background: linear-gradient(135deg, #ff5252, #ff8787);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 59, 59, 0.5);
+        }
+
+        .btn-add:active {
+            transform: translateY(0);
+        }
+
+        .input-dark {
+            width: 100%;
+            padding: 12px 15px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            font-size: 0.95rem;
+        }
+
+        .input-dark:focus {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px rgba(255, 59, 59, 0.2);
+        }
+
+        .btn-delete {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-delete:hover {
+            background: #ff4444;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .categories-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title .icon {
+            color: var(--accent-red);
+        }
+
+        .categories-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .category-pill {
+            background-color: #333;
+            color: #ccc;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .category-pill:hover {
+            background-color: #444;
+        }
+
+        .category-pill.active {
+            background-color: #4a4a4a;
+            color: white;
+            border-color: #666;
+            font-weight: bold;
+        }
+
+        .category-indicator-bar {
+            height: 4px;
+            background-color: #333;
+            border-radius: 2px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .indicator-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, var(--accent-red), transparent);
+        }
+
+        .search-section {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+
+        .search-box {
+            display: flex;
+            border: 2px solid var(--accent-red);
+            border-radius: 5px;
+            overflow: hidden;
+            width: 600px;
+            max-width: 100%;
+        }
+
+        #keyword-input {
+            flex: 1;
+            background-color: transparent;
+            border: none;
+            padding: 15px 20px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        #search-btn {
+            background-color: var(--accent-red);
+            border: none;
+            color: white;
+            padding: 0 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #search-btn:hover {
+            background-color: var(--accent-red-hover);
+        }
+
+        .results-section {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        .status-message {
+            text-align: right;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--table-header-bg);
+            color: var(--text-secondary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: var(--table-row-even);
+        }
+
+        tbody tr:nth-child(odd) {
+            background-color: var(--table-row-odd);
+        }
+
+        tbody tr:hover {
+            background-color: #252525;
+        }
+
+        td:nth-child(n+3) {
+            color: var(--link-blue);
+        }
+
+        td:nth-child(1) {
+            color: var(--text-secondary);
+            width: 50px;
+            text-align: center;
+        }
+
+        th:nth-child(1) {
+            text-align: center;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -98,6 +424,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            margin-top: 5px;
         }
 
         .key-actions {
@@ -105,9 +432,12 @@
             gap: 10px;
             align-items: center;
             flex-shrink: 0;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+            width: 100%;
+            justify-content: flex-end;
         }
 
-        /* Switch */
         .toggle-switch {
             position: relative;
             display: inline-block;
@@ -153,55 +483,103 @@
             transform: translateX(20px);
         }
 
-        /* Buttons */
-        .btn-delete {
-            background: transparent;
-            border: 1px solid #ff4444;
-            color: #ff4444;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+        @media screen and (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
 
-        .btn-delete:hover {
-            background: #ff4444;
-            color: white;
-        }
+            .app-container {
+                gap: 20px;
+            }
 
-        .input-dark {
-            flex: 1;
-            padding: 12px;
-            background: #2d2d2d;
-            border: 1px solid #444;
-            color: white;
-            border-radius: 6px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
+            h1 {
+                font-size: 1.5rem;
+                flex-direction: column;
+                gap: 5px;
+            }
 
-        .input-dark:focus {
-            border-color: #ff3b3b;
-        }
+            .subtitle {
+                font-size: 0.85rem;
+                padding: 0 10px;
+            }
 
-        .btn-add {
-            background: #ff3b3b;
-            color: white;
-            border: none;
-            padding: 0 20px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
+            .search-box {
+                flex-direction: column;
+                border: none;
+            }
 
-        .btn-add:hover {
-            background: #ff5252;
+            #keyword-input {
+                border: 2px solid var(--accent-red);
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+
+            #search-btn {
+                border-radius: 5px;
+                padding: 12px;
+                width: 100%;
+            }
+
+            .modal-content {
+                margin: 20% auto;
+                padding: 15px;
+                width: 95%;
+            }
+
+            .add-section {
+                flex-direction: column;
+            }
+
+            #new-key-type,
+            #new-key-name,
+            #new-key-value {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+
+            .key-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .key-info {
+                width: 100%;
+                margin-right: 0;
+            }
+
+            .key-value {
+                width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                margin-top: 5px;
+                margin-left: 0 !important;
+            }
+
+            .key-actions {
+                width: 100%;
+                justify-content: flex-end;
+                border-top: 1px solid #444;
+                padding-top: 10px;
+                margin-top: 5px;
+            }
+
+            th,
+            td {
+                padding: 10px 8px;
+                font-size: 0.8rem;
+            }
+
+            .top-nav {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .api-btn-container {
+                position: static;
+                transform: none;
+                margin-top: 10px;
+            }
         }
     </style>
 </head>
@@ -239,7 +617,7 @@
         </div>
     </div>
 
-    <!-- Main App -->
+    <!-- Main Container -->
     <div class="app-container">
         <header>
             <div class="top-nav">
@@ -287,8 +665,14 @@
         </section>
     </div>
 
-    <!-- Logic Script (Compat Mode for file:// support) -->
-    <script>
+    <!-- Firebase SDK & Logic (Modular v11 for modern web - RESTORED & INLINED to ensure compat) -->
+    <!-- Using type="module" ensures we use the modern imports. The user is on HTTPS web. -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getDatabase, ref, onValue, update, push, set, remove, serverTimestamp, query, orderByChild, equalTo, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
             authDomain: "template-3530f.firebaseapp.com",
@@ -298,7 +682,6 @@
             messagingSenderId: "891098188622",
             appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
         };
-
         const DB_KEY_PATH = 'shared_api_keys';
         const CATEGORIES = [
             "영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠",
@@ -312,69 +695,59 @@
             "교육": "27", "과학/기술": "28", "비영리/사회운동": "29"
         };
 
-        let db, auth;
-
-        document.addEventListener("DOMContentLoaded", initApp);
+        // State
+        let db;
+        let auth;
 
         async function initApp() {
             setupUI();
-            loadCachedApiKeys(); // FAST LOAD
+            try { loadCachedApiKeys(); } catch (e) { }
 
             try {
-                // Initialize Firebase (Compat)
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                db = firebase.database();
-                auth = firebase.auth();
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getDatabase(app);
 
-                console.log("Firebase Init (Compat)");
-
-                // Connection Monitor
-                db.ref(".info/connected").on("value", snap => {
+                // Connection Status
+                onValue(ref(db, ".info/connected"), (snap) => {
                     const el = document.getElementById('status-message');
                     if (snap.val() === true) {
                         if (el && el.innerText !== "완료") { el.innerText = "서버 연결됨"; el.style.color = "#4dabf7"; }
                     } else {
-                        if (el && !el.innerText.includes("모드")) { el.innerText = "연결 중..."; el.style.color = "#888"; }
+                        if (el) { el.innerText = "연결 중..."; el.style.color = "#888"; }
                     }
                 });
 
                 // Auth
-                auth.signInAnonymously().catch(e => console.error("Auth Err:", e));
-                auth.onAuthStateChanged(user => {
-                    if (user) {
-                        startDataSync();
-                    }
+                signInAnonymously(auth).catch(e => console.error("Auth Err", e));
+                onAuthStateChanged(auth, user => {
+                    if (user) startDataSync();
                 });
 
             } catch (e) {
-                console.error("Critical Error", e);
+                console.error("Init Error", e);
                 alert("초기화 오류: " + e.message);
             }
         }
 
         function startDataSync() {
-            db.ref(DB_KEY_PATH).on('value', snap => {
+            onValue(ref(db, DB_KEY_PATH), (snap) => {
                 const val = snap.val() || {};
                 localStorage.setItem('cached_api_keys', JSON.stringify(val));
                 renderKeys(val);
             });
-
-            db.ref('global_search_state').on('value', snap => {
+            onValue(ref(db, 'global_search_state'), (snap) => {
                 const val = snap.val();
                 if (val) updateUI(val);
             });
         }
 
         function loadCachedApiKeys() {
-            try {
-                const c = localStorage.getItem('cached_api_keys');
-                if (c) renderKeys(JSON.parse(c));
-            } catch (e) { }
+            const c = localStorage.getItem('cached_api_keys');
+            if (c) renderKeys(JSON.parse(c));
         }
 
-        // --- GLOBAL ACTIONS ---
+        // --- GLOBAL EXPORTS (Binding to window for HTML clicks) ---
         window.saveApiKey = function () {
             const name = document.getElementById('new-key-name').value.trim();
             const key = document.getElementById('new-key-value').value.trim();
@@ -384,18 +757,18 @@
             if (!name || !key) return alert("값을 입력해주세요.");
             if (!db) return alert("연결 대기 중...");
 
-            const data = { name, key, type, updatedAt: firebase.database.ServerValue.TIMESTAMP };
-
+            const data = { name, key, type, updatedAt: serverTimestamp() };
             const promise = id
-                ? db.ref(DB_KEY_PATH + "/" + id).update(data)
-                : (data.active = true, data.createdAt = firebase.database.ServerValue.TIMESTAMP, db.ref(DB_KEY_PATH).push(data));
+                ? update(ref(db, `${DB_KEY_PATH}/${id}`), data)
+                : (data.active = true, data.createdAt = serverTimestamp(), push(ref(db, DB_KEY_PATH), data));
 
             promise.then(() => { alert("저장됨"); resetForm(); })
-                .catch(e => alert("저장 실패: " + e.message));
+                .catch(e => alert("실패: " + e.message));
         };
 
-        window.toggleKey = (id, active) => db.ref(DB_KEY_PATH + "/" + id + "/active").set(active);
-        window.deleteKey = (id) => { if (confirm("삭제?")) db.ref(DB_KEY_PATH + "/" + id).remove(); };
+        window.toggleKey = (id, active) => set(ref(db, `${DB_KEY_PATH}/${id}/active`), active);
+        window.deleteKey = (id) => { if (confirm("삭제?")) remove(ref(db, `${DB_KEY_PATH}/${id}`)); };
+
         window.prepareEdit = (id, n, k, t) => {
             document.getElementById('new-key-name').value = n;
             document.getElementById('new-key-value').value = k;
@@ -405,11 +778,8 @@
             document.getElementById('cancel-edit-btn').style.display = "block";
         };
 
-        // --- INTERNAL ---
+        // --- INTERNAL HELPERS ---
         async function getActiveApiKey(type = 'youtube') {
-            try { return JSON.parse(localStorage.getItem('cached_api_keys'))[0].key; } catch { } // Ultra-fast failover
-
-            // Logic: Cache -> DB (Compat)
             try {
                 const c = JSON.parse(localStorage.getItem('cached_api_keys') || '{}');
                 const k = Object.values(c).filter(x => (x.type || 'youtube') === type && x.active !== false);
@@ -417,7 +787,8 @@
             } catch { }
 
             if (!db) return null;
-            const snap = await db.ref(DB_KEY_PATH).orderByChild('active').equalTo(true).once('value');
+            const q = query(ref(db, DB_KEY_PATH), orderByChild('active'), equalTo(true));
+            const snap = await get(q);
             const val = snap.val();
             if (!val) return null;
             const k = Object.values(val).filter(x => (x.type || 'youtube') === type);
@@ -474,7 +845,7 @@
                 const state = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(state);
                 msg.innerText = "완료"; msg.style.color = "#888";
-                if (db) db.ref('global_search_state').update(state).catch(() => { });
+                if (db) update(ref(db, 'global_search_state'), state).catch(() => { });
 
             } catch (e) {
                 msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
@@ -509,15 +880,15 @@
                 btn.onclick = () => performSearch(null, cat);
                 list.appendChild(btn);
             });
-            document.getElementById('search-btn').onclick = () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory());
-            document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); };
+            document.getElementById('search-btn').addEventListener('click', () => performSearch(document.getElementById('keyword-input').value, getCurrentCategory()));
+            document.getElementById('keyword-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(e.target.value, getCurrentCategory()); });
 
             const m = document.getElementById('api-modal');
             document.getElementById('api-btn').onclick = () => { m.style.display = "block"; resetForm(); };
             document.querySelector('.close').onclick = () => { m.style.display = "none"; };
             window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
 
-            document.getElementById('save-key-btn').onclick = window.saveApiKey;
+            document.getElementById('save-key-btn').addEventListener('click', window.saveApiKey);
             document.getElementById('cancel-edit-btn').onclick = resetForm;
         }
 
@@ -534,7 +905,7 @@
             const list = document.getElementById('key-list');
             list.innerHTML = '';
             const keys = Object.entries(data);
-            if (!keys.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">없음</div>'; return; }
+            if (!keys.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
             keys.sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
 
             keys.forEach(([id, d]) => {
@@ -569,6 +940,9 @@
             });
         }
         function getCurrentCategory() { return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트"; }
+
+        // Boot
+        initApp();
     </script>
 </body>
 
