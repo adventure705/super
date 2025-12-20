@@ -647,7 +647,7 @@
     <!-- App Logic -->
     <script>
         // Update DB_KEY to a fresh version to force sync and clear conflicts
-        const DB_KEY = 'users/masteruserID/shared_api_keys';
+        const DB_KEY = 'shared_api_keys';
 
         const firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", databaseURL: "https://template-3530f.firebaseio.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
         const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
@@ -790,9 +790,22 @@
                         // 3. Setup Listeners
                         db.ref(DB_KEY).on('value', s => {
                             const val = s.val();
-                            log("Data Update: " + (val ? Object.keys(val).length : 0) + " items");
-                            saveLocalCache(val || {});
+                            const local = getLocalCache();
+                            log("DB Update (Items: " + (val ? Object.keys(val).length : 0) + ")");
+
+                            // BOOTSTRAP: If server empty but local has keys, PUSH local.
+                            if (!val && Object.keys(local).length > 0) {
+                                log("Bootstrapping Server with Local Data...");
+                                db.ref(DB_KEY).set(local)
+                                    .then(() => log("Bootstrap Success"))
+                                    .catch(e => log("Bootstrap Fail: " + e.message));
+                            } else {
+                                // Normal Sync
+                                saveLocalCache(val || {});
+                            }
                         });
+
+
                         db.ref('global_search_state_v2').on('value', s => { if (s.val()) updateUI(s.val()); });
                     }).catch(e => {
                         console.error("Auth Fail", e);
