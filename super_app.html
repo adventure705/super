@@ -1452,12 +1452,12 @@
                                                     <th class="px-4 py-3">구분</th>
                                                     <th class="px-4 py-3 va-sortable-header" onclick="analysisModule.sortVideo('title')">제목 ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('publishedAt')">게시일 ↕</th>
-                                                    <th class="px-4 py-3 text-right">길이</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('durationSeconds')">길이 ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('viewCount')">조회수 ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('likeCount')">좋아요(★) ↕</th>
-                                                    <th class="px-4 py-3 text-right">L/V (%)</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('lvRate')">L/V (%) ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('commentCount')">댓글(★) ↕</th>
-                                                    <th class="px-4 py-3 text-right">C/V (%)</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('cvRate')">C/V (%) ↕</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="va-videoListBody" class="divide-y divide-dark-border"></tbody>
@@ -1508,7 +1508,20 @@
                     let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, apiKey);
                     videos = videos.slice(0, 200);
                     const sMap = await this.fetchStats(videos.map(v => v.videoId), apiKey);
-                    videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), commentCount: Number(s.commentCount || 0), durationSeconds: this.parseDur(s.duration), tags: s.tags || [] }; });
+                    videos = videos.map(i => {
+                        const s = sMap[i.videoId] || {};
+                        const vc = Number(s.viewCount || 0);
+                        const lc = Number(s.likeCount || 0);
+                        const cc = Number(s.commentCount || 0);
+                        return {
+                            ...i, ...s,
+                            viewCount: vc, likeCount: lc, commentCount: cc,
+                            durationSeconds: this.parseDur(s.duration),
+                            tags: s.tags || [],
+                            lvRate: vc ? (lc / vc * 100) : 0,
+                            cvRate: vc ? (cc / vc * 100) : 0
+                        };
+                    });
 
                     this.state.allVideosData = videos;
                     this.state.channelMetadata = meta;
@@ -1620,7 +1633,7 @@
                 l.sort((a, b) => {
                     let va = a[this.state.videoSortState.key], vb = b[this.state.videoSortState.key];
                     // Handle numeric vs string
-                    if (['viewCount', 'likeCount', 'commentCount', 'durationSeconds'].includes(this.state.videoSortState.key)) {
+                    if (['viewCount', 'likeCount', 'commentCount', 'durationSeconds', 'lvRate', 'cvRate'].includes(this.state.videoSortState.key)) {
                         va = Number(va); vb = Number(vb);
                     }
                     if (va < vb) return -1;
@@ -1636,8 +1649,8 @@
                     const badgeColor = type === 'Shorts' ? 'bg-red-500/20 text-red-500' : (type === '미드폼' ? 'bg-blue-500/20 text-blue-500' : 'bg-purple-500/20 text-purple-500');
                     const starsL = this.getStarRating(v.likeCount, v.viewCount);
                     const starsC = this.getStarRating(v.commentCount, v.viewCount, true);
-                    const lvRate = v.viewCount ? (v.likeCount / v.viewCount * 100).toFixed(2) : 0;
-                    const cvRate = v.viewCount ? (v.commentCount / v.viewCount * 100).toFixed(2) : 0;
+                    const lvRate = v.lvRate !== undefined ? v.lvRate.toFixed(2) : (v.viewCount ? (v.likeCount / v.viewCount * 100).toFixed(2) : 0);
+                    const cvRate = v.cvRate !== undefined ? v.cvRate.toFixed(2) : (v.viewCount ? (v.commentCount / v.viewCount * 100).toFixed(2) : 0);
 
                     return `
                     <tr class="hover:bg-dark-hover border-b border-dark-border group">
@@ -1751,17 +1764,17 @@
                 if (d.exists && d.data().analysisNote) { const n = d.data().analysisNote; set('note_summary', n.summary); set('note_pros', n.pros); set('note_cons', n.cons); set('note_genre', n.genre); set('note_tone', n.tone); set('note_style', n.style); set('note_audience', n.audience); set('note_ad_domain', n.ad_domain); set('note_ad_type', n.ad_type); set('note_engagement_memo', n.engagement_memo); }
                 else { document.querySelectorAll('.va-note-input').forEach(i => i.value = ''); }
             },
-            async saveNote() {
+            async saveNote(suppressAlert) {
                 if (!this.state.channelMetadata) return;
                 const get = (k) => document.getElementById(k)?.value || '';
                 const note = { summary: get('note_summary'), pros: get('note_pros'), cons: get('note_cons'), genre: get('note_genre'), tone: get('note_tone'), style: get('note_style'), audience: get('note_audience'), ad_domain: get('note_ad_domain'), ad_type: get('note_ad_type'), engagement_memo: get('note_engagement_memo') };
                 await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(this.state.channelMetadata.id).set({ analysisNote: note }, { merge: true });
-                alert("저장 완료");
+                if (!suppressAlert) alert("저장 완료");
             },
-            async analyzeGemini() {
+            async analyzeGemini(isAuto) {
                 const gk = app.getApiKey('gemini');
-                if (!gk) return alert("Gemini 키 필요");
-                if (!this.state.channelMetadata) return alert("분석 먼저 하세요");
+                if (!gk) { console.error("Gemini key required"); if (!isAuto) alert("Gemini 키 필요"); return; }
+                if (!this.state.channelMetadata) { if (!isAuto) alert("분석 먼저 하세요"); return; }
                 const btn = document.getElementById('va-geminiBtn');
                 btn.innerText = "분석 중..."; btn.disabled = true;
                 try {
@@ -1773,7 +1786,8 @@
                     const res = JSON.parse(text);
                     const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
                     set('note_summary', res.summary); set('note_pros', res.pros); set('note_cons', res.cons); set('note_genre', res.genre); set('note_tone', res.tone); set('note_style', res.style); set('note_audience', res.audience); set('note_ad_domain', res.ad_domain); set('note_ad_type', res.ad_type); set('note_engagement_memo', res.engagement_memo);
-                } catch (e) { alert("Error: " + e.message); } finally { btn.innerHTML = '<i class="fas fa-robot"></i> Gemini 자동 분석'; btn.disabled = false; }
+                    await this.saveNote(true); // Auto-save
+                } catch (e) { console.error(e); if (!isAuto) alert("Error: " + e.message); } finally { btn.innerHTML = '<i class="fas fa-robot"></i> Gemini 자동 분석'; btn.disabled = false; }
             },
             sortVideo(key) {
                 if (this.state.videoSortState.key === key) this.state.videoSortState.dir = this.state.videoSortState.dir === 'desc' ? 'asc' : 'desc';
