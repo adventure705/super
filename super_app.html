@@ -23,7 +23,7 @@
                             muted: '#a0a0a0'
                         },
                         brand: {
-                            primary: '#ef4444', // Red for YouTube style
+                            primary: '#ef4444',
                             hover: '#dc2626'
                         }
                     }
@@ -31,7 +31,6 @@
             }
         }
     </script>
-    <!-- Google Fonts -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
 
@@ -39,7 +38,6 @@
             font-family: 'Inter', sans-serif;
         }
 
-        /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -68,7 +66,6 @@
             }
         }
     </style>
-    <!-- Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 
@@ -81,13 +78,9 @@
             <div class="flex items-center justify-center h-16 border-b border-dark-border">
                 <h1 class="text-xl font-bold text-brand-primary"><i class="fab fa-youtube mr-2"></i>Super Tool</h1>
             </div>
-
             <nav class="flex-1 overflow-y-auto py-4">
-                <ul class="space-y-1 px-2" id="desktop-menu">
-                    <!-- Menu Items injected by JS -->
-                </ul>
+                <ul class="space-y-1 px-2" id="desktop-menu"></ul>
             </nav>
-
             <div class="border-t border-dark-border p-4">
                 <button onclick="app.openSettings()"
                     class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors">
@@ -98,7 +91,6 @@
 
         <!-- Main Content -->
         <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
-            <!-- Mobile Header -->
             <header
                 class="md:hidden flex items-center justify-between h-14 bg-dark-sidebar border-b border-dark-border px-4 z-20">
                 <h1 class="text-lg font-bold text-brand-primary">Super Tool</h1>
@@ -107,7 +99,6 @@
                 </button>
             </header>
 
-            <!-- Mobile Sidebar Overlay -->
             <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden"
                 onclick="app.toggleMobileMenu()"></div>
             <div id="mobile-sidebar"
@@ -118,9 +109,7 @@
                             class="fas fa-times"></i></button>
                 </div>
                 <nav class="flex-1 overflow-y-auto py-4">
-                    <ul class="space-y-1 px-2" id="mobile-menu-list">
-                        <!-- Menu Items -->
-                    </ul>
+                    <ul class="space-y-1 px-2" id="mobile-menu-list"></ul>
                 </nav>
                 <div class="border-t border-dark-border p-4">
                     <button onclick="app.openSettings(); app.toggleMobileMenu();"
@@ -130,9 +119,7 @@
                 </div>
             </div>
 
-            <!-- Content Area -->
             <main class="flex-1 overflow-auto bg-dark-bg p-4 md:p-8 relative" id="main-content">
-                <!-- Dynamic Content Loaded Here -->
                 <div class="flex flex-col items-center justify-center h-full text-center text-dark-muted">
                     <i class="fas fa-rocket text-6xl mb-4 text-brand-primary opacity-50"></i>
                     <h2 class="text-2xl font-bold text-white mb-2">환영합니다!</h2>
@@ -140,7 +127,6 @@
                 </div>
             </main>
 
-            <!-- Status Bar -->
             <div id="status-bar"
                 class="absolute bottom-4 right-8 bg-dark-card border border-dark-border px-3 py-1 rounded-full text-xs text-dark-muted opacity-0 transition-opacity duration-500 pointer-events-none">
                 <i class="fas fa-sync fa-spin mr-1"></i> 동기화 중...
@@ -165,40 +151,41 @@
             </div>
 
             <div class="p-6 overflow-y-auto max-h-[70vh]">
-                <!-- API Keys Manager -->
                 <div class="mb-8">
                     <h3 class="text-lg font-semibold text-white mb-4 border-l-4 border-brand-primary pl-3">API 키 관리</h3>
-                    <p class="text-sm text-dark-muted mb-4">모든 기능에서 공통으로 사용할 API 키를 관리합니다. 변경 시 즉시 모든 기기에 동기화됩니다.</p>
-
-                    <div class="space-y-4" id="api-keys-list">
-                        <!-- Keys injected by JS -->
-                    </div>
-
-                    <div class="mt-4 pt-4 border-t border-dark-border flex gap-3">
-                        <select id="new-key-type"
-                            class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary w-1/3">
-                            <option value="youtube">Youtube API</option>
-                            <option value="gemini">Gemini API</option>
-                            <option value="translate">Translate API</option>
-                        </select>
-                        <input type="text" id="new-key-value"
-                            class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary flex-1"
-                            placeholder="새 API 키 값 입력">
-                        <button onclick="app.addApiKey()"
-                            class="bg-brand-primary hover:bg-brand-hover text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors">추가</button>
+                    <p class="text-sm text-dark-muted mb-4">모든 기능에서 공통으로 사용할 API 키를 관리합니다. 키를 활성화/비활성화하거나 수정할 수 있습니다.
+                    </p>
+                    <div class="space-y-4" id="api-keys-list"></div>
+                    <div class="mt-4 pt-4 border-t border-dark-border space-y-3">
+                        <div class="flex gap-3">
+                            <select id="new-key-type"
+                                class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary w-1/3">
+                                <option value="youtube">Youtube API</option>
+                                <option value="gemini">Gemini API</option>
+                                <option value="translate">Translate API</option>
+                            </select>
+                            <input type="text" id="new-key-name"
+                                class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary flex-1"
+                                placeholder="키 이름 (예: 메인 계정)">
+                        </div>
+                        <div class="flex gap-3">
+                            <input type="text" id="new-key-value"
+                                class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary flex-1"
+                                placeholder="API 키 값 (sk-...)">
+                            <button id="save-key-btn" onclick="app.addApiKey()"
+                                class="bg-brand-primary hover:bg-brand-hover text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors whitespace-nowrap"
+                                style="min-width: 80px;">추가</button>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Global Data Management (Mockup for now) -->
                 <div>
                     <h3 class="text-lg font-semibold text-white mb-4 border-l-4 border-blue-500 pl-3">데이터 관리</h3>
                     <div class="bg-dark-card p-4 rounded-lg border border-dark-border">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-gray-300">총 저장된 데이터 항목:</span>
-                            <span class="text-sm font-mono text-brand-primary" id="total-data-count">0</span>
+                            <span class="text-sm text-gray-300">총 저장된 데이터:</span>
+                            <span class="text-sm font-mono text-brand-primary" id="total-data-count">-</span>
                         </div>
-                        <p class="text-xs text-dark-muted">모든 데이터는 Firestore 'global_data' 컬렉션에 단일 계정(master) 기준으로
-                            저장됩니다.</p>
+                        <p class="text-xs text-dark-muted">모든 데이터는 'global_data' 컬렉션에 통합 관리됩니다.</p>
                     </div>
                 </div>
             </div>
@@ -210,27 +197,25 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-    <!-- Main Logic -->
     <script>
-        // --- 1. CONFIGURATION ---
-        const MASTER_DOC_ID = 'master_settings'; // Single document for all settings/keys
+        // --- CONFIG ---
+        const MASTER_DOC_ID = 'master_settings';
         const DATA_COLLECTION = 'global_data';
 
-        // Modules Definition (Will be expanded later with real content)
         const MODULES = [
             { id: 'home', name: '홈', icon: 'fas fa-home' },
-            { id: 'channel', name: '채널 분석', icon: 'fas fa-tv', file: 'channel.html' },
-            { id: 'analysis', name: '영상 분석', icon: 'fas fa-chart-line', file: 'analysis.html' },
-            { id: 'comment', name: '댓글 분석', icon: 'fas fa-comments', file: 'comment.html' },
-            { id: 'keyword', name: '키워드 검색', icon: 'fas fa-search', file: 'keyword.html' },
-            { id: 'estimate', name: '수익 예측', icon: 'fas fa-coins', file: 'estimate.html' },
+            { id: 'keyword', name: '키워드 검색', icon: 'fas fa-search' },
+            { id: 'channel', name: '채널 분석', icon: 'fas fa-tv' },
+            { id: 'analysis', name: '영상 분석', icon: 'fas fa-chart-line' },
+            { id: 'comment', name: '댓글 분석', icon: 'fas fa-comments' },
+            { id: 'estimate', name: '수익 예측', icon: 'fas fa-coins' },
         ];
 
-        // --- 2. APP CORE ---
+        // --- APP CORE ---
         const app = {
             db: null,
             state: {
-                apiKeys: [], // [{ type, key, id, name }]
+                apiKeys: [],
                 currentModule: null
             },
 
@@ -272,7 +257,6 @@
             },
 
             loadModule(id) {
-                // UI Highlight
                 document.querySelectorAll('nav button').forEach(b => {
                     b.classList.remove('bg-dark-hover', 'text-white');
                     b.querySelector('i').classList.remove('text-brand-primary');
@@ -283,12 +267,11 @@
                     b.querySelector('i').classList.add('text-brand-primary');
                 });
 
-                // Close Mobile Menu
                 document.getElementById('mobile-sidebar').classList.add('-translate-x-full');
                 document.getElementById('mobile-menu-overlay').classList.add('hidden');
 
-                // Content Loading
                 const main = document.getElementById('main-content');
+                this.state.currentModule = id;
 
                 if (id === 'home') {
                     main.innerHTML = `
@@ -300,29 +283,28 @@
                     return;
                 }
 
-                // Placeholder for now - Real implementation will fetch content or iframe
-                // Ideally, we refactor existing HTMLs into JS Modules.
-                // For this step, we'll show a "Preparing" message.
-                // or IFRAME approach for quick integration? No, user wants ONE app.
-                // We will start emptying content and ask to migrate logic. 
-                // BUT for now, let's just put a placeholder card.
+                if (id === 'keyword') {
+                    keywordModule.render(main);
+                    keywordModule.init();
+                    return;
+                }
 
                 main.innerHTML = `
                     <div class="animate-pulse flex flex-col items-center justify-center h-full">
                         <div class="text-xl text-white mb-4"><i class="fas fa-spinner fa-spin mr-2"></i> ${MODULES.find(m => m.id === id).name} 로딩 중...</div>
-                        <p class="text-sm text-dark-muted">모듈 통합 작업이 필요합니다.</p>
+                        <p class="text-sm text-dark-muted">이 모듈은 아직 통합 준비 중입니다.</p>
                     </div>
                 `;
-
-                // *** In future steps, we will inject real code here ***
-                // loadModuleScript(id); 
             },
 
-            // --- SETTINGS & DATA ---
+            getApiKey(type) {
+                const keys = this.state.apiKeys.filter(k => k.type === type && k.active !== false);
+                if (keys.length === 0) return null;
+                return keys[Math.floor(Math.random() * keys.length)].key;
+            },
 
             listenToSettings() {
                 if (!this.db) return;
-                // Single Doc Listener for Master Settings
                 this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID)
                     .onSnapshot(doc => {
                         this.showStatus("동기화 완료");
@@ -331,7 +313,6 @@
                             this.state.apiKeys = d.apiKeys || [];
                             this.renderApiKeys();
                         } else {
-                            // Create default if not exists
                             this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).set({
                                 createdAt: new Date().toISOString(),
                                 apiKeys: []
@@ -346,61 +327,117 @@
                     list.innerHTML = `<div class="text-center text-sm text-dark-muted py-4">등록된 키가 없습니다.</div>`;
                     return;
                 }
-
-                list.innerHTML = this.state.apiKeys.map((k, idx) => `
-                    <div class="flex items-center justify-between bg-dark-bg p-3 rounded border border-dark-border">
-                        <div class="flex items-center gap-3 overflow-hidden">
-                            <span class="text-xs font-bold px-2 py-1 rounded bg-gray-800 text-gray-300 uppercase w-20 text-center">${k.type}</span>
-                            <div class="flex flex-col">
-                                <span class="text-sm text-white font-mono truncate max-w-[150px] md:max-w-xs">
+                list.innerHTML = this.state.apiKeys.map((k, idx) => {
+                    const isActive = k.active !== false;
+                    const opacityClass = isActive ? '' : 'opacity-50';
+                    const activeColor = isActive ? 'text-green-400' : 'text-gray-500';
+                    const activeText = isActive ? '사용 중' : '비활성';
+                    return `
+                    <div class="flex flex-col md:flex-row items-center justify-between bg-dark-bg p-3 rounded border border-dark-border gap-3 ${opacityClass} transition-all">
+                        <div class="flex items-center gap-3 overflow-hidden flex-1 w-full">
+                            <span class="text-xs font-bold px-2 py-1 rounded bg-gray-800 text-gray-300 uppercase w-20 text-center flex-shrink-0">${k.type}</span>
+                            <div class="flex flex-col min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm text-white font-bold truncate">${k.name || 'API Key'}</span>
+                                    <span class="text-[10px] ${activeColor} border border-gray-700 px-1 rounded">${activeText}</span>
+                                </div>
+                                <span class="text-xs text-dark-muted font-mono truncate">
                                     ${k.key.substring(0, 10)}...${k.key.substring(k.key.length - 4)}
                                 </span>
                             </div>
                         </div>
-                        <button onclick="app.removeApiKey('${k.key}')" class="text-dark-muted hover:text-red-500 transition-colors p-2">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" onchange="app.toggleKey('${k.key}')" ${isActive ? 'checked' : ''}>
+                                <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-primary"></div>
+                            </label>
+                            <button onclick="app.prepEditKey('${k.key}')" class="text-dark-muted hover:text-blue-400 transition-colors p-2" title="수정">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button onclick="app.removeApiKey('${k.key}')" class="text-dark-muted hover:text-red-500 transition-colors p-2" title="삭제">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
-                `).join('');
+                `}).join('');
+            },
+
+            prepEditKey(keyVal) {
+                const k = this.state.apiKeys.find(key => key.key === keyVal);
+                if (!k) return;
+                document.getElementById('new-key-type').value = k.type;
+                document.getElementById('new-key-value').value = k.key;
+                document.getElementById('new-key-name').value = k.name || '';
+
+                const saveBtn = document.getElementById('save-key-btn');
+                saveBtn.innerText = "수정 저장";
+                saveBtn.onclick = () => app.updateKeyContent(keyVal);
+                saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.remove('bg-brand-primary', 'hover:bg-brand-hover');
+                document.getElementById('new-key-value').focus();
             },
 
             async addApiKey() {
                 const type = document.getElementById('new-key-type').value;
                 const key = document.getElementById('new-key-value').value.trim();
-                if (!key) return alert("키를 입력하세요.");
+                const nameInput = document.getElementById('new-key-name').value.trim();
+                const name = nameInput || "새 API 키";
 
-                // Validate Duplicate
+                if (!key) return alert("키를 입력하세요.");
                 if (this.state.apiKeys.find(k => k.key === key)) return alert("이미 등록된 키입니다.");
 
-                const newKeys = [...this.state.apiKeys, { type, key, addedAt: Date.now() }];
+                const newKeys = [...this.state.apiKeys, { type, key, name, active: true, addedAt: Date.now() }];
+                this.saveKeys(newKeys, "키 추가됨");
+                this.resetForm();
+            },
 
-                // Save to Firestore
-                try {
-                    await this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).set({
-                        apiKeys: newKeys
-                    }, { merge: true });
-                    document.getElementById('new-key-value').value = '';
-                    this.showStatus("키 저장됨");
-                } catch (e) {
-                    console.error(e);
-                    alert("저장 실패");
-                }
+            async updateKeyContent(oldKeyVal) {
+                const type = document.getElementById('new-key-type').value;
+                const newKeyVal = document.getElementById('new-key-value').value.trim();
+                const name = document.getElementById('new-key-name').value.trim() || "API Key";
+
+                if (!newKeyVal) return alert("키 값은 비어있을 수 없습니다.");
+                if (oldKeyVal !== newKeyVal && this.state.apiKeys.find(k => k.key === newKeyVal)) return alert("변경된 키 값이 이미 존재합니다.");
+
+                const newKeys = this.state.apiKeys.map(k => {
+                    if (k.key === oldKeyVal) return { ...k, type, name, key: newKeyVal };
+                    return k;
+                });
+                await this.saveKeys(newKeys, "키 수정됨");
+                this.resetForm();
+            },
+
+            async toggleKey(keyVal) {
+                const k = this.state.apiKeys.find(key => key.key === keyVal);
+                if (!k) return;
+                const newStatus = !(k.active !== false);
+                const newKeys = this.state.apiKeys.map(item => item.key === keyVal ? { ...item, active: newStatus } : item);
+                await this.saveKeys(newKeys, newStatus ? "키 활성화됨" : "키 비활성화됨");
             },
 
             async removeApiKey(keyVal) {
                 if (!confirm("삭제하시겠습니까?")) return;
                 const newKeys = this.state.apiKeys.filter(k => k.key !== keyVal);
-                try {
-                    await this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).update({
-                        apiKeys: newKeys
-                    });
-                    this.showStatus("키 삭제됨");
-                } catch (e) {
-                    alert("삭제 실패");
-                }
+                await this.saveKeys(newKeys, "키 삭제됨");
             },
 
-            // --- UI UTILS ---
+            async saveKeys(newKeys, msg) {
+                try {
+                    await this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).set({ apiKeys: newKeys }, { merge: true });
+                    this.showStatus(msg);
+                } catch (e) { alert("저장 실패"); }
+            },
+
+            resetForm() {
+                document.getElementById('new-key-value').value = '';
+                document.getElementById('new-key-name').value = '';
+                const btn = document.getElementById('save-key-btn');
+                btn.innerText = "추가";
+                btn.onclick = () => app.addApiKey();
+                btn.classList.add('bg-brand-primary', 'hover:bg-brand-hover');
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            },
+
             toggleMobileMenu() {
                 const sb = document.getElementById('mobile-sidebar');
                 const overlay = document.getElementById('mobile-menu-overlay');
@@ -416,11 +453,7 @@
                 const m = document.getElementById('settings-modal');
                 const c = document.getElementById('settings-modal-content');
                 m.classList.remove('hidden');
-                // Animation
-                setTimeout(() => {
-                    c.classList.remove('scale-95', 'opacity-0');
-                    c.classList.add('scale-100', 'opacity-100');
-                }, 10);
+                setTimeout(() => { c.classList.remove('scale-95', 'opacity-0'); c.classList.add('scale-100', 'opacity-100'); }, 10);
             },
             closeSettings() {
                 const m = document.getElementById('settings-modal');
@@ -442,7 +475,267 @@
             }
         };
 
-        // Start
+        // --- KEYWORD MODULE ---
+        const keywordModule = {
+            CATS: ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "게임", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "인물/블로그", "비영리/사회운동", "여행/이벤트"],
+            CAT_IDS: { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" },
+            currentResults: [],
+            sortKey: null,
+            sortAsc: true,
+
+            render(container) {
+                container.innerHTML = `
+                    <div class="max-w-7xl mx-auto space-y-8">
+                        <div class="text-center space-y-2">
+                             <h2 class="text-2xl font-bold text-white"><span class="text-brand-primary">●</span> YouTube 다국어 키워드 검색기</h2>
+                             <p class="text-dark-muted">카테고리 선택 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-2 text-white font-bold"><i class="fas fa-filter text-brand-primary"></i> 카테고리 선택</div>
+                            <div class="flex flex-wrap gap-2 justify-center" id="kw-categories"></div>
+                        </div>
+                        <div class="bg-dark-card p-6 rounded-xl border border-dark-border space-y-6">
+                            <div class="flex flex-wrap justify-center gap-4 items-center text-sm text-dark-muted">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-calendar"></i> 기준일:
+                                    <input type="date" id="kw-date" class="bg-dark-bg border border-dark-border rounded px-2 py-1 text-white focus:border-brand-primary outline-none">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-globe"></i> 국가:
+                                    <select id="kw-country" class="bg-dark-bg border border-dark-border rounded px-2 py-1 text-white focus:border-brand-primary outline-none"></select>
+                                </div>
+                                <span class="text-xs text-gray-600">(과거 날짜 조회 시 API 소모량 ↑)</span>
+                            </div>
+                            <div class="flex justify-center">
+                                <div class="flex w-full max-w-2xl border-2 border-brand-primary rounded-lg overflow-hidden transition-shadow focus-within:ring-2 focus-within:ring-red-900">
+                                    <input type="text" id="kw-input" placeholder="키워드 입력 (예: 먹방)" class="flex-1 bg-transparent border-none px-4 py-3 text-white placeholder-gray-600 focus:outline-none text-lg">
+                                    <button onclick="keywordModule.search()" class="bg-brand-primary hover:bg-brand-hover text-white px-8 font-bold transition-colors">검색</button>
+                                </div>
+                            </div>
+                        </div>
+                         <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden min-h-[400px]">
+                            <div class="p-4 border-b border-dark-border flex justify-between items-center">
+                                <h3 class="font-bold text-white"><i class="fas fa-list text-brand-primary mr-2"></i>키워드 결과 (100개)</h3>
+                                <div class="flex gap-2">
+                                    <span id="kw-status" class="text-sm text-dark-muted self-center">대기 중</span>
+                                    <button onclick="keywordModule.downloadCSV()" id="kw-csv-btn" class="hidden bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded transition-colors"><i class="fas fa-file-csv mr-1"></i> CSV 저장</button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left text-gray-400">
+                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar">
+                                        <tr>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('rank')">NO</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('channel')">채널명</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('subsRaw')">구독자</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap min-w-[200px]" onclick="keywordModule.sort('korean')">🇰🇷 영상제목</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('views')">조회수</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('comments')">댓글</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('likes')">좋아요</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('date')">게시일</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇺🇸 영어</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇯🇵 일본어</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇨🇳 중국어</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇪🇸 스페인어</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇮🇳 인도어</th>
+                                            <th class="px-4 py-3 whitespace-nowrap">🇷🇺 러시아어</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="kw-results-body"></tbody>
+                                </table>
+                            </div>
+                         </div>
+                    </div>
+                `;
+            },
+            init() {
+                const cBox = document.getElementById('kw-categories');
+                cBox.innerHTML = this.CATS.map(c => `<span onclick="keywordModule.selectCat(this, '${c}')" class="category-pill px-4 py-2 rounded-full bg-dark-card hover:bg-dark-hover cursor-pointer border border-transparent hover:border-brand-primary text-sm text-gray-300 transition-all select-none">${c}</span>`).join('');
+                document.getElementById('kw-date').valueAsDate = new Date();
+                const COUNTRIES = { 'KR': '대한민국', 'US': '미국', 'GB': '영국', 'JP': '일본', 'ES': '스페인', 'IN': '인도', 'RU': '러시아', 'TW': '대만', 'HK': '홍콩', 'ID': '인도네시아' };
+                const cSelect = document.getElementById('kw-country');
+                cSelect.innerHTML = Object.entries(COUNTRIES).map(([code, name]) => `<option value="${code}" ${code === 'KR' ? 'selected' : ''}>${name}</option>`).join('');
+                document.getElementById('kw-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') this.search(); });
+            },
+            selectCat(el, cat) {
+                document.querySelectorAll('#kw-categories .category-pill').forEach(b => {
+                    b.classList.remove('bg-gray-700', 'text-white', 'border-brand-primary');
+                    b.classList.add('bg-dark-card', 'text-gray-300');
+                });
+                el.classList.remove('bg-dark-card', 'text-gray-300');
+                el.classList.add('bg-gray-700', 'text-white', 'border-brand-primary');
+                this.search(null, cat);
+            },
+            async search(queryOverride = null, catOverride = null) {
+                const q = queryOverride !== null ? queryOverride : document.getElementById('kw-input').value;
+                let cat = catOverride;
+                if (!cat) {
+                    const activePill = document.querySelector('#kw-categories .category-pill.bg-gray-700');
+                    if (activePill) cat = activePill.innerText;
+                    else cat = "엔터테인먼트";
+                }
+                const msg = document.getElementById('kw-status');
+                const k = app.getApiKey('youtube');
+                const tk = app.getApiKey('translate');
+                if (!k) return alert("설정에서 YouTube API 키를 먼저 등록해주세요.");
+
+                msg.innerText = "데이터 요청 중...";
+                msg.className = "text-sm text-brand-primary animate-pulse";
+                const dateVal = document.getElementById('kw-date').value;
+                const region = document.getElementById('kw-country').value;
+                const isToday = (dateVal === new Date().toISOString().split('T')[0]);
+                try {
+                    let videoIds = [];
+                    if (q || !isToday) {
+                        let params = `search?part=id&type=video&maxResults=50&key=${k}&regionCode=${region}`;
+                        if (q) params += `&q=${encodeURIComponent(q)}`;
+                        if (!isToday) {
+                            const start = new Date(dateVal + "T00:00:00Z").toISOString();
+                            const end = new Date(dateVal + "T23:59:59Z").toISOString();
+                            params += `&publishedAfter=${start}&publishedBefore=${end}&order=viewCount`;
+                        }
+                        if (!q && cat) {
+                            params += `&videoCategoryId=${this.CAT_IDS[cat]}`;
+                            if (isToday) params += `&order=viewCount`;
+                        }
+                        const r1 = await this.fetchYT(params);
+                        videoIds = r1.items.map(i => i.id.videoId);
+                        if (r1.nextPageToken) {
+                            const r2 = await this.fetchYT(`${params}&pageToken=${r1.nextPageToken}`);
+                            videoIds = [...videoIds, ...r2.items.map(i => i.id.videoId)];
+                        }
+                    } else {
+                        const cid = this.CAT_IDS[cat];
+                        try {
+                            const r1 = await this.fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&maxResults=50&key=${k}`);
+                            videoIds = r1.items.map(i => i.id);
+                            if (r1.nextPageToken) {
+                                const r2 = await this.fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
+                                videoIds = [...videoIds, ...r2.items.map(i => i.id)];
+                            }
+                        } catch {
+                            const r1 = await this.fetchYT(`search?part=id&q=${encodeURIComponent(cat)}&type=video&maxResults=50&key=${k}`);
+                            videoIds = r1.items.map(i => i.id.videoId);
+                        }
+                    }
+                    const uniqueIds = [...new Set(videoIds)].slice(0, 100);
+                    let finalItems = [];
+                    for (let i = 0; i < uniqueIds.length; i += 50) {
+                        const chunk = uniqueIds.slice(i, i + 50).join(',');
+                        const r = await this.fetchYT(`videos?part=snippet,statistics&id=${chunk}&key=${k}`);
+                        finalItems = [...finalItems, ...r.items];
+                    }
+                    const channelIds = [...new Set(finalItems.map(i => i.snippet.channelId))];
+                    const channelStats = {};
+                    for (let i = 0; i < channelIds.length; i += 50) {
+                        const chunk = channelIds.slice(i, i + 50).join(',');
+                        try {
+                            const r = await this.fetchYT(`channels?part=statistics&id=${chunk}&key=${k}`);
+                            r.items.forEach(ch => { channelStats[ch.id] = ch.statistics.subscriberCount; });
+                        } catch (e) { console.error(e); }
+                    }
+                    const titles = finalItems.map(i => i.snippet.title);
+                    let trans = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
+                    if (tk) {
+                        msg.innerText = "번역 API 호출 중...";
+                        trans = await this.doTrans(titles, tk);
+                    }
+                    this.currentResults = finalItems.map((item, i) => {
+                        const s = item.snippet;
+                        const st = item.statistics || {};
+                        const subCount = channelStats[s.channelId] || 0;
+                        return {
+                            rank: i + 1,
+                            korean: s.title,
+                            id: item.id,
+                            channel: s.channelTitle,
+                            channelId: s.channelId,
+                            subsRaw: Number(subCount),
+                            subs: Number(subCount).toLocaleString(),
+                            views: Number(st.viewCount || 0).toLocaleString(),
+                            comments: Number(st.commentCount || 0).toLocaleString(),
+                            likes: Number(st.likeCount || 0).toLocaleString(),
+                            date: (s.publishedAt || "").split('T')[0],
+                            english: trans.en[i] || '-', japanese: trans.ja[i] || '-',
+                            chinese: trans['zh-CN'][i] || '-', spanish: trans.es[i] || '-',
+                            hindi: trans.hi[i] || '-', russian: trans.ru[i] || '-'
+                        };
+                    });
+                    this.updateUI();
+                    msg.innerText = `완료 (${finalItems.length}개)`;
+                    msg.className = "text-sm text-green-500 font-bold";
+                } catch (e) {
+                    msg.innerText = "오류: " + e.message;
+                    msg.className = "text-sm text-red-500 font-bold";
+                    alert("API 오류: " + e.message);
+                }
+            },
+            async fetchYT(path) {
+                const r = await fetch(`https://www.googleapis.com/youtube/v3/${path}`);
+                if (!r.ok) throw new Error("YouTube API Error");
+                return r.json();
+            },
+            async doTrans(txs, k) {
+                const out = {};
+                const langs = ['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'];
+                await Promise.all(langs.map(async l => {
+                    try {
+                        const r = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${k}`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ q: txs, target: l, format: 'text' })
+                        });
+                        const d = await r.json();
+                        out[l] = d.data.translations.map(t => t.translatedText);
+                    } catch { out[l] = Array(txs.length).fill('-'); }
+                }));
+                return out;
+            },
+            updateUI() {
+                const tbody = document.getElementById('kw-results-body');
+                if (!tbody) return;
+                tbody.innerHTML = this.currentResults.map(r => `
+                    <tr class="border-b border-dark-border hover:bg-dark-card transition-colors">
+                        <td class="px-4 py-3 text-center text-dark-muted">${r.rank}</td>
+                        <td class="px-4 py-3"><a href="https://www.youtube.com/channel/${r.channelId}" target="_blank" class="hover:text-white hover:underline transition-colors">${r.channel}</a></td>
+                        <td class="px-4 py-3 text-dark-muted">${r.subs}</td>
+                        <td class="px-4 py-3 min-w-[300px]"><a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" class="text-white hover:text-brand-primary font-medium hover:underline transition-colors block truncate w-full">${r.korean}</a></td>
+                        <td class="px-4 py-3 text-right font-mono text-gray-300">${r.views}</td>
+                        <td class="px-4 py-3 text-right font-mono text-dark-muted">${r.comments}</td>
+                        <td class="px-4 py-3 text-right font-mono text-dark-muted">${r.likes}</td>
+                        <td class="px-4 py-3 text-dark-muted whitespace-nowrap">${r.date}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.english}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.japanese}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.chinese}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.spanish}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.hindi}</td>
+                        <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.russian}</td>
+                    </tr>`).join('');
+                document.getElementById('kw-csv-btn').classList.remove('hidden');
+            },
+            sort(key) {
+                if (this.sortKey === key) this.sortAsc = !this.sortAsc;
+                else { this.sortKey = key; this.sortAsc = true; }
+                this.currentResults.sort((a, b) => {
+                    let va = a[key], vb = b[key];
+                    if (['views', 'comments', 'likes', 'subsRaw', 'rank'].includes(key)) { va = Number(String(va).replace(/,/g, '')) || 0; vb = Number(String(vb).replace(/,/g, '')) || 0; }
+                    if (va < vb) return this.sortAsc ? -1 : 1;
+                    if (va > vb) return this.sortAsc ? 1 : -1;
+                    return 0;
+                });
+                this.updateUI();
+            },
+            downloadCSV() {
+                if (!this.currentResults.length) return alert("데이터 없음");
+                const BOM = "\uFEFF";
+                let csv = BOM + "Rank,Channel,Subscribers,Title,Views,Comments,Likes,Date,English,Japanese,Chinese,Spanish,Hindi,Russian\n";
+                this.currentResults.forEach(r => { csv += `${r.rank},"${r.channel.replace(/"/g, '""')}",${r.subsRaw},"${r.korean.replace(/"/g, '""')}",${r.views.replace(/,/g, '')},${r.comments.replace(/,/g, '')},${r.likes.replace(/,/g, '')},${r.date},"${r.english}","${r.japanese}","${r.chinese}","${r.spanish}","${r.hindi}","${r.russian}"\n`; });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `youtube_keywords_${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+            }
+        };
         window.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
