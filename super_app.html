@@ -1287,7 +1287,9 @@
                 allVideosData: [],
                 channelMetadata: null,
                 savedChannelsData: [],
-                videoSortState: { key: 'publishedAt', dir: 'desc' }
+                videoSortState: { key: 'publishedAt', dir: 'desc' },
+                shortsSortState: { key: 'publishedAt', dir: 'desc' },
+                videoFilter: { type: 'all', search: '' }
             },
             API_BASE_URL: 'https://www.googleapis.com/youtube/v3/',
 
@@ -1336,7 +1338,17 @@
 
                                 <!-- Shorts -->
                                 <div class="bg-dark-card p-4 rounded-xl border border-dark-border hidden" id="va-shortsSection">
-                                    <h3 class="font-bold text-white mb-4">🔥 최신 Shorts</h3>
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="font-bold text-white">🔥 최신 Shorts</h3>
+                                        <div class="flex gap-2 text-xs">
+                                            <select onchange="analysisModule.sortShorts(this.value)" class="bg-dark-bg text-white border border-dark-border rounded px-2 py-1">
+                                                <option value="publishedAt">최신순</option>
+                                                <option value="viewCount">조회수순</option>
+                                                <option value="likeCount">좋아요순</option>
+                                                <option value="commentCount">댓글순</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div class="relative group">
                                         <button class="va-scroll-button left-2 bg-brand-primary text-white" onclick="analysisModule.scrollShorts(-300)">◀</button>
                                         <div id="va-shortsContent" class="flex space-x-4 px-1 overflow-x-auto scrollbar-hide py-2"></div>
@@ -1377,20 +1389,32 @@
                                     </div>
                                 </div>
                                 <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
-                                    <div class="p-4 border-b border-dark-border flex justify-between items-center">
-                                        <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
-                                        <div class="space-x-2"><button onclick="analysisModule.renderVideoList()" class="text-xs bg-dark-bg px-2 py-1 rounded border border-dark-border">새로고침</button></div>
+                                    <div class="p-4 border-b border-dark-border flex flex-col md:flex-row justify-between items-center gap-4">
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
+                                            <button onclick="analysisModule.downloadCSV()" class="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded transition"><i class="fas fa-file-csv mr-1"></i>CSV</button>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <select onchange="analysisModule.filterVideo('type', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
+                                                <option value="all">전체</option>
+                                                <option value="shorts">Shorts (60초 이하)</option>
+                                                <option value="mid">미드폼 (10분 미만)</option>
+                                                <option value="long">롱폼 (10분 이상)</option>
+                                            </select>
+                                            <input type="text" placeholder="제목 검색..." onkeyup="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-32 md:w-48">
+                                        </div>
                                     </div>
                                     <div class="overflow-x-auto">
                                         <table class="min-w-full text-sm text-left text-gray-400">
                                             <thead class="bg-dark-bg text-gray-200 uppercase text-xs">
                                                 <tr>
                                                     <th class="px-4 py-3">No</th>
+                                                    <th class="px-4 py-3">구분</th>
                                                     <th class="px-4 py-3 va-sortable-header" onclick="analysisModule.sortVideo('title')">제목 ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('publishedAt')">게시일 ↕</th>
-                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('viewCount')">조회수 ↕</th>
-                                                    <th class="px-4 py-3 text-right">길이</th>
-                                                    <th class="px-4 py-3 text-center">L/V</th>
+                                                    <th class="px-4 py-3 text-center">조회수<br><span class="text-[10px] text-gray-500">길이</span></th>
+                                                    <th class="px-4 py-3 text-center">좋아요 (★)</th>
+                                                    <th class="px-4 py-3 text-center">댓글 (★)</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="va-videoListBody" class="divide-y divide-dark-border"></tbody>
@@ -1482,7 +1506,7 @@
                 const d = new Date(); d.setDate(d.getDate() - 90);
                 const r = v.filter(x => new Date(x.publishedAt) >= d);
                 if (!r.length) return { avgViews: 0, avgLikes: 0, avgComments: 0 };
-                const s = k => r.reduce((a, b) => a + (b[k] || 0), 0);
+                const s = k => r.reduce((a, b) => a + Number(b[k] || 0), 0);
                 return { avgViews: Math.round(s('viewCount') / r.length), avgLikes: Math.round(s('likeCount') / r.length), avgComments: Math.round(s('commentCount') / r.length) };
             },
 
@@ -1509,11 +1533,73 @@
             renderVideoList() {
                 const b = document.getElementById('va-videoListBody');
                 if (!b) return;
-                const l = [...this.state.allVideosData].sort((a, b) => b[this.state.videoSortState.key] - a[this.state.videoSortState.key]);
-                if (this.state.videoSortState.dir === 'asc') l.reverse();
+
+                let l = [...this.state.allVideosData];
+
+                // Filter
+                if (this.state.videoFilter.type !== 'all') {
+                    l = l.filter(v => {
+                        if (this.state.videoFilter.type === 'shorts') return v.durationSeconds <= 60;
+                        if (this.state.videoFilter.type === 'mid') return v.durationSeconds > 60 && v.durationSeconds < 600;
+                        if (this.state.videoFilter.type === 'long') return v.durationSeconds >= 600;
+                        return true;
+                    });
+                }
+                if (this.state.videoFilter.search) {
+                    l = l.filter(v => v.title.toLowerCase().includes(this.state.videoFilter.search.toLowerCase()));
+                }
+
+                // Sort
+                l.sort((a, b) => {
+                    let va = a[this.state.videoSortState.key], vb = b[this.state.videoSortState.key];
+                    // Handle numeric vs string
+                    if (['viewCount', 'likeCount', 'commentCount', 'durationSeconds'].includes(this.state.videoSortState.key)) {
+                        va = Number(va); vb = Number(vb);
+                    }
+                    if (va < vb) return -1;
+                    if (va > vb) return 1;
+                    return 0;
+                });
+                if (this.state.videoSortState.dir === 'desc') l.reverse();
+
                 document.getElementById('va-totalVideos').innerText = l.length;
-                b.innerHTML = l.map((v, i) => `
-                    <tr class="hover:bg-dark-hover"><td class="px-4 py-3 text-dark-muted">${i + 1}</td><td class="px-4 py-3 text-white truncate max-w-[200px]"><a href="https://youtu.be/${v.videoId}" target="_blank" class="hover:underline">${v.title}</a></td><td class="px-4 py-3 text-right text-dark-muted text-xs">${v.publishedAt.split('T')[0]}</td><td class="px-4 py-3 text-right font-mono text-green-400">${v.viewCount.toLocaleString()}</td><td class="px-4 py-3 text-right text-xs text-dark-muted">${new Date(v.durationSeconds * 1000).toISOString().substr(11, 8)}</td><td class="px-4 py-3 text-center text-xs text-yellow-500">${(v.likeCount / v.viewCount * 100).toFixed(1)}%</td></tr>`).join('');
+
+                b.innerHTML = l.map((v, i) => {
+                    const type = v.durationSeconds <= 60 ? 'Shorts' : (v.durationSeconds < 600 ? '미드폼' : '롱폼');
+                    const badgeColor = type === 'Shorts' ? 'bg-red-500/20 text-red-500' : (type === '미드폼' ? 'bg-blue-500/20 text-blue-500' : 'bg-purple-500/20 text-purple-500');
+                    const starsL = this.getStarRating(v.likeCount, v.viewCount);
+                    const starsC = this.getStarRating(v.commentCount, v.viewCount, true);
+
+                    return `
+                    <tr class="hover:bg-dark-hover border-b border-dark-border group">
+                        <td class="px-4 py-3 text-dark-muted align-top">${i + 1}</td>
+                        <td class="px-4 py-3 align-top"><span class="text-xs px-2 py-1 rounded ${badgeColor}">${type}</span></td>
+                        <td class="px-4 py-3 align-top">
+                            <div class="flex items-start gap-2">
+                                <a href="https://youtu.be/${v.videoId}" target="_blank" class="text-white hover:underline truncate max-w-[200px] block" title="${v.title}">${v.title}</a>
+                                <button onclick="analysisModule.copyLink('https://youtu.be/${v.videoId}')" class="text-dark-muted hover:text-brand-primary opacity-0 group-hover:opacity-100 transition"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <button onclick="analysisModule.toggleDetail('${v.videoId}')" class="text-xs text-brand-primary hover:underline mt-1">상세 정보 (태그/설명)</button>
+                            <div id="detail-${v.videoId}" class="hidden mt-2 text-xs bg-black/20 p-2 rounded text-gray-400">
+                                <p class="mb-1"><span class="text-white font-bold">Tags:</span> ${v.tags ? v.tags.join(', ') : '없음'}</p>
+                                <p class="whitespace-pre-wrap h-20 overflow-y-auto custom-scrollbar border-t border-dark-border pt-1 mt-1">${v.description || '설명 없음'}</p>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-right text-dark-muted text-xs align-top whitespace-nowrap">${v.publishedAt.split('T')[0]}</td>
+                        <td class="px-4 py-3 text-right align-top">
+                            <div class="font-mono text-green-400">${v.viewCount.toLocaleString()}</div>
+                            <div class="text-xs text-dark-muted">${new Date(v.durationSeconds * 1000).toISOString().substr(11, 8)}</div>
+                        </td>
+                        <td class="px-4 py-3 text-center align-top">
+                            <div class="text-yellow-500 text-xs tracking-tighter">${'★'.repeat(starsL)}${'☆'.repeat(5 - starsL)}</div>
+                            <div class="text-[10px] text-dark-muted">${v.likeCount.toLocaleString()} (${(v.likeCount / v.viewCount * 100).toFixed(1)}%)</div>
+                        </td>
+                        <td class="px-4 py-3 text-center align-top">
+                            <div class="text-blue-400 text-xs tracking-tighter">${'★'.repeat(starsC)}${'☆'.repeat(5 - starsC)}</div>
+                            <div class="text-[10px] text-dark-muted">${v.commentCount.toLocaleString()} (${(v.commentCount / v.viewCount * 100).toFixed(1)}%)</div>
+                        </td>
+                    </tr>`;
+                }).join('');
             },
             switchTab(t) {
                 document.querySelectorAll('.va-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1529,7 +1615,21 @@
                 if (!b) return;
                 if (!this.state.savedChannelsData.length) { document.getElementById('va-emptySavedMsg').classList.remove('hidden'); return; }
                 document.getElementById('va-emptySavedMsg').classList.add('hidden');
-                b.innerHTML = this.state.savedChannelsData.map(d => `<tr class="hover:bg-dark-hover cursor-pointer" onclick="analysisModule.loadSaved('${d.metadata.id}')"><td class="px-4 py-3 text-white">${d.metadata.title}</td><td class="px-4 py-3 text-center text-dark-muted">${Number(d.metadata.subscribers).toLocaleString()}</td><td class="px-4 py-3 text-center text-xs text-dark-muted">${d.lastUpdated.split('T')[0]}</td><td class="px-4 py-3 text-center"><button class="text-red-500 hover:text-white" onclick="event.stopPropagation(); analysisModule.deleteSaved('${d.metadata.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+                b.innerHTML = this.state.savedChannelsData.map(d => `
+                    <tr class="hover:bg-dark-hover cursor-pointer" onclick="analysisModule.loadSaved('${d.metadata.id}')">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <img src="${d.metadata.thumbnail || 'https://placehold.co/40'}" class="w-10 h-10 rounded-full bg-gray-700 object-cover">
+                                <span class="text-white font-bold">${d.metadata.title}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-center text-dark-muted">${Number(d.metadata.subscribers).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-center text-xs text-dark-muted">${d.lastUpdated.split('T')[0]}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button class="text-brand-primary hover:text-white mr-2" onclick="event.stopPropagation(); analysisModule.refreshSaved('${d.metadata.id}')" title="정보 갱신"><i class="fas fa-sync-alt"></i></button>
+                            <button class="text-red-500 hover:text-white" onclick="event.stopPropagation(); analysisModule.deleteSaved('${d.metadata.id}')" title="삭제"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`).join('');
             },
             async loadSaved(id) {
                 const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
@@ -1599,17 +1699,114 @@
             },
             renderShorts() {
                 const c = document.getElementById('va-shortsContent'); if (!c) return; c.innerHTML = '';
-                const s = this.state.allVideosData.filter(v => v.durationSeconds <= 60);
+                let s = this.state.allVideosData.filter(v => v.durationSeconds <= 60);
                 if (!s.length) { document.getElementById('va-shortsSection').classList.add('hidden'); return; }
                 document.getElementById('va-shortsSection').classList.remove('hidden');
-                s.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+                // Sort Shorts
+                const sk = this.state.shortsSortState.key;
+                s.sort((a, b) => {
+                    let va = a[sk], vb = b[sk];
+                    if (['viewCount', 'likeCount', 'commentCount'].includes(sk)) { va = Number(va); vb = Number(vb); }
+                    if (va < vb) return -1; if (va > vb) return 1; return 0;
+                });
+                if (this.state.shortsSortState.dir === 'desc') s.reverse();
+
                 s.forEach(v => {
-                    const el = document.createElement('div'); el.className = 'inline-block w-40 bg-dark-bg rounded-lg overflow-hidden shadow-lg flex-shrink-0 border border-dark-border hover:border-brand-primary transition';
-                    el.innerHTML = `<div class="relative pb-[177%]"><a href="https://youtu.be/${v.videoId}" target="_blank"><img src="${v.thumbnail}" class="absolute h-full w-full object-cover"></a><div class="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent p-2"><p class="text-xs font-bold text-white truncate">${v.title}</p><p class="text-[10px] text-gray-400">👁️ ${v.viewCount.toLocaleString()}</p></div></div>`;
+                    const el = document.createElement('div'); el.className = 'inline-block w-48 bg-dark-bg rounded-lg overflow-hidden shadow-lg flex-shrink-0 border border-dark-border hover:border-brand-primary transition';
+                    el.innerHTML = `
+                        <div class="relative pb-[177%]">
+                            <a href="https://youtu.be/${v.videoId}" target="_blank">
+                                <img src="${v.thumbnail}" class="absolute h-full w-full object-cover">
+                            </a>
+                            <div class="absolute bottom-0 w-full bg-gradient-to-t from-black/95 to-transparent p-2">
+                                <p class="text-xs font-bold text-white truncate mb-1">${v.title}</p>
+                                <div class="grid grid-cols-2 gap-1 text-[10px] text-gray-300">
+                                    <span>👁️ ${Number(v.viewCount).toLocaleString()}</span>
+                                    <span class="text-right">👍 ${Number(v.likeCount).toLocaleString()}</span>
+                                    <span>💬 ${Number(v.commentCount).toLocaleString()}</span>
+                                    <span class="text-right">${v.publishedAt.split('T')[0]}</span>
+                                </div>
+                            </div>
+                        </div>`;
                     c.appendChild(el);
                 });
             },
-            scrollShorts(v) { document.getElementById('va-shortsContent').scrollBy({ left: v, behavior: 'smooth' }); }
+            scrollShorts(v) { document.getElementById('va-shortsContent').scrollBy({ left: v, behavior: 'smooth' }); },
+
+            // --- Helpers ---
+            sortShorts(k) {
+                if (this.state.shortsSortState.key === k) this.state.shortsSortState.dir = this.state.shortsSortState.dir === 'desc' ? 'asc' : 'desc';
+                else { this.state.shortsSortState.key = k; this.state.shortsSortState.dir = 'desc'; }
+                this.renderShorts();
+            },
+            filterVideo(t, v) { this.state.videoFilter[t] = v; this.renderVideoList(); },
+            toggleDetail(id) { document.getElementById(`detail-${id}`).classList.toggle('hidden'); },
+            copyLink(url) {
+                const t = document.createElement('textarea'); t.value = url; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
+                app.showStatus("링크 복사 완료");
+            },
+            getStarRating(val, views, isComment = false) {
+                if (!views) return 0;
+                const r = (val / views) * 100;
+                // Heuristic thresholds
+                if (isComment) {
+                    // Comment rate: usually lower. 0-0.5%
+                    if (r > 0.5) return 5; if (r > 0.3) return 4; if (r > 0.1) return 3; if (r > 0.05) return 2; return 1;
+                } else {
+                    // Like rate: usually 4% is great
+                    if (r > 5) return 5; if (r > 3.5) return 4; if (r > 2) return 3; if (r > 1) return 2; return 1;
+                }
+            },
+            downloadCSV() {
+                let l = [...this.state.allVideosData];
+                // Apply current filter to CSV? Or download all? User said "Entire list", usually implies all or current view. Let's do current view.
+                if (this.state.videoFilter.type !== 'all') {
+                    l = l.filter(v => {
+                        if (this.state.videoFilter.type === 'shorts') return v.durationSeconds <= 60;
+                        if (this.state.videoFilter.type === 'mid') return v.durationSeconds > 60 && v.durationSeconds < 600;
+                        if (this.state.videoFilter.type === 'long') return v.durationSeconds >= 600;
+                        return true;
+                    });
+                }
+                if (this.state.videoFilter.search) l = l.filter(v => v.title.toLowerCase().includes(this.state.videoFilter.search.toLowerCase()));
+
+                const BOM = "\uFEFF";
+                let csv = BOM + "ID,Title,Published,Duration(sec),Views,Likes,Comments,URL,Tags,Description\n";
+                l.forEach(v => {
+                    const clean = t => String(t || '').replace(/"/g, '""');
+                    csv += `${v.videoId},"${clean(v.title)}",${v.publishedAt},${v.durationSeconds},${v.viewCount},${v.likeCount},${v.commentCount},https://youtu.be/${v.videoId},"${clean(v.tags && v.tags.join(','))}","${clean(v.description)}"\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `videos_${this.state.channelMetadata?.title || 'export'}.csv`; a.click();
+            },
+            async refreshSaved(id) {
+                const k = app.getApiKey('youtube');
+                if (!k) return alert("API Key Missing");
+                // Temporarily override ID input to allow startAnalysis to run or reuse logic
+                // startAnalysis reads from input. Better to call internal fetch logic.
+                try {
+                    const chData = await this.fetchCh(id, k);
+                    if (!chData?.items?.length) throw new Error("채널 없음");
+                    const item = chData.items[0];
+                    const meta = { id: item.id, title: item.snippet.title, description: item.snippet.description, subscribers: item.statistics.subscriberCount, totalViews: item.statistics.viewCount, totalVideos: item.statistics.videoCount, thumbnail: item.snippet.thumbnails.default?.url || '', publishedAt: item.snippet.publishedAt, country: item.snippet.country || 'N/A' };
+                    let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, k);
+                    videos = videos.slice(0, 200);
+                    const sMap = await this.fetchStats(videos.map(v => v.videoId), k);
+                    videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), durationSeconds: this.parseDur(s.duration) }; });
+                    const stats90 = this.calc90(videos);
+                    const safe = JSON.parse(JSON.stringify(meta));
+
+                    // Preserve Note
+                    const oldDoc = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(meta.id).get();
+                    let note = {};
+                    if (oldDoc.exists && oldDoc.data().analysisNote) note = oldDoc.data().analysisNote;
+
+                    await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(meta.id).set({ metadata: safe, videos: JSON.parse(JSON.stringify(videos)), stats90, lastUpdated: new Date().toISOString(), analysisNote: note }, { merge: true });
+                    await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(meta.id).set({ metadata: safe, stats90, lastUpdated: new Date().toISOString() });
+                    alert("갱신 완료");
+                } catch (e) { alert("갱신 실패: " + e.message); }
+            }
         };
 
 
