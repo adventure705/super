@@ -582,38 +582,42 @@
             <div class="search-box">
                 <input type="text" id="keyword-input" placeholder="키워드 입력 (예: 먹방)">
                 <button id="search-btn">검색</button>
-                <button id="csv-btn" style="background:#2ecc71; margin-left:10px; display:none;"
-                    onclick="downloadCSV()">CSV 저장</button>
             </div>
         </section>
 
         <section class="results-section">
-            <div class="section-title"><span class="icon">●</span> 키워드 결과 (100개)</div>
-            <div class="status-message" id="status-message">로딩 중...</div>
-            <div class="table-container">
-                <table id="results-table">
-                    <thead>
-                        <tr>
-                            <th>NO</th>
-                            <th>채널명</th>
-                            <th>구독자수</th>
-                            <th>🇰🇷 영상제목 (LINK)</th>
-                            <th>조회수</th>
-                            <th>댓글수</th>
-                            <th>좋아요</th>
-                            <th>게시일</th>
-                            <th>🇺🇸 영어</th>
-                            <th>🇯🇵 일본어</th>
-                            <th>🇨🇳 중국어</th>
-                            <th>🇪🇸 스페인어</th>
-                            <th>🇮🇳 인도어</th>
-                            <th>🇷🇺 러시아어</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </section>
+            <section class="results-section">
+                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><span class="icon">●</span> 키워드 결과 (100개)</span>
+                    <button id="csv-btn"
+                        style="background:#2ecc71; font-size:0.8rem; padding:5px 10px; border-radius:4px; display:none;"
+                        onclick="downloadCSV()">💾 CSV 저장</button>
+                </div>
+                <div class="status-message" id="status-message">로딩 중...</div>
+                <div class="table-container">
+                    <table id="results-table">
+                        <thead>
+                            <tr>
+                                <th>NO</th>
+                                <th>채널명</th>
+                                <th>구독자수</th>
+                                <th>🇰🇷 영상제목 (LINK)</th>
+                                <th>조회수</th>
+                                <th>댓글수</th>
+                                <th>좋아요</th>
+                                <th>게시일</th>
+                                <th>🇺🇸 영어</th>
+                                <th>🇯🇵 일본어</th>
+                                <th>🇨🇳 중국어</th>
+                                <th>🇪🇸 스페인어</th>
+                                <th>🇮🇳 인도어</th>
+                                <th>🇷🇺 러시아어</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
     </div>
 
     <!-- API Modal -->
@@ -712,7 +716,7 @@
         // Hardcoded Default
         let firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
 
-        const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "여행/이벤트", "게임", "인물/블로그", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "비영리/사회운동"];
+        const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "게임", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "인물/블로그", "비영리/사회운동", "여행/이벤트"];
         const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
         let db, auth; // db is Firestore instance now
 
