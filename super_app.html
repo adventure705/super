@@ -1402,6 +1402,7 @@
                                         </div>
                                         <div>
                                             <h3 class="va-note-section-title"># 콘텐츠 특성</h3>
+                                            <label class="va-note-label">주제 및 소재</label><input type="text" id="note_topic" class="va-note-input">
                                             <label class="va-note-label">장르</label><input type="text" id="note_genre" class="va-note-input">
                                             <label class="va-note-label">톤앤매너</label><input type="text" id="note_tone" class="va-note-input">
                                             <label class="va-note-label">스타일</label><textarea id="note_style" class="va-note-input h-10"></textarea>
@@ -1802,13 +1803,13 @@
             async loadNote(id) {
                 const d = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
                 const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
-                if (d.exists && d.data().analysisNote) { const n = d.data().analysisNote; set('note_summary', n.summary); set('note_pros', n.pros); set('note_cons', n.cons); set('note_genre', n.genre); set('note_tone', n.tone); set('note_style', n.style); set('note_audience', n.audience); set('note_ad_domain', n.ad_domain); set('note_ad_type', n.ad_type); set('note_engagement_memo', n.engagement_memo); }
+                if (d.exists && d.data().analysisNote) { const n = d.data().analysisNote; set('note_summary', n.summary); set('note_pros', n.pros); set('note_cons', n.cons); set('note_topic', n.topic); set('note_genre', n.genre); set('note_tone', n.tone); set('note_style', n.style); set('note_audience', n.audience); set('note_ad_domain', n.ad_domain); set('note_ad_type', n.ad_type); set('note_engagement_memo', n.engagement_memo); }
                 else { document.querySelectorAll('.va-note-input').forEach(i => i.value = ''); }
             },
             async saveNote(suppressAlert) {
                 if (!this.state.channelMetadata) return;
                 const get = (k) => document.getElementById(k)?.value || '';
-                const note = { summary: get('note_summary'), pros: get('note_pros'), cons: get('note_cons'), genre: get('note_genre'), tone: get('note_tone'), style: get('note_style'), audience: get('note_audience'), ad_domain: get('note_ad_domain'), ad_type: get('note_ad_type'), engagement_memo: get('note_engagement_memo') };
+                const note = { summary: get('note_summary'), pros: get('note_pros'), cons: get('note_cons'), topic: get('note_topic'), genre: get('note_genre'), tone: get('note_tone'), style: get('note_style'), audience: get('note_audience'), ad_domain: get('note_ad_domain'), ad_type: get('note_ad_type'), engagement_memo: get('note_engagement_memo') };
                 await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(this.state.channelMetadata.id).set({ analysisNote: note }, { merge: true });
                 if (!suppressAlert) alert("저장 완료");
             },
@@ -1820,13 +1821,13 @@
                 btn.innerText = "분석 중..."; btn.disabled = true;
                 try {
                     const meta = this.state.channelMetadata;
-                    const prompt = `Analyze YouTube channel '${meta.title}' (${meta.subscribers} subs). Description: ${meta.description}. Provide JSON: { summary, pros, cons, genre, tone, style, audience, ad_domain, ad_type, engagement_memo } in Korean.`;
+                    const prompt = `Analyze YouTube channel '${meta.title}' (${meta.subscribers} subs). Description: ${meta.description}. Provide JSON: { summary, pros, cons, topic, genre, tone, style, audience, ad_domain, ad_type, engagement_memo } in Korean. 'topic' should be brief keywords.`;
                     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${gk}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
                     const j = await r.json();
                     const text = j.candidates[0].content.parts[0].text.replace(/\`\`\`json|\`\`\`/g, '').trim();
                     const res = JSON.parse(text);
                     const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
-                    set('note_summary', res.summary); set('note_pros', res.pros); set('note_cons', res.cons); set('note_genre', res.genre); set('note_tone', res.tone); set('note_style', res.style); set('note_audience', res.audience); set('note_ad_domain', res.ad_domain); set('note_ad_type', res.ad_type); set('note_engagement_memo', res.engagement_memo);
+                    set('note_summary', res.summary); set('note_pros', res.pros); set('note_cons', res.cons); set('note_topic', res.topic); set('note_genre', res.genre); set('note_tone', res.tone); set('note_style', res.style); set('note_audience', res.audience); set('note_ad_domain', res.ad_domain); set('note_ad_type', res.ad_type); set('note_engagement_memo', res.engagement_memo);
                     await this.saveNote(true); // Auto-save
                 } catch (e) { console.error(e); if (!isAuto) alert("Error: " + e.message); } finally { btn.innerHTML = '<i class="fas fa-robot"></i> Gemini 자동 분석'; btn.disabled = false; }
             },
