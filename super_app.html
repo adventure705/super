@@ -1075,22 +1075,14 @@
                 const name = document.getElementById('new-category-input').value.trim();
                 if (!name || this.state.categories.includes(name)) return;
                 const newCats = [...this.state.categories, name];
-                // Optimistic Update
-                this.state.categories = newCats;
-                this.render(document.getElementById('main-content'));
-                document.getElementById('new-category-input').value = '';
-
                 await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+                // Listener will trigger render and update state
                 // Listener will confirm
             },
 
             async deleteCategory(name) {
                 if (!confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) return;
                 const newCats = this.state.categories.filter(c => c !== name);
-
-                // Optimistic
-                this.state.categories = newCats;
-                this.render(document.getElementById('main-content'));
 
                 await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
                 // Reset channels but keep them
@@ -1107,9 +1099,15 @@
             async updateCategoryName(idx, newName) {
                 if (!newName || newName === this.state.categories[idx]) return;
                 const oldName = this.state.categories[idx];
-                const newCats = [...this.state.categories];
-                newCats[idx] = newName;
-                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+
+                // Read fresh first to avoid race conditions
+                const doc = await app.db.collection('global_data').doc('channel_categories').get();
+                let currentCats = doc.exists ? (doc.data().names || ['미분류']) : ['미분류'];
+
+                if (idx >= currentCats.length) return; // Safety check
+
+                currentCats[idx] = newName;
+                await app.db.collection('global_data').doc('channel_categories').set({ names: currentCats }, { merge: true });
 
                 // Update channels
                 const batch = app.db.batch();
@@ -1611,7 +1609,11 @@
                     });
                 }
                 if (this.state.videoFilter.views) {
-                    l = l.filter(v => Number(v.viewCount) >= Number(this.state.videoFilter.views));
+                    const minViews = Number(this.state.videoFilter.views);
+                    l = l.filter(v => {
+                        const count = Number(v.viewCount); // Ensure number
+                        return count >= minViews;
+                    });
                 }
                 if (this.state.videoFilter.ratingL) {
                     l = l.filter(v => this.getStarRating(v.likeCount, v.viewCount) >= Number(this.state.videoFilter.ratingL));
@@ -1741,7 +1743,15 @@
                 if (s.exists && s.data().videos && s.data().videos.length > 0) {
                     const d = s.data();
                     this.state.channelMetadata = d.metadata;
-                    this.state.allVideosData = d.videos || [];
+                    this.state.channelMetadata = d.metadata;
+                    // Ensure numeric types for saved data compatibility
+                    this.state.allVideosData = (d.videos || []).map(v => ({
+                        ...v,
+                        viewCount: Number(v.viewCount || 0),
+                        likeCount: Number(v.likeCount || 0),
+                        commentCount: Number(v.commentCount || 0),
+                        durationSeconds: Number(v.durationSeconds || 0)
+                    }));
 
                     // Reset filter/sort for freshness
                     this.state.videoFilter = { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0 };
