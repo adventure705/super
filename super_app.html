@@ -534,10 +534,10 @@
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('rank')">NO</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('channel')">채널명</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('subsRaw')">구독자</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap min-w-[200px]" onclick="keywordModule.sort('korean')">🇰🇷 영상제목</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('views')">조회수</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('comments')">댓글</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('likes')">좋아요</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap min-w-[200px]" onclick="keywordModule.sort('korean')">🇰🇷 영상제목</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('date')">게시일</th>
                                             <th class="px-4 py-3 whitespace-nowrap">🇺🇸 영어</th>
                                             <th class="px-4 py-3 whitespace-nowrap">🇯🇵 일본어</th>
@@ -723,10 +723,10 @@
                         <td class="px-4 py-3 text-center text-dark-muted">${r.rank}</td>
                         <td class="px-4 py-3"><a href="https://www.youtube.com/channel/${r.channelId}" target="_blank" class="hover:text-white hover:underline transition-colors">${r.channel}</a></td>
                         <td class="px-4 py-3 text-dark-muted">${r.subs}</td>
-                        <td class="px-4 py-3 min-w-[300px]"><a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" class="text-white hover:text-brand-primary font-medium hover:underline transition-colors block truncate w-full">${r.korean}</a></td>
                         <td class="px-4 py-3 text-right font-mono text-gray-300">${r.views}</td>
                         <td class="px-4 py-3 text-right font-mono text-dark-muted">${r.comments}</td>
                         <td class="px-4 py-3 text-right font-mono text-dark-muted">${r.likes}</td>
+                        <td class="px-4 py-3 min-w-[300px]"><a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" class="text-white hover:text-brand-primary font-medium hover:underline transition-colors block truncate w-full">${r.korean}</a></td>
                         <td class="px-4 py-3 text-dark-muted whitespace-nowrap">${r.date}</td>
                         <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.english}</td>
                         <td class="px-4 py-3 text-xs text-dark-muted truncate max-w-[150px]">${r.japanese}</td>
