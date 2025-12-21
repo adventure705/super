@@ -1307,8 +1307,61 @@
                 if (!days || days === 'N/A' || total === 0) return '-';
                 if (days < 1) return `1일당 ${(1 / Number(days)).toFixed(1)}개`;
                 return `${Math.round(Number(days))}일당 1개`;
+            },
+
+            setupScrollSync() {
+                const topScroll = document.getElementById('ch-top-scroll');
+                const topScrollContent = document.getElementById('ch-top-scroll-content');
+                const tableContainer = document.getElementById('ch-table-container');
+                const table = document.getElementById('ch-result-table');
+
+                if (topScroll && tableContainer && table && topScrollContent) {
+                    // Update width
+                    const updateWidth = () => {
+                        topScrollContent.style.width = table.scrollWidth + 'px';
+                    };
+                    updateWidth();
+                    // Resize observer to keep widths in sync
+                    new ResizeObserver(updateWidth).observe(table);
+
+                    // Sync scrolls
+                    let isSyncing = false;
+                    topScroll.onscroll = () => {
+                        if (!isSyncing) {
+                            isSyncing = true;
+                            tableContainer.scrollLeft = topScroll.scrollLeft;
+                        }
+                        isSyncing = false;
+                    };
+                    tableContainer.onscroll = () => {
+                        if (!isSyncing) {
+                            isSyncing = true;
+                            topScroll.scrollLeft = tableContainer.scrollLeft;
+                        }
+                        isSyncing = false;
+                    };
+                }
             }
         };
+
+        // --- Global Scroll-to-Top Button ---
+        // (Inserted dynamically by app.init or present in HTML)
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.createElement('button');
+            btn.id = 'scrollTopBtn';
+            btn.className = 'fixed bottom-6 right-6 w-12 h-12 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-opacity opacity-0 pointer-events-none z-[100]';
+            btn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+            btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.body.appendChild(btn);
+
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    btn.classList.remove('opacity-0', 'pointer-events-none');
+                } else {
+                    btn.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+        });
 
 
         // --- ANALYSIS MODULE --- (Ported from analysis.html)
