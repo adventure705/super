@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super App: All-in-One Tool</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#121212',
+                            sidebar: '#1e1e1e',
+                            card: '#252525',
+                            border: '#333333',
+                            hover: '#3a3a3a',
+                            text: '#e0e0e0',
+                            muted: '#a0a0a0'
+                        },
+                        brand: {
+                            primary: '#ef4444', // Red for YouTube style
+                            hover: '#dc2626'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .content-area-height {
+            height: calc(100vh - 64px);
+        }
+
+        @media (max-width: 768px) {
+            .content-area-height {
+                height: calc(100vh - 56px);
+            }
+        }
+    </style>
+    <!-- Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-dark-bg text-dark-text overflow-hidden">
+
+    <div class="flex h-screen w-full">
+        <!-- Sidebar (Desktop) -->
+        <aside
+            class="hidden md:flex flex-col w-64 bg-dark-sidebar border-r border-dark-border transition-all duration-300">
+            <div class="flex items-center justify-center h-16 border-b border-dark-border">
+                <h1 class="text-xl font-bold text-brand-primary"><i class="fab fa-youtube mr-2"></i>Super Tool</h1>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto py-4">
+                <ul class="space-y-1 px-2" id="desktop-menu">
+                    <!-- Menu Items injected by JS -->
+                </ul>
+            </nav>
+
+            <div class="border-t border-dark-border p-4">
+                <button onclick="app.openSettings()"
+                    class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors">
+                    <i class="fas fa-cog w-5 h-5 mr-3"></i> API 설정
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <!-- Mobile Header -->
+            <header
+                class="md:hidden flex items-center justify-between h-14 bg-dark-sidebar border-b border-dark-border px-4 z-20">
+                <h1 class="text-lg font-bold text-brand-primary">Super Tool</h1>
+                <button onclick="app.toggleMobileMenu()" class="text-white focus:outline-none">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </header>
+
+            <!-- Mobile Sidebar Overlay -->
+            <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden"
+                onclick="app.toggleMobileMenu()"></div>
+            <div id="mobile-sidebar"
+                class="fixed inset-y-0 left-0 w-64 bg-dark-sidebar border-r border-dark-border z-40 transform -translate-x-full transition-transform duration-300 md:hidden">
+                <div class="flex items-center justify-between h-14 border-b border-dark-border px-4">
+                    <h1 class="text-lg font-bold text-white">메뉴</h1>
+                    <button onclick="app.toggleMobileMenu()" class="text-gray-400 hover:text-white"><i
+                            class="fas fa-times"></i></button>
+                </div>
+                <nav class="flex-1 overflow-y-auto py-4">
+                    <ul class="space-y-1 px-2" id="mobile-menu-list">
+                        <!-- Menu Items -->
+                    </ul>
+                </nav>
+                <div class="border-t border-dark-border p-4">
+                    <button onclick="app.openSettings(); app.toggleMobileMenu();"
+                        class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors">
+                        <i class="fas fa-cog w-5 h-5 mr-3"></i> API 설정
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <main class="flex-1 overflow-auto bg-dark-bg p-4 md:p-8 relative" id="main-content">
+                <!-- Dynamic Content Loaded Here -->
+                <div class="flex flex-col items-center justify-center h-full text-center text-dark-muted">
+                    <i class="fas fa-rocket text-6xl mb-4 text-brand-primary opacity-50"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">환영합니다!</h2>
+                    <p>왼쪽 메뉴에서 원하는 기능을 선택하세요.</p>
+                </div>
+            </main>
+
+            <!-- Status Bar -->
+            <div id="status-bar"
+                class="absolute bottom-4 right-8 bg-dark-card border border-dark-border px-3 py-1 rounded-full text-xs text-dark-muted opacity-0 transition-opacity duration-500 pointer-events-none">
+                <i class="fas fa-sync fa-spin mr-1"></i> 동기화 중...
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal"
+        class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+        <div class="bg-dark-sidebar w-full max-w-2xl rounded-xl shadow-2xl border border-dark-border transform transition-all scale-95 opacity-0"
+            id="settings-modal-content">
+            <div class="flex justify-between items-center p-6 border-b border-dark-border">
+                <h2 class="text-xl font-bold text-white"><i class="fas fa-key mr-2 text-brand-primary"></i>통합 설정</h2>
+                <div class="flex gap-2">
+                    <span id="auth-status"
+                        class="text-xs px-2 py-1 rounded bg-green-900 text-green-300 border border-green-700">익명
+                        로그인됨</span>
+                    <button onclick="app.closeSettings()" class="text-gray-400 hover:text-white transition-colors"><i
+                            class="fas fa-times text-xl"></i></button>
+                </div>
+            </div>
+
+            <div class="p-6 overflow-y-auto max-h-[70vh]">
+                <!-- API Keys Manager -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold text-white mb-4 border-l-4 border-brand-primary pl-3">API 키 관리</h3>
+                    <p class="text-sm text-dark-muted mb-4">모든 기능에서 공통으로 사용할 API 키를 관리합니다. 변경 시 즉시 모든 기기에 동기화됩니다.</p>
+
+                    <div class="space-y-4" id="api-keys-list">
+                        <!-- Keys injected by JS -->
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-dark-border flex gap-3">
+                        <select id="new-key-type"
+                            class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary w-1/3">
+                            <option value="youtube">Youtube API</option>
+                            <option value="gemini">Gemini API</option>
+                            <option value="translate">Translate API</option>
+                        </select>
+                        <input type="text" id="new-key-value"
+                            class="bg-dark-card border border-dark-border text-white text-sm rounded-lg p-2.5 focus:ring-brand-primary focus:border-brand-primary flex-1"
+                            placeholder="새 API 키 값 입력">
+                        <button onclick="app.addApiKey()"
+                            class="bg-brand-primary hover:bg-brand-hover text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center transition-colors">추가</button>
+                    </div>
+                </div>
+
+                <!-- Global Data Management (Mockup for now) -->
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4 border-l-4 border-blue-500 pl-3">데이터 관리</h3>
+                    <div class="bg-dark-card p-4 rounded-lg border border-dark-border">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-300">총 저장된 데이터 항목:</span>
+                            <span class="text-sm font-mono text-brand-primary" id="total-data-count">0</span>
+                        </div>
+                        <p class="text-xs text-dark-muted">모든 데이터는 Firestore 'global_data' 컬렉션에 단일 계정(master) 기준으로
+                            저장됩니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        // --- 1. CONFIGURATION ---
+        const MASTER_DOC_ID = 'master_settings'; // Single document for all settings/keys
+        const DATA_COLLECTION = 'global_data';
+
+        // Modules Definition (Will be expanded later with real content)
+        const MODULES = [
+            { id: 'home', name: '홈', icon: 'fas fa-home' },
+            { id: 'channel', name: '채널 분석', icon: 'fas fa-tv', file: 'channel.html' },
+            { id: 'analysis', name: '영상 분석', icon: 'fas fa-chart-line', file: 'analysis.html' },
+            { id: 'comment', name: '댓글 분석', icon: 'fas fa-comments', file: 'comment.html' },
+            { id: 'keyword', name: '키워드 검색', icon: 'fas fa-search', file: 'keyword.html' },
+            { id: 'estimate', name: '수익 예측', icon: 'fas fa-coins', file: 'estimate.html' },
+        ];
+
+        // --- 2. APP CORE ---
+        const app = {
+            db: null,
+            state: {
+                apiKeys: [], // [{ type, key, id, name }]
+                currentModule: null
+            },
+
+            async init() {
+                await this.initFirebase();
+                this.renderSidebar();
+                this.setupEventListeners();
+                this.listenToSettings();
+            },
+
+            async initFirebase() {
+                try {
+                    const r = await fetch('firebase-config.json');
+                    if (!r.ok) throw new Error("No config");
+                    const config = await r.json();
+                    firebase.initializeApp(config);
+                    this.db = firebase.firestore();
+                    await firebase.auth().signInAnonymously();
+                    console.log("Firebase Connected");
+                    document.getElementById('auth-status').innerText = "Ver: Single User Mode";
+                } catch (e) {
+                    console.error("Firebase Init Fail", e);
+                    alert("Firebase 설정 로드 실패. firebase-config.json을 확인하세요.");
+                }
+            },
+
+            renderSidebar() {
+                const mkItem = (m) => `
+                    <li>
+                        <button onclick="app.loadModule('${m.id}')" id="btn-${m.id}" class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors group">
+                            <i class="${m.icon} w-5 h-5 mr-3 text-gray-500 group-hover:text-brand-primary transition-colors"></i> 
+                            ${m.name}
+                        </button>
+                    </li>
+                `;
+                const html = MODULES.map(mkItem).join('');
+                document.getElementById('desktop-menu').innerHTML = html;
+                document.getElementById('mobile-menu-list').innerHTML = html;
+            },
+
+            loadModule(id) {
+                // UI Highlight
+                document.querySelectorAll('nav button').forEach(b => {
+                    b.classList.remove('bg-dark-hover', 'text-white');
+                    b.querySelector('i').classList.remove('text-brand-primary');
+                });
+                const btns = document.querySelectorAll(`#btn-${id}`);
+                btns.forEach(b => {
+                    b.classList.add('bg-dark-hover', 'text-white');
+                    b.querySelector('i').classList.add('text-brand-primary');
+                });
+
+                // Close Mobile Menu
+                document.getElementById('mobile-sidebar').classList.add('-translate-x-full');
+                document.getElementById('mobile-menu-overlay').classList.add('hidden');
+
+                // Content Loading
+                const main = document.getElementById('main-content');
+
+                if (id === 'home') {
+                    main.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-full text-center text-dark-muted">
+                            <i class="fas fa-rocket text-6xl mb-4 text-brand-primary opacity-50"></i>
+                            <h2 class="text-2xl font-bold text-white mb-2">환영합니다!</h2>
+                            <p>모든 유튜브 분석 도구가 이곳에 통합되었습니다.</p>
+                        </div>`;
+                    return;
+                }
+
+                // Placeholder for now - Real implementation will fetch content or iframe
+                // Ideally, we refactor existing HTMLs into JS Modules.
+                // For this step, we'll show a "Preparing" message.
+                // or IFRAME approach for quick integration? No, user wants ONE app.
+                // We will start emptying content and ask to migrate logic. 
+                // BUT for now, let's just put a placeholder card.
+
+                main.innerHTML = `
+                    <div class="animate-pulse flex flex-col items-center justify-center h-full">
+                        <div class="text-xl text-white mb-4"><i class="fas fa-spinner fa-spin mr-2"></i> ${MODULES.find(m => m.id === id).name} 로딩 중...</div>
+                        <p class="text-sm text-dark-muted">모듈 통합 작업이 필요합니다.</p>
+                    </div>
+                `;
+
+                // *** In future steps, we will inject real code here ***
+                // loadModuleScript(id); 
+            },
+
+            // --- SETTINGS & DATA ---
+
+            listenToSettings() {
+                if (!this.db) return;
+                // Single Doc Listener for Master Settings
+                this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID)
+                    .onSnapshot(doc => {
+                        this.showStatus("동기화 완료");
+                        if (doc.exists) {
+                            const d = doc.data();
+                            this.state.apiKeys = d.apiKeys || [];
+                            this.renderApiKeys();
+                        } else {
+                            // Create default if not exists
+                            this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).set({
+                                createdAt: new Date().toISOString(),
+                                apiKeys: []
+                            });
+                        }
+                    });
+            },
+
+            renderApiKeys() {
+                const list = document.getElementById('api-keys-list');
+                if (this.state.apiKeys.length === 0) {
+                    list.innerHTML = `<div class="text-center text-sm text-dark-muted py-4">등록된 키가 없습니다.</div>`;
+                    return;
+                }
+
+                list.innerHTML = this.state.apiKeys.map((k, idx) => `
+                    <div class="flex items-center justify-between bg-dark-bg p-3 rounded border border-dark-border">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <span class="text-xs font-bold px-2 py-1 rounded bg-gray-800 text-gray-300 uppercase w-20 text-center">${k.type}</span>
+                            <div class="flex flex-col">
+                                <span class="text-sm text-white font-mono truncate max-w-[150px] md:max-w-xs">
+                                    ${k.key.substring(0, 10)}...${k.key.substring(k.key.length - 4)}
+                                </span>
+                            </div>
+                        </div>
+                        <button onclick="app.removeApiKey('${k.key}')" class="text-dark-muted hover:text-red-500 transition-colors p-2">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `).join('');
+            },
+
+            async addApiKey() {
+                const type = document.getElementById('new-key-type').value;
+                const key = document.getElementById('new-key-value').value.trim();
+                if (!key) return alert("키를 입력하세요.");
+
+                // Validate Duplicate
+                if (this.state.apiKeys.find(k => k.key === key)) return alert("이미 등록된 키입니다.");
+
+                const newKeys = [...this.state.apiKeys, { type, key, addedAt: Date.now() }];
+
+                // Save to Firestore
+                try {
+                    await this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).set({
+                        apiKeys: newKeys
+                    }, { merge: true });
+                    document.getElementById('new-key-value').value = '';
+                    this.showStatus("키 저장됨");
+                } catch (e) {
+                    console.error(e);
+                    alert("저장 실패");
+                }
+            },
+
+            async removeApiKey(keyVal) {
+                if (!confirm("삭제하시겠습니까?")) return;
+                const newKeys = this.state.apiKeys.filter(k => k.key !== keyVal);
+                try {
+                    await this.db.collection(DATA_COLLECTION).doc(MASTER_DOC_ID).update({
+                        apiKeys: newKeys
+                    });
+                    this.showStatus("키 삭제됨");
+                } catch (e) {
+                    alert("삭제 실패");
+                }
+            },
+
+            // --- UI UTILS ---
+            toggleMobileMenu() {
+                const sb = document.getElementById('mobile-sidebar');
+                const overlay = document.getElementById('mobile-menu-overlay');
+                if (sb.classList.contains('-translate-x-full')) {
+                    sb.classList.remove('-translate-x-full');
+                    overlay.classList.remove('hidden');
+                } else {
+                    sb.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
+                }
+            },
+            openSettings() {
+                const m = document.getElementById('settings-modal');
+                const c = document.getElementById('settings-modal-content');
+                m.classList.remove('hidden');
+                // Animation
+                setTimeout(() => {
+                    c.classList.remove('scale-95', 'opacity-0');
+                    c.classList.add('scale-100', 'opacity-100');
+                }, 10);
+            },
+            closeSettings() {
+                const m = document.getElementById('settings-modal');
+                const c = document.getElementById('settings-modal-content');
+                c.classList.remove('scale-100', 'opacity-100');
+                c.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => m.classList.add('hidden'), 300);
+            },
+            setupEventListeners() {
+                document.getElementById('settings-modal').addEventListener('click', (e) => {
+                    if (e.target === document.getElementById('settings-modal')) this.closeSettings();
+                });
+            },
+            showStatus(msg) {
+                const el = document.getElementById('status-bar');
+                el.innerHTML = `<i class="fas fa-check mr-1"></i> ${msg}`;
+                el.classList.remove('opacity-0');
+                setTimeout(() => el.classList.add('opacity-0'), 2000);
+            }
+        };
+
+        // Start
+        window.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+
+</html>
