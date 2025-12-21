@@ -3036,13 +3036,20 @@
 
                 const parseBold = (text) => text ? text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') : "";
                 document.getElementById('cmt_ui-summary').innerHTML = `
+                    <div class="mb-6 aspect-video rounded-xl overflow-hidden border border-dark-border shadow-2xl bg-black">
+                        <iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
                     ${parseBold(data.summary)}
-                    <div class="mt-4 pt-4 border-t border-blue-500/20">
+                    <div class="mt-4 pt-4 border-t border-blue-500/20 flex gap-3">
                         <a href="https://youtu.be/${videoId}" target="_blank" class="inline-flex items-center text-brand-primary hover:text-white transition-colors font-bold text-sm bg-brand-primary/10 px-3 py-1.5 rounded-lg border border-brand-primary/30">
                             <i class="fab fa-youtube mr-2"></i> 영상 원본 보기
                         </a>
+                        <button onclick="commentModule.downloadSingleTXT('${videoId}')" class="inline-flex items-center text-blue-400 hover:text-white transition-colors font-bold text-sm bg-blue-400/10 px-3 py-1.5 rounded-lg border border-blue-400/30">
+                            <i class="fas fa-file-alt mr-2"></i> 리포트 다운로드 (TXT)
+                        </button>
                     </div>
                 `;
+
 
                 const d = document.getElementById('cmt_dynamicReportContent');
                 const v = data.viral_analysis || {};
@@ -3484,11 +3491,13 @@ ${data.summary}
                                      <td class="p-3 text-xs text-gray-500">${new Date(i.video.publishedAt).toLocaleDateString()}</td>
                                      <td class="p-3 text-xs text-gray-500">${new Date(i.timestamp).toLocaleString()}</td>
                                      <td class="p-3 text-right" onclick="event.stopPropagation()">
-                                         <div class="flex items-center justify-end gap-2">
-                                             <button onclick="commentModule.downloadSingleCSV('${k}')" class="text-blue-400 hover:text-blue-300" title="CSV 다운로드"><i class="fas fa-file-csv"></i></button>
-                                             <button onclick="commentModule.deleteHistory(event, '${k}')" class="text-gray-500 hover:text-red-500" title="삭제"><i class="fas fa-trash"></i></button>
+                                         <div class="flex items-center justify-end gap-3 font-bold">
+                                             <button onclick="commentModule.downloadSingleTXT('${k}')" class="text-blue-400 hover:text-blue-300 flex items-center gap-1" title="TXT 리포트 다운로드"><i class="fas fa-file-alt"></i><span class="text-[10px]">TXT</span></button>
+                                             <button onclick="commentModule.downloadSingleCSV('${k}')" class="text-green-400 hover:text-green-300 flex items-center gap-1" title="CSV 다운로드"><i class="fas fa-file-csv"></i><span class="text-[10px]">CSV</span></button>
+                                             <button onclick="commentModule.deleteHistory(event, '${k}')" class="text-gray-500 hover:text-red-500 ml-1" title="삭제"><i class="fas fa-trash"></i></button>
                                          </div>
                                      </td>
+
                                 </tr>
                             `;
                 }).join('')}
@@ -3550,25 +3559,43 @@ ${data.summary}
                 csv += "구분,내용\n";
                 csv += `영상 제목,"${v.title.replace(/"/g, '""')}"\n`;
                 csv += `채널명,"${v.channelTitle.replace(/"/g, '""')}"\n`;
+                csv += `게시일,"${new Date(v.publishedAt).toLocaleDateString()}"\n`;
+                csv += `조회수,${v.viewCount}\n`;
+                csv += `좋아요,${v.likeCount}\n`;
+                csv += `댓글수,${v.commentCount}\n`;
                 csv += `분석 일시,"${new Date(item.timestamp).toLocaleString()}"\n\n`;
 
                 csv += `전체 요약,"${(a.summary || "").replace(/"/g, '""')}"\n`;
                 csv += `긍정 비율,${a.sentiment_pos_percent}%\n`;
                 csv += `부정 비율,${a.sentiment_neg_percent}%\n`;
+                csv += `감성 분석 요약,"${(a.sentiment_analysis || "").replace(/"/g, '""')}"\n`;
                 csv += `바이럴 성장세,"${(a.viral_analysis?.growth_trend || "").replace(/"/g, '""')}"\n`;
-                csv += `참여도,"${(a.viral_analysis?.engagement_rate || "").replace(/"/g, '""')}"\n`;
+                csv += `바이럴 참여도,"${(a.viral_analysis?.engagement_rate || "").replace(/"/g, '""')}"\n`;
+                csv += `알고리즘 분석,"${(a.viral_analysis?.subject_characteristics || "").replace(/"/g, '""')}"\n`;
+                csv += `콘텐츠 유형,${a.content_type_analysis?.type}\n`;
+                csv += `분류 근거,"${(a.content_type_analysis?.reason || "").replace(/"/g, '""')}"\n`;
+                csv += `전략 제안,"${(a.content_type_analysis?.strategy || "").replace(/"/g, '""')}"\n`;
                 csv += `성공 요인,"${(a.insight_analysis || "").replace(/"/g, '""')}"\n`;
                 csv += `시청자 니즈,"${(a.viewer_needs || "").replace(/"/g, '""')}"\n`;
+                csv += `열광 이유,"${(a.psychology_analysis?.reason_for_enthusiasm || "").replace(/"/g, '""')}"\n`;
+                csv += `비판 이유,"${(a.psychology_analysis?.reason_for_criticism || "").replace(/"/g, '""')}"\n`;
 
                 csv += `\n주요 키워드\n`;
-                (a.keywords_detailed || []).forEach(k => {
-                    csv += `"${k.replace(/"/g, '""')}"\n`;
-                });
+                (a.keywords_detailed || []).forEach(k => { csv += `"${k.replace(/"/g, '""')}"\n`; });
 
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const filename = `Analysis_${v.title.substring(0, 20)}_${Date.now()}.csv`.replace(/[\/:*?"<>|]/g, '_');
                 this.triggerDownloadBlob(blob, filename);
             },
+
+            downloadSingleTXT(id) {
+                const item = this.state.historyCache[id];
+                if (!item) return;
+                const md = this.generateMarkdown(item.analysis, item.video);
+                const filename = `Analysis_Report_${item.video.title.substring(0, 20)}_${Date.now()}.txt`.replace(/[\/:*?"<>|]/g, '_');
+                this.triggerDownloadBlob(new Blob([md], { type: "text/plain" }), filename);
+            },
+
 
             loadMoreChannelVideos() {
                 if (this.state.currentChannelId) this.fetchChannelVideosPage(this.getKeys().ytKey);
