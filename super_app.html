@@ -220,6 +220,7 @@
             },
 
             async init() {
+                this.appId = window.__app_id || 'default-app-id';
                 await this.initFirebase();
                 this.renderSidebar();
                 this.setupEventListeners();
@@ -498,25 +499,26 @@
 
             init() {
                 this.setupListeners();
+                // Setup scroll sync after render
+                setTimeout(() => this.setupScrollSync(), 500);
             },
 
             setupListeners() {
-                // Detach old listeners if any
                 this.listeners.forEach(unsub => unsub());
                 this.listeners = [];
 
                 if (!app.db) return;
 
-                // Listen to channels
-                const channelsCol = app.db.collection('global_channels');
+                // Use artifacts path to migrate/share data with channel.html
+                const channelsCol = app.db.collection(`artifacts/${app.appId}/public/data/channels`);
                 const unsubChannels = channelsCol.onSnapshot(snapshot => {
                     this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     this.render(document.getElementById('main-content'));
+                    this.setupScrollSync();
                 });
                 this.listeners.push(unsubChannels);
 
-                // Listen to categories
-                const catDoc = app.db.collection('global_data').doc('channel_categories');
+                const catDoc = app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`);
                 const unsubCat = catDoc.onSnapshot(doc => {
                     if (doc.exists) {
                         this.state.categories = doc.data().names || ['미분류'];
@@ -544,36 +546,75 @@
                 this.state.categoryColors = newColors;
             },
 
+            setupScrollSync() {
+                const top = document.getElementById('ch-top-scroll');
+                const content = document.getElementById('ch-top-scroll-content');
+                const tableContainer = document.getElementById('ch-table-container');
+                const table = document.getElementById('ch-result-table');
+
+                if (top && content && tableContainer && table) {
+                    content.style.width = table.scrollWidth + 'px';
+                    top.onscroll = () => { tableContainer.scrollLeft = top.scrollLeft; };
+                    tableContainer.onscroll = () => { top.scrollLeft = tableContainer.scrollLeft; };
+                }
+            },
+
             render(container) {
-                if (!container) return; // Guard
+                if (!container) return;
                 if (app.state.currentModule !== 'channel') return;
 
                 const { channels, categories, currentSort, searchTerm, categoryFilter } = this.state;
 
-                // Filter & Sort
+                // Filter
                 let filtered = channels.filter(ch => {
                     const match = searchTerm.toLowerCase();
-                    const text = [ch.channelName, ch.note, ch.country, ch.customCategory].join(' ').toLowerCase();
+                    const text = [
+                        ch.channelName, ch.note, ch.country, ch.customCategory,
+                        (ch.subscribers || 0).toString(), (ch.totalViews || 0).toString()
+                    ].join(' ').toLowerCase();
                     if (searchTerm && !text.includes(match)) return false;
                     if (categoryFilter !== '전체' && ch.customCategory !== categoryFilter) return false;
                     return true;
                 });
 
+                // Sort
                 filtered.sort((a, b) => {
                     let aVal = a[currentSort.key];
                     let bVal = b[currentSort.key];
-                    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-                    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+                    // Handle specific types
+                    if (['subscribers', 'totalViews', 'totalVideos', 'avgViews90d', 'avgLikes90d', 'avgComments90d'].includes(currentSort.key)) {
+                        aVal = Number(aVal || 0);
+                        bVal = Number(bVal || 0);
+                    } else if (currentSort.key === 'avgUploadFreqDays') {
+                        aVal = parseFloat(aVal) || 999999;
+                        bVal = parseFloat(bVal) || 999999;
+                    } else if (currentSort.key === 'channelCreationDate') {
+                        aVal = new Date(aVal || 0).getTime();
+                        bVal = new Date(bVal || 0).getTime();
+                    } else {
+                        aVal = (aVal || '').toString().toLowerCase();
+                        bVal = (bVal || '').toString().toLowerCase();
+                    }
+
                     if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
                     if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
                     return 0;
                 });
 
+                const Th = (key, label, extra = '') => `
+                    <th class="px-4 py-3 cursor-pointer hover:text-white whitespace-nowrap ${extra}" onclick="channelModule.sort('${key}')">
+                        <div class="flex items-center gap-1">
+                            ${label}
+                            ${currentSort.key === key ? `<i class="fas fa-sort-${currentSort.direction === 'asc' ? 'up' : 'down'} text-brand-primary"></i>` : ''}
+                        </div>
+                    </th>`;
+
                 container.innerHTML = `
-                    <div class="max-w-7xl mx-auto space-y-6">
+                    <div class="max-w-full space-y-4">
                         <div class="flex justify-between items-center">
                             <h2 class="text-2xl font-bold text-white"><i class="fas fa-tv text-brand-primary mr-2"></i>채널 목록 관리</h2>
-                            <div class="text-sm text-dark-muted">총 채널: <span class="text-white font-bold">${channels.length}</span></div>
+                            <div class="text-sm text-dark-muted">총 채널: <span class="text-white font-bold">${channels.length}</span> (필터됨: ${filtered.length})</div>
                         </div>
 
                         <!-- Add & Search -->
@@ -584,14 +625,13 @@
                             </div>
                             <div class="md:col-span-4 relative">
                                 <i class="fas fa-search absolute left-3 top-3 text-gray-500"></i>
-                                <input type="text" oninput="channelModule.handleSearch(this.value)" value="${searchTerm}" placeholder="채널 검색..." class="w-full bg-dark-card border border-dark-border text-white rounded-lg pl-10 pr-4 py-2 focus:border-brand-primary outline-none">
+                                <input type="text" oninput="channelModule.handleSearch(this.value)" value="${searchTerm}" placeholder="검색..." class="w-full bg-dark-card border border-dark-border text-white rounded-lg pl-10 pr-4 py-2 focus:border-brand-primary outline-none">
                             </div>
                         </div>
 
                         <!-- Filters -->
-                        <div class="flex flex-wrap gap-3 items-center bg-dark-card p-4 rounded-xl border border-dark-border">
-                            <span class="text-sm font-bold text-gray-400">카테고리:</span>
-                            <div class="flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2 items-center bg-dark-card p-3 rounded-xl border border-dark-border">
+                             <div class="flex flex-wrap gap-2">
                                 <button onclick="channelModule.setFilter('전체')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === '전체' ? 'bg-white text-black font-bold' : 'bg-dark-bg text-gray-400 border border-dark-border'}">전체</button>
                                 ${categories.map(cat => `
                                     <button onclick="channelModule.setFilter('${cat}')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === cat ? 'ring-2 ring-white ' + this.state.categoryColors[cat] + ' text-white' : 'bg-dark-bg text-gray-400 border border-dark-border'}">
@@ -600,48 +640,68 @@
                                 `).join('')}
                             </div>
                             <div class="ml-auto">
-                                <button onclick="channelModule.toggleCatModal(true)" class="text-xs text-brand-primary hover:text-white transition-colors"><i class="fas fa-cog"></i> 카테고리 관리</button>
+                                <button onclick="channelModule.toggleCatModal(true)" class="text-xs text-brand-primary hover:text-white transition-colors"><i class="fas fa-cog"></i> 관리</button>
                             </div>
                         </div>
 
-                        <!-- Table -->
-                        <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm text-left text-gray-400">
-                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar">
+                        <!-- Table Area -->
+                        <div class="bg-dark-card rounded-xl border border-dark-border relative">
+                            <!-- Top Scrollbar -->
+                            <div id="ch-top-scroll" class="overflow-x-auto w-full sticky top-0 z-20 bg-dark-sidebar bg-opacity-90 h-4 custom-scrollbar">
+                                <div id="ch-top-scroll-content" class="h-1"></div>
+                            </div>
+
+                            <div id="ch-table-container" class="overflow-x-auto">
+                                <table id="ch-result-table" class="w-full text-sm text-left text-gray-400 whitespace-nowrap">
+                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar sticky top-0 z-10">
                                         <tr>
                                             <th class="px-4 py-3">프로필</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('channelName')">채널명</th>
-                                            <th class="px-4 py-3">카테고리</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('subscribers')">구독자</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('totalViews')">총 조회수</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('avgViews90d')">90일 평균 조회</th>
-                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('avgUploadFreqDays')">업로드 주기</th>
+                                            ${Th('channelName', '채널명')}
+                                            <th class="px-4 py-3">링크</th>
+                                            ${Th('customCategory', '카테고리')}
+                                            ${Th('country', '국가')}
+                                            ${Th('note', '비고(메모)')}
+                                            ${Th('subscribers', '구독자')}
+                                            ${Th('totalViews', '총 조회수')}
+                                            ${Th('totalVideos', '총 영상수')}
+                                            ${Th('channelCreationDate', '채널 생성일')}
+                                            <th class="px-4 py-3">경과 시간</th>
+                                            ${Th('avgUploadFreqDays', '평균 업로드 주기')}
+                                            ${Th('avgViews90d', '90일 평균 조회수')}
+                                            ${Th('avgLikes90d', '90일 평균 좋아요')}
+                                            ${Th('avgComments90d', '90일 평균 댓글')}
                                             <th class="px-4 py-3 text-right">관리</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody class="divide-y divide-dark-border">
                                         ${filtered.length > 0 ? filtered.map(ch => `
-                                            <tr class="border-b border-dark-border hover:bg-dark-hover transition-colors">
-                                                <td class="px-4 py-3"><img src="${ch.profileIconUrl}" class="w-8 h-8 rounded-full"></td>
+                                            <tr class="hover:bg-dark-hover transition-colors">
+                                                <td class="px-4 py-3"><img src="${ch.profileIconUrl}" onerror="this.src='https://placehold.co/40x40/333/ccc?text=User'" class="w-8 h-8 rounded-full"></td>
+                                                <td class="px-4 py-3 font-medium text-white">${ch.channelName}</td>
                                                 <td class="px-4 py-3">
-                                                    <a href="${ch.channelUrl}" target="_blank" class="text-white hover:text-brand-primary font-bold">${ch.channelName}</a>
-                                                    <div class="text-xs text-dark-muted">${ch.country} · ${this.calculateElapsedTime(ch.channelCreationDate)}</div>
+                                                    <button onclick="channelModule.copyLink('${ch.channelUrl}')" class="text-green-500 hover:text-green-400 bg-dark-bg p-1 rounded border border-dark-border"><i class="fas fa-link"></i></button>
                                                 </td>
                                                 <td class="px-4 py-3">
                                                     <span onclick="channelModule.cycleCategory('${ch.id}', '${ch.customCategory}')" class="cursor-pointer px-2 py-1 rounded text-xs text-white ${this.state.categoryColors[ch.customCategory] || 'bg-gray-600'}">
                                                         ${ch.customCategory}
                                                     </span>
                                                 </td>
-                                                <td class="px-4 py-3 font-mono text-gray-300">${ch.subscribers.toLocaleString()}</td>
-                                                <td class="px-4 py-3 font-mono text-dark-muted">${ch.totalViews.toLocaleString()}</td>
-                                                <td class="px-4 py-3 font-mono text-brand-primary">${ch.avgViews90d.toLocaleString()}</td>
-                                                <td class="px-4 py-3 text-xs">${this.formatUploadFrequency(ch.avgUploadFreqDays, ch.totalVideos)}</td>
+                                                <td class="px-4 py-3">${ch.country}</td>
+                                                <td class="px-4 py-3 max-w-[200px] truncate cursor-pointer hover:text-white" onclick="channelModule.editNote('${ch.id}', '${(ch.note || '').replace(/'/g, "\\'")}')" title="누르면 수정">${ch.note || '<span class="text-dark-muted text-xs">메모 없음</span>'}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.subscribers || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.totalViews || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.totalVideos || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3">${ch.channelCreationDate ? ch.channelCreationDate.split('T')[0] : '-'}</td>
+                                                <td class="px-4 py-3">${this.calculateElapsedTime(ch.channelCreationDate)}</td>
+                                                <td class="px-4 py-3">${this.formatUploadFrequency(ch.avgUploadFreqDays, ch.totalVideos)}</td>
+                                                <td class="px-4 py-3 font-mono text-brand-primary">${(ch.avgViews90d || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.avgLikes90d || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.avgComments90d || 0).toLocaleString()}</td>
                                                 <td class="px-4 py-3 text-right">
                                                     <button onclick="channelModule.deleteChannel('${ch.id}')" class="text-dark-muted hover:text-red-500 transition-colors"><i class="fas fa-trash"></i></button>
                                                 </td>
                                             </tr>
-                                        `).join('') : `<tr><td colspan="8" class="p-8 text-center text-dark-muted">등록된 채널이 없습니다.</td></tr>`}
+                                        `).join('') : `<tr><td colspan="16" class="p-8 text-center text-dark-muted">등록된 채널이 없습니다.</td></tr>`}
                                     </tbody>
                                 </table>
                             </div>
@@ -667,6 +727,20 @@
                             <button onclick="channelModule.toggleCatModal(false)" class="w-full bg-gray-700 text-white rounded py-2 text-sm hover:bg-gray-600">닫기</button>
                         </div>
                     </div>
+
+                    <!-- Note Edit Modal (Ad-hoc) -->
+                    <div id="note-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
+                        <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
+                            <h3 class="text-lg font-bold text-white mb-4">메모 수정</h3>
+                            <textarea id="note-input" rows="3" class="w-full bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm mb-4"></textarea>
+                            <input type="hidden" id="note-id">
+                            <div class="flex justify-end gap-2">
+                                <button onclick="document.getElementById('note-modal').classList.add('hidden')" class="bg-gray-700 text-white rounded px-3 py-2 text-sm">취소</button>
+                                <button onclick="channelModule.saveNote()" class="bg-brand-primary text-white rounded px-3 py-2 text-sm">저장</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Loading Overlay -->
                     <div id="ch-loading" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                         <div class="bg-dark-card p-4 rounded-lg flex items-center gap-3 text-white border border-brand-primary">
@@ -695,12 +769,11 @@
                 this.showLoading(true, "채널 정보 가져오는 중...");
                 try {
                     const data = await this.fetchYouTubeData(url, k);
-                    await app.db.collection('global_channels').add({
+                    await app.db.collection(`artifacts/${app.appId}/public/data/channels`).add({
                         ...data,
                         addedAt: new Date().toISOString()
                     });
                     this.showLoading(false);
-                    // Input clear happens on re-render
                 } catch (e) {
                     this.showLoading(false);
                     alert("오류: " + e.message);
@@ -709,25 +782,24 @@
 
             async deleteChannel(id) {
                 if (!confirm("삭제하시겠습니까?")) return;
-                await app.db.collection('global_channels').doc(id).delete();
+                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(id).delete();
             },
 
             async addCategory() {
                 const name = document.getElementById('new-cat-input').value.trim();
                 if (!name || this.state.categories.includes(name)) return;
                 const newCats = [...this.state.categories, name];
-                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+                await app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`).set({ names: newCats }, { merge: true });
             },
 
             async deleteCategory(name) {
                 if (!confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) return;
                 const newCats = this.state.categories.filter(c => c !== name);
-                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
-                // Reset channels
+                await app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`).set({ names: newCats }, { merge: true });
                 const batch = app.db.batch();
                 this.state.channels.forEach(ch => {
                     if (ch.customCategory === name) {
-                        batch.update(app.db.collection('global_channels').doc(ch.id), { customCategory: '미분류' });
+                        batch.update(app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(ch.id), { customCategory: '미분류' });
                     }
                 });
                 await batch.commit();
@@ -736,7 +808,31 @@
             async cycleCategory(chId, currentCat) {
                 const idx = this.state.categories.indexOf(currentCat);
                 const nextCat = this.state.categories[(idx + 1) % this.state.categories.length];
-                await app.db.collection('global_channels').doc(chId).update({ customCategory: nextCat });
+                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(chId).update({ customCategory: nextCat });
+            },
+
+            editNote(id, note) {
+                const m = document.getElementById('note-modal');
+                m.classList.remove('hidden');
+                document.getElementById('note-input').value = note;
+                document.getElementById('note-id').value = id;
+            },
+
+            async saveNote() {
+                const id = document.getElementById('note-id').value;
+                const note = document.getElementById('note-input').value;
+                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(id).update({ note });
+                document.getElementById('note-modal').classList.add('hidden');
+            },
+
+            copyLink(url) {
+                const t = document.createElement('textarea');
+                t.value = url;
+                document.body.appendChild(t);
+                t.select();
+                document.execCommand('copy');
+                document.body.removeChild(t);
+                app.showStatus("링크 복사됨");
             },
 
             showLoading(show, text) {
@@ -748,41 +844,33 @@
 
             // --- API Helpers ---
             async fetchYouTubeData(url, apiKey) {
-                // Simplified extraction
                 let id = null;
                 if (url.includes('channel/')) id = url.split('channel/')[1].split('/')[0];
                 else if (url.includes('@')) {
-                    // Handle search
                     const handle = url.split('@')[1].split('/')[0];
                     const s = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/search?part=id&q=@${handle}&type=channel&key=${apiKey}`);
                     if (s.items?.[0]) id = s.items[0].id.channelId;
                 }
-                if (!id) throw new Error("채널 ID를 찾을 수 없습니다. (/channel/ ID 형식 또는 @핸들 사용 권장)");
+                if (!id) throw new Error("채널 ID를 찾을 수 없습니다.");
 
-                // Channel Info
                 const chRes = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${id}&key=${apiKey}`);
                 const item = chRes.items[0];
                 if (!item) throw new Error("채널 정보 없음");
 
-                // 90 days stats (simplified for brevity, can verify logic from original)
-                // Note: Implementing full 90d logic requires iterating playlistItems.
-                // For MVP integration, I will implement a lighter version or full per requirement.
-                // Let's implement full 90d logic based on original file code.
                 const uploadsId = item.contentDetails.relatedPlaylists.uploads;
                 const videos = await this.fetchRecentVideos(uploadsId, apiKey);
 
-                let stats90 = { views: 0, likes: 0, count: videos.length };
+                let stats90 = { views: 0, likes: 0, comments: 0, count: videos.length };
                 if (videos.length > 0) {
-                    // Fetch video stats
-                    const chunk = videos.map(v => v.id).join(',');
+                    const chunk = videos.slice(0, 50).map(v => v.id).join(',');
                     const vRes = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${chunk}&key=${apiKey}`);
                     vRes.items.forEach(v => {
                         stats90.views += Number(v.statistics.viewCount || 0);
                         stats90.likes += Number(v.statistics.likeCount || 0);
+                        stats90.comments += Number(v.statistics.commentCount || 0);
                     });
                 }
 
-                // Upload freq
                 const oldest = videos.length > 0 ? videos[videos.length - 1].date : item.snippet.publishedAt;
                 const days = (new Date() - new Date(oldest)) / (86400000) || 1;
                 const freq = videos.length > 0 ? (days / videos.length).toFixed(1) : 0;
@@ -799,6 +887,7 @@
                     avgUploadFreqDays: freq,
                     avgViews90d: stats90.count ? Math.round(stats90.views / stats90.count) : 0,
                     avgLikes90d: stats90.count ? Math.round(stats90.likes / stats90.count) : 0,
+                    avgComments90d: stats90.count ? Math.round(stats90.comments / stats90.count) : 0,
                     customCategory: '미분류',
                     note: '',
                     channelId: item.id
@@ -806,7 +895,6 @@
             },
 
             async fetchRecentVideos(pid, k) {
-                // Fetch last ~50 videos or up to 90 days
                 const res = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${pid}&maxResults=50&key=${k}`);
                 const now = new Date();
                 const d90 = new Date(now - 90 * 86400000);
@@ -830,8 +918,8 @@
 
             formatUploadFrequency(days, total) {
                 if (!days || days === 'N/A' || total === 0) return '-';
-                if (days < 1) return `1일당 ${(1 / days).toFixed(1)}개`;
-                return `${Math.round(days)}일당 1개`;
+                if (days < 1) return `1일당 ${(1 / Number(days)).toFixed(1)}개`;
+                return `${Math.round(Number(days))}일당 1개`;
             }
         };
 
