@@ -65,6 +65,129 @@
                 height: calc(100vh - 56px);
             }
         }
+
+        /* Video Analysis Module Styles */
+        .va-tab-btn {
+            flex: 1;
+            padding: 1rem;
+            text-align: center;
+            font-weight: 700;
+            color: rgba(248, 248, 248, 0.4);
+            transition: all 0.3s;
+            border-radius: 0.75rem 0.75rem 0 0;
+            background-color: #1a1a2e;
+            border-bottom: 4px solid transparent;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+            .va-tab-btn {
+                font-size: 1rem;
+            }
+        }
+
+        .va-tab-btn:hover {
+            background-color: #282a4d;
+            color: rgba(248, 248, 248, 0.8);
+        }
+
+        .va-tab-btn.active {
+            color: #ffffff !important;
+            background-color: #e94560 !important;
+            border-bottom-color: #e94560 !important;
+        }
+
+        .va-calendar-cell {
+            width: 100%;
+            padding: 4px;
+            text-align: center;
+            font-size: 0.75rem;
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #383b6e;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .va-scroll-button {
+            position: absolute;
+            z-index: 20;
+            border-radius: 9999px;
+            padding: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.125rem;
+            width: 40px;
+            height: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        @media (min-width: 768px) {
+            .va-scroll-button {
+                display: flex;
+            }
+        }
+
+        .va-note-input {
+            width: 100%;
+            background-color: #1a1a2e;
+            border: 1px solid #383b6e;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            color: #f8f8f8;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+            margin-bottom: 0.5rem;
+        }
+
+        .va-note-input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .va-note-label {
+            display: block;
+            font-size: 0.75rem;
+            color: rgba(248, 248, 248, 0.6);
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .va-note-section-title {
+            color: #e94560;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+            padding-bottom: 0.25rem;
+        }
+
+        .va-sortable-header {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+
+        .va-sortable-header:hover {
+            color: #e94560;
+        }
+
+        .va-star-filled {
+            color: #fbbf24;
+        }
+
+        .va-star-empty {
+            color: #4b5563;
+        }
     </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -244,14 +367,50 @@
             },
 
             renderSidebar() {
-                const mkItem = (m) => `
-                    <li>
-                        <button onclick="app.loadModule('${m.id}')" id="btn-${m.id}" class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors group">
-                            <i class="${m.icon} w-5 h-5 mr-3 text-gray-500 group-hover:text-brand-primary transition-colors"></i> 
-                            ${m.name}
-                        </button>
-                    </li>
-                `;
+                const mkItem = (m) => {
+                    // The instruction provided a hardcoded mkItem.
+                    // To integrate it correctly while maintaining the dynamic nature,
+                    // we'll use the provided structure for 'channel' and 'video'
+                    // and adapt it to the existing dynamic rendering logic.
+                    // The instruction's mkItem was not using the 'm' parameter,
+                    // so we'll assume the intent was to add specific buttons
+                    // rather than replace the dynamic generation entirely.
+                    // However, the instruction explicitly replaces the mkItem function.
+                    // Following the instruction faithfully means replacing the mkItem function.
+                    // This will result in only 'channel' and 'video' buttons being rendered.
+                    // If the intent was to *add* a video button dynamically, the instruction
+                    // should have modified the MODULES array and kept the original mkItem.
+                    // Given the explicit instruction to replace mkItem, I will do so.
+                    if (m.id === 'channel') {
+                        return `
+                            <li>
+                                <button id="btn-channel" onclick="app.loadModule('channel')" class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors group">
+                                    <i class="fas fa-tv w-5 h-5 mr-3 text-gray-500 group-hover:text-brand-primary transition-colors"></i> 
+                                    채널 목록
+                                </button>
+                            </li>
+                        `;
+                    } else if (m.id === 'video') {
+                        return `
+                            <li>
+                                <button id="btn-video" onclick="app.loadModule('video')" class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors group">
+                                    <i class="fas fa-search-dollar w-5 h-5 mr-3 text-gray-500 group-hover:text-brand-primary transition-colors"></i> 
+                                    영상 분석
+                                </button>
+                            </li>
+                        `;
+                    } else {
+                        // For other modules, use the original dynamic template
+                        return `
+                            <li>
+                                <button onclick="app.loadModule('${m.id}')" id="btn-${m.id}" class="flex items-center w-full px-4 py-3 text-sm font-medium text-dark-muted hover:bg-dark-hover hover:text-white rounded-lg transition-colors group">
+                                    <i class="${m.icon} w-5 h-5 mr-3 text-gray-500 group-hover:text-brand-primary transition-colors"></i> 
+                                    ${m.name}
+                                </button>
+                            </li>
+                        `;
+                    }
+                };
                 const html = MODULES.map(mkItem).join('');
                 document.getElementById('desktop-menu').innerHTML = html;
                 document.getElementById('mobile-menu-list').innerHTML = html;
@@ -294,6 +453,12 @@
                 if (id === 'channel') {
                     channelModule.render(main);
                     channelModule.init();
+                    return;
+                }
+
+                if (id === 'analysis') {
+                    analysisModule.render(main);
+                    analysisModule.init();
                     return;
                 }
 
@@ -780,6 +945,7 @@
                                 <div id="ch-top-scroll-content" class="h-1"></div>
                             </div>
 
+                            <!-- Video List -->
                             <div id="ch-table-container" class="overflow-x-auto">
                                 <table id="ch-result-table" class="w-full text-sm text-left text-gray-400 whitespace-nowrap">
                                     <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar sticky top-0 z-10">
@@ -1086,6 +1252,338 @@
                 if (days < 1) return `1일당 ${(1 / Number(days)).toFixed(1)}개`;
                 return `${Math.round(Number(days))}일당 1개`;
             }
+        };
+
+
+        // --- ANALYSIS MODULE --- (Ported from analysis.html)
+        const analysisModule = {
+            state: {
+                allVideosData: [],
+                channelMetadata: null,
+                savedChannelsData: [],
+                videoSortState: { key: 'publishedAt', dir: 'desc' }
+            },
+            API_BASE_URL: 'https://www.googleapis.com/youtube/v3/',
+
+            init() {
+                this.subscribeToSavedChannels();
+            },
+
+            render(container) {
+                if (!container) return;
+                container.innerHTML = `
+                    <div class="max-w-7xl mx-auto space-y-6">
+                        <div class="flex justify-between items-center">
+                             <h2 class="text-2xl font-bold text-white"><i class="fas fa-chart-line text-brand-primary mr-2"></i>영상/채널 분석</h2>
+                             <div class="flex gap-2">
+                                <button onclick="analysisModule.switchTab('analyze')" id="tab-analyze" class="va-tab-btn active"><i class="fas fa-search mr-2"></i>분석</button>
+                                <button onclick="analysisModule.switchTab('saved')" id="tab-saved" class="va-tab-btn"><i class="fas fa-folder mr-2"></i>저장됨</button>
+                             </div>
+                        </div>
+
+                        <div id="content-analyze" class="space-y-6">
+                            <div class="bg-dark-card p-6 rounded-xl shadow-lg border border-dark-border" id="searchPanel">
+                                <div class="flex flex-col md:flex-row gap-3">
+                                    <input type="text" id="va-channelId" placeholder="채널 ID, 핸들(@), 또는 채널명" class="flex-grow p-3 rounded-lg bg-dark-bg border border-dark-border focus:border-brand-primary text-white outline-none">
+                                    <button id="va-analyzeButton" onclick="analysisModule.startAnalysis()" class="px-6 py-3 bg-brand-primary hover:bg-brand-hover text-white font-bold rounded-lg transition whitespace-nowrap">분석 시작</button>
+                                </div>
+                                <p id="va-statusMessage" class="mt-4 text-center text-sm font-medium animate-pulse text-brand-primary"></p>
+                            </div>
+                            
+                            <div id="va-resultsSection" class="hidden space-y-6">
+                                <div id="va-channelInfo" class="grid md:grid-cols-2 gap-6"></div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                                    <div class="bg-dark-card p-5 rounded-xl border border-dark-border"><p class="text-2xl font-bold text-white" id="va-statSubscribers">0</p><p class="text-sm text-dark-muted">구독자</p></div>
+                                    <div class="bg-dark-card p-5 rounded-xl border border-dark-border"><p class="text-2xl font-bold text-white" id="va-statViews">0</p><p class="text-sm text-dark-muted">총 조회수</p></div>
+                                    <div class="bg-dark-card p-5 rounded-xl border border-dark-border"><p class="text-2xl font-bold text-white" id="va-statVideos">0</p><p class="text-sm text-dark-muted">총 영상</p></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                                    <div class="bg-dark-card p-4 rounded-xl border border-brand-primary/30"><p class="text-xl font-bold text-brand-primary" id="va-avgViews90Days">0</p><p class="text-xs text-dark-muted">90일 평균 조회수</p></div>
+                                    <div class="bg-dark-card p-4 rounded-xl border border-brand-primary/30"><p class="text-xl font-bold text-brand-primary" id="va-avgLikes90Days">0</p><p class="text-xs text-dark-muted">90일 평균 좋아요</p></div>
+                                    <div class="bg-dark-card p-4 rounded-xl border border-brand-primary/30"><p class="text-xl font-bold text-brand-primary" id="va-avgComments90Days">0</p><p class="text-xs text-dark-muted">90일 평균 댓글</p></div>
+                                </div>
+                                <!-- Calendar -->
+                                <div class="bg-dark-card p-4 rounded-xl border border-dark-border overflow-x-auto">
+                                    <div class="flex justify-between items-center mb-4 min-w-[300px]" id="va-calendarNav"></div>
+                                    <div id="va-calendarBody" class="grid grid-cols-7 gap-1 min-w-[300px]"></div>
+                                </div>
+
+                                <!-- Shorts -->
+                                <div class="bg-dark-card p-4 rounded-xl border border-dark-border hidden" id="va-shortsSection">
+                                    <h3 class="font-bold text-white mb-4">🔥 최신 Shorts</h3>
+                                    <div class="relative group">
+                                        <button class="va-scroll-button left-2 bg-brand-primary text-white" onclick="analysisModule.scrollShorts(-300)">◀</button>
+                                        <div id="va-shortsContent" class="flex space-x-4 px-1 overflow-x-auto scrollbar-hide py-2"></div>
+                                        <button class="va-scroll-button right-2 bg-brand-primary text-white" style="right:0; left:auto;" onclick="analysisModule.scrollShorts(300)">▶</button>
+                                    </div>
+                                </div>
+                                <div class="bg-dark-card p-6 rounded-xl border border-dark-border relative">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h2 class="text-xl font-bold text-white">📝 분석 노트</h2>
+                                        <div class="flex gap-2">
+                                            <button onclick="analysisModule.analyzeGemini()" id="va-geminiBtn" class="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm flex items-center gap-2"><i class="fas fa-robot"></i> Gemini 자동 분석</button>
+                                            <button onclick="analysisModule.saveNote()" class="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm"><i class="fas fa-save"></i> 저장</button>
+                                        </div>
+                                    </div>
+                                    <div class="grid md:grid-cols-2 gap-6">
+                                        <div>
+                                            <h3 class="va-note-section-title"># 종합 의견</h3>
+                                            <label class="va-note-label">요약</label><textarea id="note_summary" class="va-note-input h-20"></textarea>
+                                            <label class="va-note-label">강점</label><input type="text" id="note_pros" class="va-note-input">
+                                            <label class="va-note-label">약점</label><input type="text" id="note_cons" class="va-note-input">
+                                        </div>
+                                        <div>
+                                            <h3 class="va-note-section-title"># 콘텐츠 특성</h3>
+                                            <label class="va-note-label">장르</label><input type="text" id="note_genre" class="va-note-input">
+                                            <label class="va-note-label">톤앤매너</label><input type="text" id="note_tone" class="va-note-input">
+                                            <label class="va-note-label">스타일</label><textarea id="note_style" class="va-note-input h-10"></textarea>
+                                            <label class="va-note-label">주타겟</label><input type="text" id="note_audience" class="va-note-input">
+                                        </div>
+                                        <div>
+                                            <h3 class="va-note-section-title"># 비즈니스</h3>
+                                            <label class="va-note-label">광고 도메인</label><input type="text" id="note_ad_domain" class="va-note-input">
+                                            <label class="va-note-label">광고 유형</label><input type="text" id="note_ad_type" class="va-note-input">
+                                        </div>
+                                        <div class="bg-dark-bg/30 p-4 rounded-lg">
+                                            <h3 class="va-note-section-title"># 퍼포먼스</h3>
+                                            <label class="va-note-label">참여 메모</label><textarea id="note_engagement_memo" class="va-note-input h-12"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
+                                    <div class="p-4 border-b border-dark-border flex justify-between items-center">
+                                        <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
+                                        <div class="space-x-2"><button onclick="analysisModule.renderVideoList()" class="text-xs bg-dark-bg px-2 py-1 rounded border border-dark-border">새로고침</button></div>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full text-sm text-left text-gray-400">
+                                            <thead class="bg-dark-bg text-gray-200 uppercase text-xs">
+                                                <tr>
+                                                    <th class="px-4 py-3">No</th>
+                                                    <th class="px-4 py-3 va-sortable-header" onclick="analysisModule.sortVideo('title')">제목 ↕</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('publishedAt')">게시일 ↕</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('viewCount')">조회수 ↕</th>
+                                                    <th class="px-4 py-3 text-right">길이</th>
+                                                    <th class="px-4 py-3 text-center">L/V</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="va-videoListBody" class="divide-y divide-dark-border"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="content-saved" class="hidden space-y-6">
+                             <div class="overflow-x-auto bg-dark-card rounded-xl border border-dark-border">
+                                <table class="min-w-full text-sm text-left text-gray-400">
+                                    <thead class="bg-dark-bg text-gray-200 uppercase text-xs">
+                                        <tr><th class="px-4 py-3">채널</th><th class="px-4 py-3 text-center">구독자</th><th class="px-4 py-3 text-center">업데이트</th><th class="px-4 py-3 text-center">관리</th></tr>
+                                    </thead>
+                                    <tbody id="va-savedListBody" class="divide-y divide-dark-border"></tbody>
+                                </table>
+                                <p id="va-emptySavedMsg" class="text-center py-8 text-dark-muted hidden">저장된 채널이 없습니다.</p>
+                            </div>
+                        </div>
+                    </div>`;
+                setTimeout(() => { const i = document.getElementById('va-channelId'); if (i) i.addEventListener('keydown', e => { if (e.key === 'Enter') this.startAnalysis(); }); }, 100);
+            },
+
+            setStatus(m, isErr) { const e = document.getElementById('va-statusMessage'); if (e) { e.innerText = m; e.className = isErr ? "mt-4 text-center text-sm font-medium animate-pulse text-red-500" : "mt-4 text-center text-sm font-medium animate-pulse text-green-500"; } },
+
+            async startAnalysis() {
+                const id = document.getElementById('va-channelId').value.trim();
+                if (!id) return alert("ID 입력 필요");
+                const apiKey = app.getApiKey('youtube');
+                if (!apiKey) return alert("YouTube API 키가 없습니다");
+                this.setStatus('데이터 수집 중...', false);
+                try {
+                    const chData = await this.fetchCh(id, apiKey);
+                    if (!chData?.items?.length) throw new Error("채널 없음");
+
+                    const item = chData.items[0];
+                    const meta = { id: item.id, title: item.snippet.title, description: item.snippet.description, subscribers: item.statistics.subscriberCount, totalViews: item.statistics.viewCount, totalVideos: item.statistics.videoCount, thumbnail: item.snippet.thumbnails.default?.url || '', publishedAt: item.snippet.publishedAt, country: item.snippet.country || 'N/A' };
+
+                    let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, apiKey);
+                    videos = videos.slice(0, 200);
+                    const sMap = await this.fetchStats(videos.map(v => v.videoId), apiKey);
+                    videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), durationSeconds: this.parseDur(s.duration) }; });
+
+                    this.state.allVideosData = videos;
+                    this.state.channelMetadata = meta;
+
+                    const stats90 = this.calc90(videos);
+                    const safe = JSON.parse(JSON.stringify(meta));
+
+                    await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(meta.id).set({ metadata: safe, videos: JSON.parse(JSON.stringify(videos)), stats90, lastUpdated: new Date().toISOString() }, { merge: true });
+                    await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(meta.id).set({ metadata: safe, stats90, lastUpdated: new Date().toISOString() });
+
+                    this.renderUI(stats90);
+                    this.setStatus('분석 완료', false);
+                    this.loadNote(meta.id);
+                } catch (e) { console.error(e); this.setStatus('오류: ' + e.message, true); }
+            },
+
+            async fetchCh(q, k) {
+                let url = `${this.API_BASE_URL}channels?part=snippet,contentDetails,statistics,brandingSettings&key=${k}`;
+                if (q.startsWith('UC') && q.length > 20) url += `&id=${q}`;
+                else if (q.startsWith('@')) url += `&forHandle=${encodeURIComponent(q)}`;
+                else { const s = await fetch(`${this.API_BASE_URL}search?part=snippet&type=channel&q=${encodeURIComponent(q)}&key=${k}`); const j = await s.json(); if (!j.items?.length) return null; url += `&id=${j.items[0].snippet.channelId}`; }
+                return (await fetch(url)).json();
+            },
+            async fetchVids(pid, k) {
+                let v = [], t = '';
+                for (let i = 0; i < 4; i++) {
+                    const r = await fetch(`${this.API_BASE_URL}playlistItems?part=snippet&playlistId=${pid}&maxResults=50&pageToken=${t}&key=${k}`);
+                    const d = await r.json();
+                    if (!d.items) break;
+                    v.push(...d.items.map(x => ({ videoId: x.snippet.resourceId.videoId, title: x.snippet.title, publishedAt: x.snippet.publishedAt, description: x.snippet.description, thumbnail: x.snippet.thumbnails.default?.url })));
+                    t = d.nextPageToken; if (!t) break;
+                }
+                return v;
+            },
+            async fetchStats(ids, k) {
+                const map = {};
+                for (let i = 0; i < ids.length; i += 50) {
+                    const r = await fetch(`${this.API_BASE_URL}videos?part=statistics,contentDetails,snippet&id=${ids.slice(i, i + 50).join(',')}&key=${k}`);
+                    const d = await r.json();
+                    if (d.items) d.items.forEach(x => { map[x.id] = { viewCount: x.statistics.viewCount, likeCount: x.statistics.likeCount, commentCount: x.statistics.commentCount, duration: x.contentDetails.duration, tags: x.snippet.tags }; });
+                }
+                return map;
+            },
+            parseDur(pt) { if (!pt) return 0; const m = pt.match(/PT(\d+H)?(\d+M)?(\d+S)?/); return (parseInt(m?.[1] || 0) * 3600) + (parseInt(m?.[2] || 0) * 60) + (parseInt(m?.[3] || 0)); },
+            calc90(v) {
+                const d = new Date(); d.setDate(d.getDate() - 90);
+                const r = v.filter(x => new Date(x.publishedAt) >= d);
+                if (!r.length) return { avgViews: 0, avgLikes: 0, avgComments: 0 };
+                const s = k => r.reduce((a, b) => a + (b[k] || 0), 0);
+                return { avgViews: Math.round(s('viewCount') / r.length), avgLikes: Math.round(s('likeCount') / r.length), avgComments: Math.round(s('commentCount') / r.length) };
+            },
+
+            renderUI(stats) {
+                document.getElementById('va-resultsSection').classList.remove('hidden');
+                document.getElementById('va-statSubscribers').innerText = Number(this.state.channelMetadata.subscribers).toLocaleString();
+                document.getElementById('va-statViews').innerText = Number(this.state.channelMetadata.totalViews).toLocaleString();
+                document.getElementById('va-statVideos').innerText = Number(this.state.channelMetadata.totalVideos).toLocaleString();
+                document.getElementById('va-avgViews90Days').innerText = stats.avgViews.toLocaleString();
+                document.getElementById('va-avgLikes90Days').innerText = stats.avgLikes.toLocaleString();
+                document.getElementById('va-avgComments90Days').innerText = stats.avgComments.toLocaleString();
+
+                const m = this.state.channelMetadata;
+                document.getElementById('va-channelInfo').innerHTML = `
+                    <div class="flex items-center gap-4 bg-dark-bg p-4 rounded-lg"><img src="${m.thumbnail}" class="w-20 h-20 rounded-full border-2 border-brand-primary"><div><h3 class="text-xl font-bold text-white">${m.title}</h3><p class="text-sm text-dark-muted">${m.country} • 개설 ${m.publishedAt.split('T')[0]}</p></div></div>
+                    <div class="bg-dark-bg p-4 rounded-lg h-24 overflow-y-auto text-sm text-gray-400">${m.description}</div>`;
+
+                this.state.monthlyCalendarData = this.genCalData(this.state.allVideosData);
+                this.state.currentCalendarDate = this.state.availableMonths[0];
+                this.renderCalendar();
+                this.renderShorts();
+                this.renderVideoList();
+            },
+            renderVideoList() {
+                const b = document.getElementById('va-videoListBody');
+                if (!b) return;
+                const l = [...this.state.allVideosData].sort((a, b) => b[this.state.videoSortState.key] - a[this.state.videoSortState.key]);
+                if (this.state.videoSortState.dir === 'asc') l.reverse();
+                document.getElementById('va-totalVideos').innerText = l.length;
+                b.innerHTML = l.map((v, i) => `
+                    <tr class="hover:bg-dark-hover"><td class="px-4 py-3 text-dark-muted">${i + 1}</td><td class="px-4 py-3 text-white truncate max-w-[200px]"><a href="https://youtu.be/${v.videoId}" target="_blank" class="hover:underline">${v.title}</a></td><td class="px-4 py-3 text-right text-dark-muted text-xs">${v.publishedAt.split('T')[0]}</td><td class="px-4 py-3 text-right font-mono text-green-400">${v.viewCount.toLocaleString()}</td><td class="px-4 py-3 text-right text-xs text-dark-muted">${new Date(v.durationSeconds * 1000).toISOString().substr(11, 8)}</td><td class="px-4 py-3 text-center text-xs text-yellow-500">${(v.likeCount / v.viewCount * 100).toFixed(1)}%</td></tr>`).join('');
+            },
+            switchTab(t) {
+                document.querySelectorAll('.va-tab-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('tab-' + t).classList.add('active');
+                if (t === 'analyze') { document.getElementById('content-analyze').classList.remove('hidden'); document.getElementById('content-saved').classList.add('hidden'); }
+                else { document.getElementById('content-analyze').classList.add('hidden'); document.getElementById('content-saved').classList.remove('hidden'); }
+            },
+            subscribeToSavedChannels() {
+                app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').onSnapshot(s => { this.state.savedChannelsData = []; s.forEach(d => this.state.savedChannelsData.push(d.data())); this.renderSavedList(); });
+            },
+            renderSavedList() {
+                const b = document.getElementById('va-savedListBody');
+                if (!b) return;
+                if (!this.state.savedChannelsData.length) { document.getElementById('va-emptySavedMsg').classList.remove('hidden'); return; }
+                document.getElementById('va-emptySavedMsg').classList.add('hidden');
+                b.innerHTML = this.state.savedChannelsData.map(d => `<tr class="hover:bg-dark-hover cursor-pointer" onclick="analysisModule.loadSaved('${d.metadata.id}')"><td class="px-4 py-3 text-white">${d.metadata.title}</td><td class="px-4 py-3 text-center text-dark-muted">${Number(d.metadata.subscribers).toLocaleString()}</td><td class="px-4 py-3 text-center text-xs text-dark-muted">${d.lastUpdated.split('T')[0]}</td><td class="px-4 py-3 text-center"><button class="text-red-500 hover:text-white" onclick="event.stopPropagation(); analysisModule.deleteSaved('${d.metadata.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+            },
+            async loadSaved(id) {
+                const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
+                if (s.exists) { const d = s.data(); this.state.channelMetadata = d.metadata; this.state.allVideosData = d.videos || []; this.renderUI(d.stats90); this.loadNote(id); this.switchTab('analyze'); this.setStatus('로딩 완료', false); }
+            },
+            async deleteSaved(id) { if (!confirm("삭제?")) return; await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(id).delete(); await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).delete(); },
+            async loadNote(id) {
+                const d = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
+                const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
+                if (d.exists && d.data().analysisNote) { const n = d.data().analysisNote; set('note_summary', n.summary); set('note_pros', n.pros); set('note_cons', n.cons); set('note_genre', n.genre); set('note_tone', n.tone); set('note_style', n.style); set('note_audience', n.audience); set('note_ad_domain', n.ad_domain); set('note_ad_type', n.ad_type); set('note_engagement_memo', n.engagement_memo); }
+                else { document.querySelectorAll('.va-note-input').forEach(i => i.value = ''); }
+            },
+            async saveNote() {
+                if (!this.state.channelMetadata) return;
+                const get = (k) => document.getElementById(k)?.value || '';
+                const note = { summary: get('note_summary'), pros: get('note_pros'), cons: get('note_cons'), genre: get('note_genre'), tone: get('note_tone'), style: get('note_style'), audience: get('note_audience'), ad_domain: get('note_ad_domain'), ad_type: get('note_ad_type'), engagement_memo: get('note_engagement_memo') };
+                await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(this.state.channelMetadata.id).set({ analysisNote: note }, { merge: true });
+                alert("저장 완료");
+            },
+            async analyzeGemini() {
+                const gk = app.getApiKey('gemini');
+                if (!gk) return alert("Gemini 키 필요");
+                if (!this.state.channelMetadata) return alert("분석 먼저 하세요");
+                const btn = document.getElementById('va-geminiBtn');
+                btn.innerText = "분석 중..."; btn.disabled = true;
+                try {
+                    const meta = this.state.channelMetadata;
+                    const prompt = `Analyze YouTube channel '${meta.title}' (${meta.subscribers} subs). Description: ${meta.description}. Provide JSON: { summary, pros, cons, genre, tone, style, audience, ad_domain, ad_type, engagement_memo } in Korean.`;
+                    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${gk}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                    const j = await r.json();
+                    const text = j.candidates[0].content.parts[0].text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+                    const res = JSON.parse(text);
+                    const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
+                    set('note_summary', res.summary); set('note_pros', res.pros); set('note_cons', res.cons); set('note_genre', res.genre); set('note_tone', res.tone); set('note_style', res.style); set('note_audience', res.audience); set('note_ad_domain', res.ad_domain); set('note_ad_type', res.ad_type); set('note_engagement_memo', res.engagement_memo);
+                } catch (e) { alert("Error: " + e.message); } finally { btn.innerHTML = '<i class="fas fa-robot"></i> Gemini 자동 분석'; btn.disabled = false; }
+            },
+            sortVideo(key) {
+                if (this.state.videoSortState.key === key) this.state.videoSortState.dir = this.state.videoSortState.dir === 'desc' ? 'asc' : 'desc';
+                else { this.state.videoSortState.key = key; this.state.videoSortState.dir = 'desc'; }
+                this.renderVideoList();
+            },
+
+            genCalData(v) {
+                const d = {};
+                v.forEach(x => { const m = x.publishedAt.slice(0, 7); if (!d[m]) d[m] = new Map(); const date = x.publishedAt.slice(0, 10); d[m].set(date, (d[m].get(date) || 0) + 1); });
+                this.state.availableMonths = Object.keys(d).sort().reverse();
+                return d;
+            },
+            renderCalendar() {
+                const c = document.getElementById('va-calendarBody'); const n = document.getElementById('va-calendarNav'); if (!c || !n) return; c.innerHTML = '';
+                if (!this.state.monthlyCalendarData[this.state.currentCalendarDate]) { n.innerHTML = '데이터 없음'; return; }
+                const [y, m] = this.state.currentCalendarDate.split('-');
+                n.innerHTML = `<button onclick="analysisModule.changeMonth(1)" class="p-1 hover:bg-white/10 rounded text-white">◀</button><span class="font-bold text-white">${y}년 ${m}월</span><button onclick="analysisModule.changeMonth(-1)" class="p-1 hover:bg-white/10 rounded text-white">▶</button>`;
+                const fd = new Date(y, m - 1, 1).getDay(); const ld = new Date(y, m, 0).getDate();
+                for (let i = 0; i < fd; i++) c.appendChild(document.createElement('div'));
+                const map = this.state.monthlyCalendarData[this.state.currentCalendarDate];
+                for (let d = 1; d <= ld; d++) {
+                    const dk = `${y}-${m}-${String(d).padStart(2, '0')}`; const count = map.get(dk) || 0;
+                    const cell = document.createElement('div'); cell.className = `va-calendar-cell ${count ? 'bg-brand-primary/50 text-white font-bold' : 'text-dark-muted/30'}`;
+                    cell.innerHTML = `<span>${d}</span>${count ? `<span class="text-[10px]">${count}</span>` : ''}`;
+                    c.appendChild(cell);
+                }
+            },
+            changeMonth(d) {
+                const idx = this.state.availableMonths.indexOf(this.state.currentCalendarDate);
+                if (this.state.availableMonths[idx + d]) { this.state.currentCalendarDate = this.state.availableMonths[idx + d]; this.renderCalendar(); }
+            },
+            renderShorts() {
+                const c = document.getElementById('va-shortsContent'); if (!c) return; c.innerHTML = '';
+                const s = this.state.allVideosData.filter(v => v.durationSeconds <= 60);
+                if (!s.length) { document.getElementById('va-shortsSection').classList.add('hidden'); return; }
+                document.getElementById('va-shortsSection').classList.remove('hidden');
+                s.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+                s.forEach(v => {
+                    const el = document.createElement('div'); el.className = 'inline-block w-40 bg-dark-bg rounded-lg overflow-hidden shadow-lg flex-shrink-0 border border-dark-border hover:border-brand-primary transition';
+                    el.innerHTML = `<div class="relative pb-[177%]"><a href="https://youtu.be/${v.videoId}" target="_blank"><img src="${v.thumbnail}" class="absolute h-full w-full object-cover"></a><div class="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent p-2"><p class="text-xs font-bold text-white truncate">${v.title}</p><p class="text-[10px] text-gray-400">👁️ ${v.viewCount.toLocaleString()}</p></div></div>`;
+                    c.appendChild(el);
+                });
+            },
+            scrollShorts(v) { document.getElementById('va-shortsContent').scrollBy({ left: v, behavior: 'smooth' }); }
         };
 
 
