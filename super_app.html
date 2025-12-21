@@ -674,10 +674,13 @@
 
                 if (!app.db) return;
 
+                this.showLoading(true, "채널 불러오는 중입니다..."); // Show loading
+
                 // Revert to global_channels as requested
                 const channelsCol = app.db.collection('global_channels');
                 const unsubChannels = channelsCol.onSnapshot(snapshot => {
                     this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.showLoading(false); // Hide loading on data
                     this.render(document.getElementById('main-content'));
                     this.setupScrollSync();
                 });
@@ -1038,7 +1041,7 @@
             setFilter(cat) { this.state.categoryFilter = cat; this.render(document.getElementById('main-content')); },
             sort(key) {
                 if (this.state.currentSort.key === key) this.state.currentSort.direction = this.state.currentSort.direction === 'desc' ? 'asc' : 'desc';
-                else this.state.currentSort = { key, direction: 'desc' };
+                else { this.state.currentSort = { key, direction: 'desc' }; } // Default to desc for new sort
                 this.render(document.getElementById('main-content'));
             },
 
@@ -1073,7 +1076,8 @@
                 if (!name || this.state.categories.includes(name)) return;
                 const newCats = [...this.state.categories, name];
                 await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
-                this.render(document.getElementById('main-content'));
+                document.getElementById('new-category-input').value = ''; // Clear input
+                // this.render(document.getElementById('main-content')); // Listener triggers render
             },
 
             async deleteCategory(name) {
@@ -1088,6 +1092,7 @@
                     }
                 });
                 await batch.commit();
+                // this.render(document.getElementById('main-content')); // Listener triggers render
             },
 
             async updateCategoryName(idx, newName) {
@@ -1105,6 +1110,7 @@
                     }
                 });
                 await batch.commit();
+                // this.render(document.getElementById('main-content')); // Listener triggers render
             },
 
             async moveCategory(idx, dir) { // kept for backward compat if needed, or remove? I will keep for safety
@@ -1347,6 +1353,9 @@
                                                 <option value="likeCount">좋아요순</option>
                                                 <option value="commentCount">댓글순</option>
                                             </select>
+                                            <button onclick="analysisModule.toggleShortsDir()" class="bg-dark-bg text-white border border-dark-border rounded px-2 py-1 hover:bg-dark-hover w-8 text-center" title="정렬 순서 변경">
+                                                ${this.state.shortsSortState.dir === 'asc' ? '▲' : '▼'}
+                                            </button>
                                         </div>
                                     </div>
                                     <div class="relative group">
@@ -1401,7 +1410,7 @@
                                                 <option value="mid">미드폼 (10분 미만)</option>
                                                 <option value="long">롱폼 (10분 이상)</option>
                                             </select>
-                                            <input type="text" placeholder="제목 검색..." onkeyup="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-32 md:w-48">
+                                            <input type="text" placeholder="제목, 설명, 태그 검색..." onkeyup="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-48 md:w-64">
                                         </div>
                                     </div>
                                     <div class="overflow-x-auto">
@@ -1412,9 +1421,10 @@
                                                     <th class="px-4 py-3">구분</th>
                                                     <th class="px-4 py-3 va-sortable-header" onclick="analysisModule.sortVideo('title')">제목 ↕</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('publishedAt')">게시일 ↕</th>
-                                                    <th class="px-4 py-3 text-center">조회수<br><span class="text-[10px] text-gray-500">길이</span></th>
-                                                    <th class="px-4 py-3 text-center">좋아요 (★)</th>
-                                                    <th class="px-4 py-3 text-center">댓글 (★)</th>
+                                                    <th class="px-4 py-3 text-right">길이</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('viewCount')">조회수 ↕</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('likeCount')">좋아요 ↕</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('commentCount')">댓글 ↕</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="va-videoListBody" class="divide-y divide-dark-border"></tbody>
@@ -1457,7 +1467,7 @@
                     let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, apiKey);
                     videos = videos.slice(0, 200);
                     const sMap = await this.fetchStats(videos.map(v => v.videoId), apiKey);
-                    videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), durationSeconds: this.parseDur(s.duration) }; });
+                    videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), commentCount: Number(s.commentCount || 0), durationSeconds: this.parseDur(s.duration), tags: s.tags || [] }; });
 
                     this.state.allVideosData = videos;
                     this.state.channelMetadata = meta;
@@ -1546,7 +1556,12 @@
                     });
                 }
                 if (this.state.videoFilter.search) {
-                    l = l.filter(v => v.title.toLowerCase().includes(this.state.videoFilter.search.toLowerCase()));
+                    const q = this.state.videoFilter.search.toLowerCase();
+                    l = l.filter(v =>
+                        v.title.toLowerCase().includes(q) ||
+                        (v.description && v.description.toLowerCase().includes(q)) ||
+                        (v.tags && v.tags.some(t => t.toLowerCase().includes(q)))
+                    );
                 }
 
                 // Sort
@@ -1579,24 +1594,22 @@
                                 <a href="https://youtu.be/${v.videoId}" target="_blank" class="text-white hover:underline truncate max-w-[200px] block" title="${v.title}">${v.title}</a>
                                 <button onclick="analysisModule.copyLink('https://youtu.be/${v.videoId}')" class="text-dark-muted hover:text-brand-primary opacity-0 group-hover:opacity-100 transition"><i class="fas fa-copy"></i></button>
                             </div>
-                            <button onclick="analysisModule.toggleDetail('${v.videoId}')" class="text-xs text-brand-primary hover:underline mt-1">상세 정보 (태그/설명)</button>
+                            <button onclick="analysisModule.toggleDetail('${v.videoId}')" class="text-xs text-brand-primary hover:underline mt-1">상세 정보</button>
                             <div id="detail-${v.videoId}" class="hidden mt-2 text-xs bg-black/20 p-2 rounded text-gray-400">
                                 <p class="mb-1"><span class="text-white font-bold">Tags:</span> ${v.tags ? v.tags.join(', ') : '없음'}</p>
                                 <p class="whitespace-pre-wrap h-20 overflow-y-auto custom-scrollbar border-t border-dark-border pt-1 mt-1">${v.description || '설명 없음'}</p>
                             </div>
                         </td>
                         <td class="px-4 py-3 text-right text-dark-muted text-xs align-top whitespace-nowrap">${v.publishedAt.split('T')[0]}</td>
+                        <td class="px-4 py-3 text-right text-xs text-dark-muted align-top">${new Date(v.durationSeconds * 1000).toISOString().substr(11, 8)}</td>
+                        <td class="px-4 py-3 text-right align-top font-mono text-green-400">${v.viewCount.toLocaleString()}</td>
                         <td class="px-4 py-3 text-right align-top">
-                            <div class="font-mono text-green-400">${v.viewCount.toLocaleString()}</div>
-                            <div class="text-xs text-dark-muted">${new Date(v.durationSeconds * 1000).toISOString().substr(11, 8)}</div>
+                            <div class="font-mono text-white">${v.likeCount.toLocaleString()}</div>
+                            <div class="text-[10px] text-yellow-500 tracking-tighter">${'★'.repeat(starsL)}${'☆'.repeat(5 - starsL)}</div>
                         </td>
-                        <td class="px-4 py-3 text-center align-top">
-                            <div class="text-yellow-500 text-xs tracking-tighter">${'★'.repeat(starsL)}${'☆'.repeat(5 - starsL)}</div>
-                            <div class="text-[10px] text-dark-muted">${v.likeCount.toLocaleString()} (${(v.likeCount / v.viewCount * 100).toFixed(1)}%)</div>
-                        </td>
-                        <td class="px-4 py-3 text-center align-top">
-                            <div class="text-blue-400 text-xs tracking-tighter">${'★'.repeat(starsC)}${'☆'.repeat(5 - starsC)}</div>
-                            <div class="text-[10px] text-dark-muted">${v.commentCount.toLocaleString()} (${(v.commentCount / v.viewCount * 100).toFixed(1)}%)</div>
+                        <td class="px-4 py-3 text-right align-top">
+                            <div class="font-mono text-white">${v.commentCount.toLocaleString()}</div>
+                            <div class="text-[10px] text-blue-400 tracking-tighter">${'★'.repeat(starsC)}${'☆'.repeat(5 - starsC)}</div>
                         </td>
                     </tr>`;
                 }).join('');
@@ -1735,9 +1748,12 @@
             scrollShorts(v) { document.getElementById('va-shortsContent').scrollBy({ left: v, behavior: 'smooth' }); },
 
             // --- Helpers ---
+            toggleShortsDir() {
+                this.state.shortsSortState.dir = this.state.shortsSortState.dir === 'desc' ? 'asc' : 'desc';
+                this.renderShorts();
+            },
             sortShorts(k) {
-                if (this.state.shortsSortState.key === k) this.state.shortsSortState.dir = this.state.shortsSortState.dir === 'desc' ? 'asc' : 'desc';
-                else { this.state.shortsSortState.key = k; this.state.shortsSortState.dir = 'desc'; }
+                this.state.shortsSortState.key = k;
                 this.renderShorts();
             },
             filterVideo(t, v) { this.state.videoFilter[t] = v; this.renderVideoList(); },
