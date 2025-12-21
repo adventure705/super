@@ -1616,9 +1616,7 @@
                 videoSortState: { key: 'publishedAt', dir: 'desc' },
                 shortsSortState: { key: 'publishedAt', dir: 'desc' },
                 savedSortState: { key: 'lastUpdated', dir: 'desc' },
-                shortsSortState: { key: 'publishedAt', dir: 'desc' },
-                savedSortState: { key: 'lastUpdated', dir: 'desc' },
-                videoFilter: { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0 }
+                videoFilter: { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0, date: null }
             },
             API_BASE_URL: 'https://www.googleapis.com/youtube/v3/',
 
@@ -1724,8 +1722,12 @@
                                 <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
                                     <div class="p-4 border-b border-dark-border flex flex-col md:flex-row justify-between items-center gap-4">
                                         <div class="flex items-center gap-2">
-                                            <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
+                                    <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
                                             <button onclick="analysisModule.downloadCSV()" class="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded transition"><i class="fas fa-file-csv mr-1"></i>CSV</button>
+                                            <div id="va-dateFilterBadge" class="hidden flex items-center gap-2 bg-brand-primary/20 text-brand-primary px-3 py-1 rounded-full text-xs font-bold border border-brand-primary/50">
+                                                <i class="fas fa-calendar-check"></i> <span id="va-dateFilterValue"></span>
+                                                <button onclick="analysisModule.clearDateFilter()" class="hover:text-white"><i class="fas fa-times"></i></button>
+                                            </div>
                                         </div>
                                         <div class="flex flex-wrap gap-2 items-center">
                                             <select onchange="analysisModule.filterVideo('type', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
@@ -1920,6 +1922,15 @@
                 const b = document.getElementById('va-videoListBody');
                 if (!b) return;
 
+                // Date Filter Badge Logic
+                const dateBadge = document.getElementById('va-dateFilterBadge');
+                if (this.state.videoFilter.date) {
+                    dateBadge.classList.remove('hidden');
+                    document.getElementById('va-dateFilterValue').innerText = this.state.videoFilter.date;
+                } else {
+                    dateBadge.classList.add('hidden');
+                }
+
                 let l = [...this.state.allVideosData];
 
                 // Filter
@@ -1952,6 +1963,10 @@
                         (v.description && v.description.toLowerCase().includes(q)) ||
                         (v.tags && v.tags.some(t => t.toLowerCase().includes(q)))
                     );
+                }
+
+                if (this.state.videoFilter.date) {
+                    l = l.filter(v => v.publishedAt.startsWith(this.state.videoFilter.date));
                 }
 
                 // Sort
@@ -2155,10 +2170,21 @@
                 const map = this.state.monthlyCalendarData[this.state.currentCalendarDate];
                 for (let d = 1; d <= ld; d++) {
                     const dk = `${y}-${m}-${String(d).padStart(2, '0')}`; const count = map.get(dk) || 0;
-                    const cell = document.createElement('div'); cell.className = `va-calendar-cell ${count ? 'bg-brand-primary/50 text-white font-bold' : 'text-dark-muted/30'}`;
+                    const cell = document.createElement('div');
+                    cell.className = `va-calendar-cell ${count ? 'bg-brand-primary/50 text-white font-bold cursor-pointer hover:bg-brand-primary transition' : 'text-dark-muted/30'}`;
+                    if (count) cell.onclick = () => analysisModule.filterVideoByDate(dk);
                     cell.innerHTML = `<span>${d}</span>${count ? `<span class="text-[10px]">${count}</span>` : ''}`;
                     c.appendChild(cell);
                 }
+            },
+            filterVideoByDate(date) {
+                this.state.videoFilter.date = date;
+                this.renderVideoList();
+                document.getElementById('va-videoListBody').scrollIntoView({ behavior: 'smooth' });
+            },
+            clearDateFilter() {
+                this.state.videoFilter.date = null;
+                this.renderVideoList();
             },
             changeMonth(d) {
                 const idx = this.state.availableMonths.indexOf(this.state.currentCalendarDate);
@@ -2175,8 +2201,11 @@
                 s.sort((a, b) => {
                     let va = a[sk], vb = b[sk];
                     if (['viewCount', 'likeCount', 'commentCount'].includes(sk)) { va = Number(va); vb = Number(vb); }
+                    if (sk === 'publishedAt') { va = new Date(va).getTime(); vb = new Date(vb).getTime(); }
+
                     if (va < vb) return -1; if (va > vb) return 1; return 0;
                 });
+                // Default is DESC (Newest First), so if dir is DESC, we REVERSE the Ascending sort.
                 if (this.state.shortsSortState.dir === 'desc') s.reverse();
 
                 s.forEach(v => {
