@@ -582,6 +582,8 @@
             <div class="search-box">
                 <input type="text" id="keyword-input" placeholder="키워드 입력 (예: 먹방)">
                 <button id="search-btn">검색</button>
+                <button id="csv-btn" style="background:#2ecc71; margin-left:10px; display:none;"
+                    onclick="downloadCSV()">CSV 저장</button>
             </div>
         </section>
 
@@ -594,6 +596,7 @@
                         <tr>
                             <th>NO</th>
                             <th>채널명</th>
+                            <th>구독자수</th>
                             <th>🇰🇷 영상제목 (LINK)</th>
                             <th>조회수</th>
                             <th>댓글수</th>
@@ -876,6 +879,9 @@
         window.closeModal = () => document.getElementById('api-modal').style.display = "none";
         window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
 
+        // Global for CSV
+        let currentResults = [];
+
         // App Functions
         async function getApiKey(t = 'youtube') {
             try {
@@ -884,6 +890,43 @@
                 if (list.length) return list[Math.floor(Math.random() * list.length)].key;
             } catch (e) { }
             return null; // Local First
+        }
+
+        function downloadCSV() {
+            if (!currentResults || !currentResults.length) return alert("저장할 데이터가 없습니다.");
+
+            const BOM = "\uFEFF";
+            let csv = BOM + "Rank,Channel Name,Channel Link,Subscribers,Video Title,Video Link,Views,Comments,Likes,Date,English,Japanese,Chinese,Spanish,Hindi,Russian\n";
+
+            currentResults.forEach(r => {
+                const row = [
+                    r.rank,
+                    `"${(r.channel || '').replace(/"/g, '""')}"`,
+                    `"https://www.youtube.com/channel/${r.channelId}"`,
+                    `"${(r.subsRaw || 0)}"`, // Raw number for CSV might be better, or formatted? Let's use raw for data, or formatted string. Using formatted from UI object generally. Let's use the formatted string r.subs if available, or just recalculate. I'll construct it from scratch to be safe or assuming r has it.
+                    // Actually updateUI uses r.subs. Let's make sure search saves it.
+                    `"${(r.korean || '').replace(/"/g, '""')}"`,
+                    `"https://www.youtube.com/watch?v=${r.id}"`,
+                    `"${(r.views || '').replace(/,/g, '')}"`, // Remove commas for raw number? Or keep as string? Excel prefers raw. Let's send raw numbers if possible or cleaned strings.
+                    `"${(r.comments || '').replace(/,/g, '')}"`,
+                    `"${(r.likes || '').replace(/,/g, '')}"`,
+                    `"${r.date}"`,
+                    `"${(r.english || '').replace(/"/g, '""')}"`,
+                    `"${(r.japanese || '').replace(/"/g, '""')}"`,
+                    `"${(r.chinese || '').replace(/"/g, '""')}"`,
+                    `"${(r.spanish || '').replace(/"/g, '""')}"`,
+                    `"${(r.hindi || '').replace(/"/g, '""')}"`,
+                    `"${(r.russian || '').replace(/"/g, '""')}"`
+                ];
+                csv += row.join(",") + "\n";
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `youtube_results_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
         }
 
         async function search(q, c) {
@@ -964,6 +1007,19 @@
                     finalItems = [...finalItems, ...r.items];
                 }
 
+                // --- NEW: Fetch Channel Stats (Subscribers) ---
+                const channelIds = [...new Set(finalItems.map(i => i.snippet.channelId))];
+                const channelStats = {};
+                for (let i = 0; i < channelIds.length; i += 50) {
+                    const chunk = channelIds.slice(i, i + 50).join(',');
+                    try {
+                        const r = await fetchYT(`channels?part=statistics&id=${chunk}&key=${k}`);
+                        r.items.forEach(ch => {
+                            channelStats[ch.id] = ch.statistics.subscriberCount;
+                        });
+                    } catch (e) { console.error("Channel fetch failed", e); }
+                }
+
                 // Prepare for Translation
                 const titles = finalItems.map(i => i.snippet.title);
 
@@ -973,14 +1029,18 @@
                     trans = await doTrans(titles, tk);
                 }
 
-                const res = finalItems.map((item, i) => {
+                currentResults = finalItems.map((item, i) => {
                     const s = item.snippet;
                     const st = item.statistics || {};
+                    const subCount = channelStats[s.channelId] || 0;
                     return {
                         rank: i + 1,
                         korean: s.title,
                         id: item.id,
                         channel: s.channelTitle,
+                        channelId: s.channelId,
+                        subsRaw: subCount,
+                        subs: Number(subCount).toLocaleString(),
                         views: Number(st.viewCount || 0).toLocaleString(),
                         comments: Number(st.commentCount || 0).toLocaleString(),
                         likes: Number(st.likeCount || 0).toLocaleString(),
@@ -991,7 +1051,7 @@
                     };
                 });
 
-                const st = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
+                const st = { query: q || c, selectedCategory: c, results: currentResults, timestamp: Date.now() };
                 updateUI(st);
                 msg.innerText = "완료 (" + finalItems.length + "개)"; msg.style.color = "#888";
 
@@ -1061,12 +1121,19 @@
             const inp = document.getElementById('keyword-input');
             if (st.query && inp.value !== st.query) inp.value = st.query;
             document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === st.selectedCategory));
+
+            // Show CSV Btn
+            document.getElementById('csv-btn').style.display = (st.results && st.results.length) ? 'inline-block' : 'none';
+
             const tb = document.querySelector('#results-table tbody'); tb.innerHTML = '';
             (st.results || []).forEach(r => {
                 const tr = document.createElement('tr');
                 const link = r.id ? `<a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" style="color:#fff;text-decoration:none;cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.korean}</a>` : r.korean;
+                const chLink = r.channelId ? `<a href="https://www.youtube.com/channel/${r.channelId}" target="_blank" style="color:#888;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.channel}</a>` : r.channel;
+
                 tr.innerHTML = `<td>${r.rank}</td>
-                                <td>${r.channel}</td>
+                                <td>${chLink}</td>
+                                <td>${r.subs}</td>
                                 <td style="color:#fff">${link}</td>
                                 <td>${r.views}</td>
                                 <td>${r.comments}</td>
