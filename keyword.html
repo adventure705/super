@@ -1135,7 +1135,7 @@
                 l.appendChild(b);
             });
             document.getElementById('search-btn').onclick = () => search(document.getElementById('keyword-input').value, getCurrentCat());
-            document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
+            document.getElementById('keyword-input').onkeydown = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
 
             const m = document.getElementById('api-modal');
             // Removed click outside to close
