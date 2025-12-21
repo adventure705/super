@@ -391,7 +391,45 @@
         .modal-bg.active .modal-content {
             transform: scale(1);
         }
+
+        /* Scroll to Top Button */
+        #scroll-to-top {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            width: 3.5rem;
+            height: 3.5rem;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #scroll-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #scroll-to-top:hover {
+            background-color: #dc2626;
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(239, 68, 68, 0.5);
+        }
+
+        #scroll-to-top:active {
+            transform: scale(0.95);
+        }
     </style>
+
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 
@@ -445,7 +483,9 @@
                 </div>
             </div>
 
-            <main class="flex-1 overflow-auto bg-dark-bg p-4 md:p-8 relative" id="main-content">
+            <main class="flex-1 overflow-auto bg-dark-bg p-4 md:p-8 pb-24 md:pb-8 relative scroll-smooth"
+                id="main-content">
+
                 <div class="flex flex-col items-center justify-center h-full text-center text-dark-muted">
                     <i class="fas fa-rocket text-6xl mb-4 text-brand-primary opacity-50"></i>
                     <h2 class="text-2xl font-bold text-white mb-2">환영합니다!</h2>
@@ -518,7 +558,13 @@
         </div>
     </div>
 
+    <!-- Top Scroll Button -->
+    <div id="scroll-to-top" title="위로 가기">
+        <i class="fas fa-chevron-up text-xl"></i>
+    </div>
+
     <!-- Firebase Scripts -->
+
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -821,7 +867,26 @@
                 document.getElementById('settings-modal').addEventListener('click', (e) => {
                     if (e.target === document.getElementById('settings-modal')) this.closeSettings();
                 });
+
+                // Top Scroll Logic
+                const mainContent = document.getElementById('main-content');
+                const scrollTopBtn = document.getElementById('scroll-to-top');
+
+                if (mainContent && scrollTopBtn) {
+                    mainContent.addEventListener('scroll', () => {
+                        if (mainContent.scrollTop > 300) {
+                            scrollTopBtn.classList.add('visible');
+                        } else {
+                            scrollTopBtn.classList.remove('visible');
+                        }
+                    });
+
+                    scrollTopBtn.addEventListener('click', () => {
+                        mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+                    });
+                }
             },
+
             showStatus(msg) {
                 const el = document.getElementById('status-bar');
                 el.innerHTML = `<i class="fas fa-check mr-1"></i> ${msg}`;
