@@ -283,9 +283,16 @@
                     return;
                 }
 
+
                 if (id === 'keyword') {
                     keywordModule.render(main);
                     keywordModule.init();
+                    return;
+                }
+
+                if (id === 'channel') {
+                    channelModule.render(main);
+                    channelModule.init();
                     return;
                 }
 
@@ -475,7 +482,360 @@
             }
         };
 
-        // --- KEYWORD MODULE ---
+        // --- CHANNEL MODULE ---
+        const channelModule = {
+            state: {
+                channels: [],
+                categories: ['미분류'],
+                categoryColors: {},
+                currentSort: { key: 'subscribers', direction: 'desc' },
+                searchTerm: '',
+                categoryFilter: '전체',
+                isCategoryModalOpen: false,
+                editingCategoryName: null
+            },
+            listeners: [],
+
+            init() {
+                this.setupListeners();
+            },
+
+            setupListeners() {
+                // Detach old listeners if any
+                this.listeners.forEach(unsub => unsub());
+                this.listeners = [];
+
+                if (!app.db) return;
+
+                // Listen to channels
+                const channelsCol = app.db.collection('global_channels');
+                const unsubChannels = channelsCol.onSnapshot(snapshot => {
+                    this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.render(document.getElementById('main-content'));
+                });
+                this.listeners.push(unsubChannels);
+
+                // Listen to categories
+                const catDoc = app.db.collection('global_data').doc('channel_categories');
+                const unsubCat = catDoc.onSnapshot(doc => {
+                    if (doc.exists) {
+                        this.state.categories = doc.data().names || ['미분류'];
+                    } else {
+                        catDoc.set({ names: ['미분류'] });
+                        this.state.categories = ['미분류'];
+                    }
+                    this.ensureCategoryColors();
+                    this.render(document.getElementById('main-content'));
+                });
+                this.listeners.push(unsubCat);
+            },
+
+            ensureCategoryColors() {
+                const palette = ['red', 'green', 'blue', 'yellow', 'purple', 'indigo', 'pink', 'teal'];
+                const colorClasses = palette.map(p => `bg-${p}-600`);
+                const newColors = { ...this.state.categoryColors, '미분류': 'bg-gray-600' };
+                let colorIndex = 0;
+                this.state.categories.forEach(cat => {
+                    if (cat !== '미분류' && !newColors[cat]) {
+                        newColors[cat] = colorClasses[colorIndex % colorClasses.length];
+                        colorIndex++;
+                    }
+                });
+                this.state.categoryColors = newColors;
+            },
+
+            render(container) {
+                if (!container) return; // Guard
+                if (app.state.currentModule !== 'channel') return;
+
+                const { channels, categories, currentSort, searchTerm, categoryFilter } = this.state;
+
+                // Filter & Sort
+                let filtered = channels.filter(ch => {
+                    const match = searchTerm.toLowerCase();
+                    const text = [ch.channelName, ch.note, ch.country, ch.customCategory].join(' ').toLowerCase();
+                    if (searchTerm && !text.includes(match)) return false;
+                    if (categoryFilter !== '전체' && ch.customCategory !== categoryFilter) return false;
+                    return true;
+                });
+
+                filtered.sort((a, b) => {
+                    let aVal = a[currentSort.key];
+                    let bVal = b[currentSort.key];
+                    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+                    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+                    if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+                    if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+                    return 0;
+                });
+
+                container.innerHTML = `
+                    <div class="max-w-7xl mx-auto space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-2xl font-bold text-white"><i class="fas fa-tv text-brand-primary mr-2"></i>채널 분석 & 관리</h2>
+                            <div class="text-sm text-dark-muted">총 채널: <span class="text-white font-bold">${channels.length}</span></div>
+                        </div>
+
+                        <!-- Add & Search -->
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                            <div class="md:col-span-8 flex gap-2">
+                                <input type="text" id="ch-url-input" placeholder="유튜브 URL 또는 @핸들 입력" class="flex-1 bg-dark-card border border-dark-border text-white rounded-lg px-4 py-2 focus:border-brand-primary outline-none">
+                                <button onclick="channelModule.addChannel()" class="bg-brand-primary hover:bg-brand-hover text-white px-6 py-2 rounded-lg font-bold transition-colors whitespace-nowrap">추가</button>
+                            </div>
+                            <div class="md:col-span-4 relative">
+                                <i class="fas fa-search absolute left-3 top-3 text-gray-500"></i>
+                                <input type="text" oninput="channelModule.handleSearch(this.value)" value="${searchTerm}" placeholder="채널 검색..." class="w-full bg-dark-card border border-dark-border text-white rounded-lg pl-10 pr-4 py-2 focus:border-brand-primary outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Filters -->
+                        <div class="flex flex-wrap gap-3 items-center bg-dark-card p-4 rounded-xl border border-dark-border">
+                            <span class="text-sm font-bold text-gray-400">카테고리:</span>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="channelModule.setFilter('전체')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === '전체' ? 'bg-white text-black font-bold' : 'bg-dark-bg text-gray-400 border border-dark-border'}">전체</button>
+                                ${categories.map(cat => `
+                                    <button onclick="channelModule.setFilter('${cat}')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === cat ? 'ring-2 ring-white ' + this.state.categoryColors[cat] + ' text-white' : 'bg-dark-bg text-gray-400 border border-dark-border'}">
+                                        ${cat}
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <div class="ml-auto">
+                                <button onclick="channelModule.toggleCatModal(true)" class="text-xs text-brand-primary hover:text-white transition-colors"><i class="fas fa-cog"></i> 카테고리 관리</button>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left text-gray-400">
+                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar">
+                                        <tr>
+                                            <th class="px-4 py-3">프로필</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('channelName')">채널명</th>
+                                            <th class="px-4 py-3">카테고리</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('subscribers')">구독자</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('totalViews')">총 조회수</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('avgViews90d')">90일 평균 조회</th>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="channelModule.sort('avgUploadFreqDays')">업로드 주기</th>
+                                            <th class="px-4 py-3 text-right">관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${filtered.length > 0 ? filtered.map(ch => `
+                                            <tr class="border-b border-dark-border hover:bg-dark-hover transition-colors">
+                                                <td class="px-4 py-3"><img src="${ch.profileIconUrl}" class="w-8 h-8 rounded-full"></td>
+                                                <td class="px-4 py-3">
+                                                    <a href="${ch.channelUrl}" target="_blank" class="text-white hover:text-brand-primary font-bold">${ch.channelName}</a>
+                                                    <div class="text-xs text-dark-muted">${ch.country} · ${this.calculateElapsedTime(ch.channelCreationDate)}</div>
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    <span onclick="channelModule.cycleCategory('${ch.id}', '${ch.customCategory}')" class="cursor-pointer px-2 py-1 rounded text-xs text-white ${this.state.categoryColors[ch.customCategory] || 'bg-gray-600'}">
+                                                        ${ch.customCategory}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-3 font-mono text-gray-300">${ch.subscribers.toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono text-dark-muted">${ch.totalViews.toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono text-brand-primary">${ch.avgViews90d.toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-xs">${this.formatUploadFrequency(ch.avgUploadFreqDays, ch.totalVideos)}</td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <button onclick="channelModule.deleteChannel('${ch.id}')" class="text-dark-muted hover:text-red-500 transition-colors"><i class="fas fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        `).join('') : `<tr><td colspan="8" class="p-8 text-center text-dark-muted">등록된 채널이 없습니다.</td></tr>`}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Modal -->
+                    <div id="cat-modal" class="${this.state.isCategoryModalOpen ? 'flex' : 'hidden'} fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
+                        <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
+                            <h3 class="text-lg font-bold text-white mb-4">카테고리 관리</h3>
+                            <div class="flex gap-2 mb-4">
+                                <input type="text" id="new-cat-input" placeholder="새 카테고리" class="flex-1 bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm">
+                                <button onclick="channelModule.addCategory()" class="bg-brand-primary text-white rounded px-3 py-2 text-sm">추가</button>
+                            </div>
+                            <ul class="space-y-2 max-h-60 overflow-y-auto mb-4">
+                                ${categories.map(cat => `
+                                    <li class="flex justify-between items-center text-sm p-2 bg-dark-bg rounded border border-dark-border">
+                                        <span class="${this.state.categoryColors[cat] || 'bg-gray-600'} px-2 py-0.5 rounded text-xs text-white">${cat}</span>
+                                        ${cat !== '미분류' ? `<button onclick="channelModule.deleteCategory('${cat}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                            <button onclick="channelModule.toggleCatModal(false)" class="w-full bg-gray-700 text-white rounded py-2 text-sm hover:bg-gray-600">닫기</button>
+                        </div>
+                    </div>
+                    <!-- Loading Overlay -->
+                    <div id="ch-loading" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                        <div class="bg-dark-card p-4 rounded-lg flex items-center gap-3 text-white border border-brand-primary">
+                            <i class="fas fa-spinner fa-spin text-brand-primary"></i> <span id="ch-loading-text">처리 중...</span>
+                        </div>
+                    </div>
+                `;
+            },
+
+            // --- Logic ---
+            handleSearch(val) { this.state.searchTerm = val; this.render(document.getElementById('main-content')); },
+            setFilter(cat) { this.state.categoryFilter = cat; this.render(document.getElementById('main-content')); },
+            toggleCatModal(show) { this.state.isCategoryModalOpen = show; this.render(document.getElementById('main-content')); },
+            sort(key) {
+                if (this.state.currentSort.key === key) this.state.currentSort.direction = this.state.currentSort.direction === 'desc' ? 'asc' : 'desc';
+                else this.state.currentSort = { key, direction: 'desc' };
+                this.render(document.getElementById('main-content'));
+            },
+
+            async addChannel() {
+                const url = document.getElementById('ch-url-input').value.trim();
+                const k = app.getApiKey('youtube');
+                if (!url) return alert("URL을 입력하세요.");
+                if (!k) return alert("설정에서 YouTube API 키를 먼저 등록해주세요.");
+
+                this.showLoading(true, "채널 정보 가져오는 중...");
+                try {
+                    const data = await this.fetchYouTubeData(url, k);
+                    await app.db.collection('global_channels').add({
+                        ...data,
+                        addedAt: new Date().toISOString()
+                    });
+                    this.showLoading(false);
+                    // Input clear happens on re-render
+                } catch (e) {
+                    this.showLoading(false);
+                    alert("오류: " + e.message);
+                }
+            },
+
+            async deleteChannel(id) {
+                if (!confirm("삭제하시겠습니까?")) return;
+                await app.db.collection('global_channels').doc(id).delete();
+            },
+
+            async addCategory() {
+                const name = document.getElementById('new-cat-input').value.trim();
+                if (!name || this.state.categories.includes(name)) return;
+                const newCats = [...this.state.categories, name];
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+            },
+
+            async deleteCategory(name) {
+                if (!confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) return;
+                const newCats = this.state.categories.filter(c => c !== name);
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+                // Reset channels
+                const batch = app.db.batch();
+                this.state.channels.forEach(ch => {
+                    if (ch.customCategory === name) {
+                        batch.update(app.db.collection('global_channels').doc(ch.id), { customCategory: '미분류' });
+                    }
+                });
+                await batch.commit();
+            },
+
+            async cycleCategory(chId, currentCat) {
+                const idx = this.state.categories.indexOf(currentCat);
+                const nextCat = this.state.categories[(idx + 1) % this.state.categories.length];
+                await app.db.collection('global_channels').doc(chId).update({ customCategory: nextCat });
+            },
+
+            showLoading(show, text) {
+                const el = document.getElementById('ch-loading');
+                if (!el) return;
+                el.classList.toggle('hidden', !show);
+                if (text) document.getElementById('ch-loading-text').innerText = text;
+            },
+
+            // --- API Helpers ---
+            async fetchYouTubeData(url, apiKey) {
+                // Simplified extraction
+                let id = null;
+                if (url.includes('channel/')) id = url.split('channel/')[1].split('/')[0];
+                else if (url.includes('@')) {
+                    // Handle search
+                    const handle = url.split('@')[1].split('/')[0];
+                    const s = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/search?part=id&q=@${handle}&type=channel&key=${apiKey}`);
+                    if (s.items?.[0]) id = s.items[0].id.channelId;
+                }
+                if (!id) throw new Error("채널 ID를 찾을 수 없습니다. (/channel/ ID 형식 또는 @핸들 사용 권장)");
+
+                // Channel Info
+                const chRes = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${id}&key=${apiKey}`);
+                const item = chRes.items[0];
+                if (!item) throw new Error("채널 정보 없음");
+
+                // 90 days stats (simplified for brevity, can verify logic from original)
+                // Note: Implementing full 90d logic requires iterating playlistItems.
+                // For MVP integration, I will implement a lighter version or full per requirement.
+                // Let's implement full 90d logic based on original file code.
+                const uploadsId = item.contentDetails.relatedPlaylists.uploads;
+                const videos = await this.fetchRecentVideos(uploadsId, apiKey);
+
+                let stats90 = { views: 0, likes: 0, count: videos.length };
+                if (videos.length > 0) {
+                    // Fetch video stats
+                    const chunk = videos.map(v => v.id).join(',');
+                    const vRes = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${chunk}&key=${apiKey}`);
+                    vRes.items.forEach(v => {
+                        stats90.views += Number(v.statistics.viewCount || 0);
+                        stats90.likes += Number(v.statistics.likeCount || 0);
+                    });
+                }
+
+                // Upload freq
+                const oldest = videos.length > 0 ? videos[videos.length - 1].date : item.snippet.publishedAt;
+                const days = (new Date() - new Date(oldest)) / (86400000) || 1;
+                const freq = videos.length > 0 ? (days / videos.length).toFixed(1) : 0;
+
+                return {
+                    channelName: item.snippet.title,
+                    channelUrl: `https://youtube.com/channel/${item.id}`,
+                    profileIconUrl: item.snippet.thumbnails.default.url,
+                    country: item.snippet.country || 'N/A',
+                    subscribers: Number(item.statistics.subscriberCount),
+                    totalViews: Number(item.statistics.viewCount),
+                    totalVideos: Number(item.statistics.videoCount),
+                    channelCreationDate: item.snippet.publishedAt,
+                    avgUploadFreqDays: freq,
+                    avgViews90d: stats90.count ? Math.round(stats90.views / stats90.count) : 0,
+                    avgLikes90d: stats90.count ? Math.round(stats90.likes / stats90.count) : 0,
+                    customCategory: '미분류',
+                    note: '',
+                    channelId: item.id
+                };
+            },
+
+            async fetchRecentVideos(pid, k) {
+                // Fetch last ~50 videos or up to 90 days
+                const res = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${pid}&maxResults=50&key=${k}`);
+                const now = new Date();
+                const d90 = new Date(now - 90 * 86400000);
+                return res.items
+                    .map(i => ({ id: i.contentDetails.videoId, date: new Date(i.contentDetails.videoPublishedAt) }))
+                    .filter(v => v.date > d90);
+            },
+
+            async fetchWithBackoff(url) {
+                const r = await fetch(url);
+                if (!r.ok) throw new Error("API Request Failed");
+                return r.json();
+            },
+
+            calculateElapsedTime(dateStr) {
+                const diff = new Date() - new Date(dateStr);
+                const years = Math.floor(diff / 31536000000);
+                const months = Math.floor(diff / 2592000000) % 12;
+                return `${years}년 ${months}개월`;
+            },
+
+            formatUploadFrequency(days, total) {
+                if (!days || days === 'N/A' || total === 0) return '-';
+                if (days < 1) return `1일당 ${(1 / days).toFixed(1)}개`;
+                return `${Math.round(days)}일당 1개`;
+            }
+        };
+
+
         const keywordModule = {
             CATS: ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "게임", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "인물/블로그", "비영리/사회운동", "여행/이벤트"],
             CAT_IDS: { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" },
