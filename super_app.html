@@ -674,13 +674,13 @@
 
                 if (!app.db) return;
 
-                this.showLoading(true, "채널 불러오는 중입니다..."); // Show loading
+                // this.showLoading(true, "채널 불러오는 중입니다..."); // REMOVED as requested
 
                 // Revert to global_channels as requested
                 const channelsCol = app.db.collection('global_channels');
                 const unsubChannels = channelsCol.onSnapshot(snapshot => {
                     this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    this.showLoading(false); // Hide loading on data
+                    // this.showLoading(false); // REMOVED
                     this.render(document.getElementById('main-content'));
                     this.setupScrollSync();
                 });
@@ -1075,14 +1075,23 @@
                 const name = document.getElementById('new-category-input').value.trim();
                 if (!name || this.state.categories.includes(name)) return;
                 const newCats = [...this.state.categories, name];
+                // Optimistic Update
+                this.state.categories = newCats;
+                this.render(document.getElementById('main-content'));
+                document.getElementById('new-category-input').value = '';
+
                 await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
-                document.getElementById('new-category-input').value = ''; // Clear input
-                // this.render(document.getElementById('main-content')); // Listener triggers render
+                // Listener will confirm
             },
 
             async deleteCategory(name) {
                 if (!confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) return;
                 const newCats = this.state.categories.filter(c => c !== name);
+
+                // Optimistic
+                this.state.categories = newCats;
+                this.render(document.getElementById('main-content'));
+
                 await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
                 // Reset channels but keep them
                 const batch = app.db.batch();
@@ -1295,6 +1304,7 @@
                 savedChannelsData: [],
                 videoSortState: { key: 'publishedAt', dir: 'desc' },
                 shortsSortState: { key: 'publishedAt', dir: 'desc' },
+                savedSortState: { key: 'lastUpdated', dir: 'desc' },
                 videoFilter: { type: 'all', search: '' }
             },
             API_BASE_URL: 'https://www.googleapis.com/youtube/v3/',
@@ -1410,7 +1420,7 @@
                                                 <option value="mid">미드폼 (10분 미만)</option>
                                                 <option value="long">롱폼 (10분 이상)</option>
                                             </select>
-                                            <input type="text" placeholder="제목, 설명, 태그 검색..." onkeyup="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-48 md:w-64">
+                                            <input type="text" placeholder="제목, 설명, 태그 검색..." oninput="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-48 md:w-64">
                                         </div>
                                     </div>
                                     <div class="overflow-x-auto">
@@ -1438,7 +1448,12 @@
                              <div class="overflow-x-auto bg-dark-card rounded-xl border border-dark-border">
                                 <table class="min-w-full text-sm text-left text-gray-400">
                                     <thead class="bg-dark-bg text-gray-200 uppercase text-xs">
-                                        <tr><th class="px-4 py-3">채널</th><th class="px-4 py-3 text-center">구독자</th><th class="px-4 py-3 text-center">업데이트</th><th class="px-4 py-3 text-center">관리</th></tr>
+                                        <tr>
+                                            <th class="px-4 py-3 cursor-pointer hover:text-white" onclick="analysisModule.sortSaved('title')">채널 ↕</th>
+                                            <th class="px-4 py-3 text-center cursor-pointer hover:text-white" onclick="analysisModule.sortSaved('subscribers')">구독자 ↕</th>
+                                            <th class="px-4 py-3 text-center cursor-pointer hover:text-white" onclick="analysisModule.sortSaved('lastUpdated')">업데이트 ↕</th>
+                                            <th class="px-4 py-3 text-center">관리</th>
+                                        </tr>
                                     </thead>
                                     <tbody id="va-savedListBody" class="divide-y divide-dark-border"></tbody>
                                 </table>
@@ -1626,27 +1641,64 @@
             renderSavedList() {
                 const b = document.getElementById('va-savedListBody');
                 if (!b) return;
-                if (!this.state.savedChannelsData.length) { document.getElementById('va-emptySavedMsg').classList.remove('hidden'); return; }
+
+                let d = [...this.state.savedChannelsData];
+
+                // Sort
+                d.sort((a, b) => {
+                    let va, vb;
+                    if (this.state.savedSortState.key === 'title') { va = a.metadata.title; vb = b.metadata.title; }
+                    else if (this.state.savedSortState.key === 'subscribers') { va = Number(a.metadata.subscribers); vb = Number(b.metadata.subscribers); }
+                    else { va = new Date(a.lastUpdated).getTime(); vb = new Date(b.lastUpdated).getTime(); }
+
+                    if (va < vb) return -1; if (va > vb) return 1; return 0;
+                });
+                if (this.state.savedSortState.dir === 'desc') d.reverse();
+
+                if (!d.length) { document.getElementById('va-emptySavedMsg').classList.remove('hidden'); b.innerHTML = ''; return; }
                 document.getElementById('va-emptySavedMsg').classList.add('hidden');
-                b.innerHTML = this.state.savedChannelsData.map(d => `
-                    <tr class="hover:bg-dark-hover cursor-pointer" onclick="analysisModule.loadSaved('${d.metadata.id}')">
+
+                b.innerHTML = d.map(x => `
+                    <tr class="hover:bg-dark-hover cursor-pointer" onclick="analysisModule.loadSaved('${x.metadata.id}')">
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
-                                <img src="${d.metadata.thumbnail || 'https://placehold.co/40'}" class="w-10 h-10 rounded-full bg-gray-700 object-cover">
-                                <span class="text-white font-bold">${d.metadata.title}</span>
+                                <img src="${x.metadata.thumbnail || 'https://placehold.co/40'}" class="w-10 h-10 rounded-full bg-gray-700 object-cover">
+                                <span class="text-white font-bold">${x.metadata.title}</span>
                             </div>
                         </td>
-                        <td class="px-4 py-3 text-center text-dark-muted">${Number(d.metadata.subscribers).toLocaleString()}</td>
-                        <td class="px-4 py-3 text-center text-xs text-dark-muted">${d.lastUpdated.split('T')[0]}</td>
+                        <td class="px-4 py-3 text-center text-dark-muted">${Number(x.metadata.subscribers).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-center text-xs text-dark-muted">${x.lastUpdated.split('T')[0]}</td>
                         <td class="px-4 py-3 text-center">
-                            <button class="text-brand-primary hover:text-white mr-2" onclick="event.stopPropagation(); analysisModule.refreshSaved('${d.metadata.id}')" title="정보 갱신"><i class="fas fa-sync-alt"></i></button>
-                            <button class="text-red-500 hover:text-white" onclick="event.stopPropagation(); analysisModule.deleteSaved('${d.metadata.id}')" title="삭제"><i class="fas fa-trash"></i></button>
+                            <button class="text-brand-primary hover:text-white mr-2" onclick="event.stopPropagation(); analysisModule.refreshSaved('${x.metadata.id}')" title="정보 갱신"><i class="fas fa-sync-alt"></i></button>
+                            <button class="text-red-500 hover:text-white" onclick="event.stopPropagation(); analysisModule.deleteSaved('${x.metadata.id}')" title="삭제"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>`).join('');
             },
+            sortSaved(k) {
+                if (this.state.savedSortState.key === k) this.state.savedSortState.dir = this.state.savedSortState.dir === 'desc' ? 'asc' : 'desc';
+                else { this.state.savedSortState.key = k; this.state.savedSortState.dir = 'desc'; }
+                this.renderSavedList();
+            },
             async loadSaved(id) {
                 const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
-                if (s.exists) { const d = s.data(); this.state.channelMetadata = d.metadata; this.state.allVideosData = d.videos || []; this.renderUI(d.stats90); this.loadNote(id); this.switchTab('analyze'); this.setStatus('로딩 완료', false); }
+                if (s.exists) {
+                    const d = s.data();
+                    this.state.channelMetadata = d.metadata;
+                    this.state.allVideosData = d.videos || [];
+
+                    // Reset filter/sort for freshness
+                    this.state.videoFilter = { type: 'all', search: '' };
+                    this.state.videoSortState = { key: 'publishedAt', dir: 'desc' };
+
+                    this.renderUI(d.stats90);
+                    this.loadNote(id);
+                    this.switchTab('analyze');
+                    this.setStatus('로딩 완료', false);
+
+                    // Fill Input
+                    const inp = document.getElementById('va-channelId');
+                    if (inp) inp.value = d.metadata.id; // Or title
+                }
             },
             async deleteSaved(id) { if (!confirm("삭제?")) return; await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(id).delete(); await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).delete(); },
             async loadNote(id) {
