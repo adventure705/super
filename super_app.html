@@ -759,7 +759,7 @@
                     </div>
 
                     <!-- Note Edit Modal -->
-                    <div id="note-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
+                    <div id="note-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
                         <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
                             <h3 class="text-lg font-bold text-white mb-4">메모 수정</h3>
                             <textarea id="note-input" rows="3" class="w-full bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm mb-4"></textarea>
@@ -784,7 +784,17 @@
 
             // --- Logic ---
             setView(v) { this.state.view = v; this.render(document.getElementById('main-content')); },
-            handleSearch(val) { this.state.searchTerm = val; this.render(document.getElementById('main-content')); },
+            handleSearch(val) {
+                this.state.searchTerm = val;
+                this.render(document.getElementById('main-content'));
+                // Restore focus
+                const input = document.querySelector('input[placeholder="검색..."]');
+                if (input) {
+                    input.focus();
+                    input.value = val; // Ensure value is set
+                    input.setSelectionRange(val.length, val.length);
+                }
+            },
             setFilter(cat) { this.state.categoryFilter = cat; this.render(document.getElementById('main-content')); },
             sort(key) {
                 if (this.state.currentSort.key === key) this.state.currentSort.direction = this.state.currentSort.direction === 'desc' ? 'asc' : 'desc';
