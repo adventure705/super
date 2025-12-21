@@ -462,6 +462,12 @@
                     return;
                 }
 
+                if (id === 'estimate') {
+                    estimateModule.render(main);
+                    estimateModule.init();
+                    return;
+                }
+
                 main.innerHTML = `
                     <div class="animate-pulse flex flex-col items-center justify-center h-full">
                         <div class="text-xl text-white mb-4"><i class="fas fa-spinner fa-spin mr-2"></i> ${MODULES.find(m => m.id === id).name} 로딩 중...</div>
@@ -2267,7 +2273,306 @@
                 a.click();
             }
         };
-        window.addEventListener('DOMContentLoaded', () => app.init());
+
+        const estimateModule = {
+            state: { rpmShort: 0.22, cpmLong: 4.50, exRate: 1478 },
+
+            init() {
+                // Initialize from the same localStorage keys as estimate.html for data compatibility
+                const sRpm = localStorage.getItem('yt_calc_rpmShort');
+                const sCpm = localStorage.getItem('yt_calc_cpmLong');
+                const sEx = localStorage.getItem('yt_calc_exRate');
+
+                if (sRpm) this.state.rpmShort = Number(sRpm);
+                if (sCpm) this.state.cpmLong = Number(sCpm);
+                if (sEx) this.state.exRate = Number(sEx);
+
+                window.estimateModule = this;
+            },
+
+            saveSettings() {
+                this.state.rpmShort = Number(document.getElementById('globalRpmShort').value);
+                this.state.cpmLong = Number(document.getElementById('globalCpmLong').value);
+                this.state.exRate = Number(document.getElementById('globalExRate').value);
+
+                // Save to the same keys as estimate.html
+                localStorage.setItem('yt_calc_rpmShort', this.state.rpmShort);
+                localStorage.setItem('yt_calc_cpmLong', this.state.cpmLong);
+                localStorage.setItem('yt_calc_exRate', this.state.exRate);
+
+                this.calcBasic();
+                this.calcTarget();
+            },
+
+            render(container) {
+                const s = this.state;
+                container.innerHTML = `
+            <div class="max-w-4xl mx-auto space-y-6">
+                 <!-- Header & Settings -->
+                 <div class="bg-dark-card p-6 rounded-xl border border-dark-border">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4 border-b border-dark-border pb-4">
+                        <h2 class="text-2xl font-bold text-white"><i class="fas fa-coins text-brand-primary mr-2"></i>수익 예측 & 목표 계산기 <span class="text-xs bg-red-500/10 text-brand-primary px-2 py-1 rounded ml-2">PRO</span></h2>
+                        <div class="flex gap-2">
+                             <button onclick="app.openSettings()" class="text-xs font-bold text-brand-primary border border-brand-primary px-3 py-1 rounded-full hover:bg-brand-primary hover:text-white transition">
+                                <i class="fas fa-key mr-1"></i> API 키 관리
+                             </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-dark-muted">쇼츠 RPM ($)</label>
+                            <input type="number" id="globalRpmShort" value="${s.rpmShort}" step="0.01" oninput="estimateModule.saveSettings()" class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-white font-mono focus:border-brand-primary outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-dark-muted">롱폼 CPM ($)</label>
+                            <input type="number" id="globalCpmLong" value="${s.cpmLong}" step="0.1" oninput="estimateModule.saveSettings()" class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-white font-mono focus:border-brand-primary outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-dark-muted">환율 (₩/$)</label>
+                            <input type="number" id="globalExRate" value="${s.exRate}" oninput="estimateModule.saveSettings()" class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-white font-mono focus:border-brand-primary outline-none">
+                        </div>
+                    </div>
+                 </div>
+
+                 <!-- Tabs -->
+                 <div class="flex border-b border-dark-border overflow-x-auto">
+                    <button onclick="estimateModule.switchTab('basic')" id="tab-btn-basic" class="flex-1 py-3 text-center font-bold text-white border-b-2 border-brand-primary bg-dark-card/50 hover:bg-dark-card transition whitespace-nowrap">1. 수익 예측</button>
+                    <button onclick="estimateModule.switchTab('target')" id="tab-btn-target" class="flex-1 py-3 text-center font-bold text-dark-muted border-b-2 border-transparent hover:text-white hover:bg-dark-card transition whitespace-nowrap">2. 목표 역산</button>
+                    <button onclick="estimateModule.switchTab('analyzer')" id="tab-btn-analyzer" class="flex-1 py-3 text-center font-bold text-dark-muted border-b-2 border-transparent hover:text-white hover:bg-dark-card transition whitespace-nowrap">3. 📡 채널 분석</button>
+                 </div>
+
+                 <!-- Content Basic -->
+                 <div id="est-content-basic" class="bg-dark-card p-6 rounded-b-xl border border-t-0 border-dark-border space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">하루 업로드 수 (개)</label>
+                            <input type="number" id="b_uploads" value="1" oninput="estimateModule.calcBasic()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">영상 당 평균 조회수</label>
+                            <input type="number" id="b_views" value="50000" step="1000" oninput="estimateModule.calcBasic()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">기간 (일)</label>
+                            <input type="number" id="b_days" value="30" oninput="estimateModule.calcBasic()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">영상 유형</label>
+                            <select id="b_type" onchange="estimateModule.calcBasic()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                                <option value="short">쇼츠 (RPM 적용)</option>
+                                <option value="long">롱폼 (CPM 적용)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-gray-900 to-black border border-brand-primary/30 rounded-xl p-6 text-center">
+                        <div class="text-dark-muted text-sm mb-2">예상 총 수익</div>
+                        <div id="b_result" class="text-4xl font-extrabold text-brand-primary mb-2">0 원</div>
+                        <div id="b_sub_result" class="text-sm text-gray-400">총 조회수: 0회</div>
+                     </div>
+                    <div class="text-center text-xs text-dark-muted">
+                        * 롱폼 계산 시 CPM × 55% (유튜브 수익배분) 자동 적용
+                    </div>
+                 </div>
+
+                 <!-- Content Target -->
+                 <div id="est-content-target" class="hidden bg-dark-card p-6 rounded-b-xl border border-t-0 border-dark-border space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">목표 월 수익 (원)</label>
+                            <input type="number" id="t_goal" value="5000000" step="100000" oninput="estimateModule.calcTarget()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">하루 업로드 수 (개)</label>
+                            <input type="number" id="t_uploads" value="1" oninput="estimateModule.calcTarget()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                        </div>
+                         <div class="space-y-2">
+                            <label class="text-sm font-bold text-white">영상 유형</label>
+                            <select id="t_type" onchange="estimateModule.calcTarget()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none text-lg">
+                                <option value="short">쇼츠 (RPM 적용)</option>
+                                <option value="long">롱폼 (CPM 적용)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-gray-900 to-black border border-brand-primary/30 rounded-xl p-6 text-center">
+                        <div class="text-dark-muted text-sm mb-2">영상 1개당 필요한 조회수</div>
+                        <div id="t_result" class="text-4xl font-extrabold text-brand-primary mb-2">0 회</div>
+                        <div id="t_sub_result" class="text-sm text-gray-400">일일 총 조회수 합계: 0회 필요</div>
+                    </div>
+                 </div>
+
+                 <!-- Content Analyzer -->
+                 <div id="est-content-analyzer" class="hidden bg-dark-card p-6 rounded-b-xl border border-t-0 border-dark-border space-y-6">
+                    <div class="flex flex-col md:flex-row gap-4 items-end">
+                        <div class="flex-1 w-full space-y-1">
+                            <label class="text-sm font-bold text-white">채널 핸들 (@Name) 또는 ID</label>
+                            <input type="text" id="a_handle" placeholder="@슈카월드" onkeydown="if(event.key==='Enter') estimateModule.analyze()" class="w-full bg-dark-bg border border-dark-border rounded p-3 text-white focus:border-brand-primary outline-none">
+                            <div class="text-xs text-dark-muted">@를 포함해서 입력해주세요.</div>
+                        </div>
+                        <button onclick="estimateModule.analyze()" class="w-full md:w-auto bg-brand-primary hover:bg-brand-hover text-white px-6 py-3 rounded font-bold transition whitespace-nowrap">분석하기</button>
+                    </div>
+                    
+                    <div id="a-loading" class="hidden text-center text-brand-primary animate-pulse py-10">데이터를 분석 중입니다...</div>
+                    
+                    <div id="a-result-area" class="hidden space-y-6">
+                        <div class="flex items-center gap-4 bg-dark-bg p-4 rounded-lg border border-dark-border">
+                            <img id="a_img" src="" class="w-16 h-16 rounded-full bg-gray-700 object-cover">
+                            <div class="overflow-hidden">
+                                <h3 id="a_title" class="text-xl font-bold text-white truncate">Channel</h3>
+                                <div class="text-sm text-dark-muted">구독자: <span id="a_subs">-</span>명 / 총 영상: <span id="a_total_vids">-</span>개</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gradient-to-br from-gray-900 to-black border border-brand-primary/30 rounded-xl p-6 text-center">
+                            <div class="text-dark-muted text-sm mb-2">월 총 예상 수익 (쇼츠 + 롱폼)</div>
+                            <div id="a_revenue_total" class="text-4xl font-extrabold text-brand-primary mb-2">0 원</div>
+                            <div class="text-xs text-dark-muted">최근 영상 기준 월간 환산 데이터</div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div class="bg-dark-bg p-4 rounded-lg border border-dark-border text-center">
+                                <div class="text-xs font-bold text-dark-muted mb-2">📱 쇼츠 (RPM $<span id="disp_rpm_short"></span>)</div>
+                                <div id="a_short_rev" class="text-xl font-bold text-white mb-1">0원</div>
+                                <div id="a_short_desc" class="text-xs text-dark-muted">-</div>
+                             </div>
+                             <div class="bg-dark-bg p-4 rounded-lg border border-dark-border text-center">
+                                <div class="text-xs font-bold text-dark-muted mb-2">🎬 롱폼 (CPM $<span id="disp_cpm_long"></span>)</div>
+                                <div id="a_long_rev" class="text-xl font-bold text-white mb-1">0원</div>
+                                <div id="a_long_desc" class="text-xs text-dark-muted">-</div>
+                             </div>
+                        </div>
+                    </div>
+                 </div>
+            </div>
+        `;
+                this.calcBasic();
+                this.calcTarget();
+            },
+
+            switchTab(id) {
+                ['basic', 'target', 'analyzer'].forEach(t => {
+                    const btn = document.getElementById(`tab-btn-${t}`);
+                    const content = document.getElementById(`est-content-${t}`);
+                    if (t === id) {
+                        btn.className = "flex-1 py-3 text-center font-bold text-white border-b-2 border-brand-primary bg-dark-card/50 hover:bg-dark-card transition whitespace-nowrap";
+                        content.classList.remove('hidden');
+                    } else {
+                        btn.className = "flex-1 py-3 text-center font-bold text-dark-muted border-b-2 border-transparent hover:text-white hover:bg-dark-card transition whitespace-nowrap";
+                        content.classList.add('hidden');
+                    }
+                });
+            },
+
+            calcBasic() {
+                const up = Number(document.getElementById('b_uploads').value);
+                const view = Number(document.getElementById('b_views').value);
+                const days = Number(document.getElementById('b_days').value);
+                const type = document.getElementById('b_type').value;
+                const totalViews = up * view * days;
+                const rate = type === 'short' ? this.state.rpmShort : (this.state.cpmLong * 0.55);
+                const rev = (totalViews / 1000) * rate * this.state.exRate;
+                document.getElementById('b_result').innerText = Math.round(rev).toLocaleString() + ' 원';
+                document.getElementById('b_sub_result').innerText = `총 조회수: ${totalViews.toLocaleString()}회`;
+            },
+
+            calcTarget() {
+                const goal = Number(document.getElementById('t_goal').value);
+                const up = Number(document.getElementById('t_uploads').value);
+                const type = document.getElementById('t_type').value;
+                const rate = type === 'short' ? this.state.rpmShort : (this.state.cpmLong * 0.55);
+
+                const totalViewsReq = (goal / this.state.exRate / rate) * 1000;
+                const viewsPerVid = totalViewsReq / (up * 30);
+
+                document.getElementById('t_result').innerText = Math.round(viewsPerVid).toLocaleString() + ' 회';
+                document.getElementById('t_sub_result').innerText = `일일 총 조회수 합계: ${Math.round(totalViewsReq).toLocaleString()}회 필요`;
+            },
+
+            async analyze() {
+                const handle = document.getElementById('a_handle').value.trim();
+                if (!handle) return alert("채널 핸들을 입력해주세요.");
+                const k = app.getApiKey('youtube');
+                if (!k) return alert("활성화된 API 키가 없습니다. '키 관리'에서 키를 추가하고 선택해주세요.");
+
+                document.getElementById('a-loading').classList.remove('hidden');
+                document.getElementById('a-result-area').classList.add('hidden');
+
+                try {
+                    // Part 1: Channel Info
+                    let url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&forHandle=${handle}&key=${k}`;
+                    let r = await fetch(url); let d = await r.json();
+                    if (!d.items?.length) {
+                        // Fallback: Search
+                        url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${handle}&type=channel&maxResults=1&key=${k}`;
+                        r = await fetch(url); d = await r.json();
+                        if (d.items?.length) {
+                            const cid = d.items[0].snippet.channelId;
+                            url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${cid}&key=${k}`;
+                            r = await fetch(url); d = await r.json();
+                        }
+                    }
+                    if (!d.items?.length) throw new Error("채널을 찾을 수 없습니다.");
+
+                    const item = d.items[0];
+                    const upId = item.contentDetails.relatedPlaylists.uploads;
+
+                    document.getElementById('a_img').src = item.snippet.thumbnails.default.url;
+                    document.getElementById('a_title').innerText = item.snippet.title;
+                    document.getElementById('a_subs').innerText = Number(item.statistics.subscriberCount).toLocaleString();
+                    document.getElementById('a_total_vids').innerText = Number(item.statistics.videoCount).toLocaleString();
+
+                    // Part 2: Recent Videos
+                    url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${upId}&maxResults=50&key=${k}`;
+                    r = await fetch(url); let vd = await r.json();
+                    if (!vd.items?.length) throw new Error("최근 영상이 없습니다.");
+
+                    const vids = vd.items.map(i => i.snippet.resourceId.videoId).join(',');
+                    url = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${vids}&key=${k}`;
+                    r = await fetch(url); let sd = await r.json();
+
+                    let sC = 0, sV = 0, lC = 0, lV = 0;
+                    const dates = sd.items.map(v => new Date(v.snippet.publishedAt));
+                    const maxD = dates.reduce((a, b) => a > b ? a : b);
+                    const minD = dates.reduce((a, b) => a < b ? a : b);
+                    const dayDiff = Math.max(Math.ceil((maxD - minD) / (1000 * 3600 * 24)), 1);
+
+                    sd.items.forEach(v => {
+                        const dur = v.contentDetails.duration;
+                        let sec = 0;
+                        const time = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                        if (time) sec = (parseInt(time[1] || 0) * 3600) + (parseInt(time[2] || 0) * 60) + parseInt(time[3] || 0);
+
+                        const view = Number(v.statistics.viewCount || 0);
+                        if (sec <= 60 && sec > 0) { sC++; sV += view; }
+                        else { lC++; lV += view; }
+                    });
+
+                    const mSC = (sC / dayDiff) * 30;
+                    const mLC = (lC / dayDiff) * 30;
+                    const avgS = sC ? sV / sC : 0;
+                    const avgL = lC ? lV / lC : 0;
+
+                    const rS = (mSC * avgS / 1000) * this.state.rpmShort * this.state.exRate;
+                    const rL = (mLC * avgL / 1000) * (this.state.cpmLong * 0.55) * this.state.exRate;
+
+                    document.getElementById('a_revenue_total').innerText = Math.round(rS + rL).toLocaleString() + ' 원';
+                    document.getElementById('disp_rpm_short').innerText = this.state.rpmShort;
+                    document.getElementById('disp_cpm_long').innerText = this.state.cpmLong;
+
+                    document.getElementById('a_short_rev').innerText = Math.round(rS).toLocaleString() + ' 원';
+                    document.getElementById('a_short_desc').innerText = `월 약 ${Math.round(mSC)}개 / 평 ${Math.round(avgS).toLocaleString()}회`;
+
+                    document.getElementById('a_long_rev').innerText = Math.round(rL).toLocaleString() + ' 원';
+                    document.getElementById('a_long_desc').innerText = `월 약 ${Math.round(mLC)}개 / 평 ${Math.round(avgL).toLocaleString()}회`;
+
+                    document.getElementById('a-loading').classList.add('hidden');
+                    document.getElementById('a-result-area').classList.remove('hidden');
+
+                } catch (e) {
+                    alert("분석 오류: " + e.message);
+                    document.getElementById('a-loading').classList.add('hidden');
+                }
+            }
+        };
     </script>
 </body>
 
