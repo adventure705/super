@@ -757,6 +757,26 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Note Edit Modal -->
+                    <div id="note-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
+                        <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
+                            <h3 class="text-lg font-bold text-white mb-4">메모 수정</h3>
+                            <textarea id="note-input" rows="3" class="w-full bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm mb-4"></textarea>
+                            <input type="hidden" id="note-id">
+                            <div class="flex justify-end gap-2">
+                                <button onclick="document.getElementById('note-modal').classList.add('hidden')" class="bg-gray-700 text-white rounded px-3 py-2 text-sm hover:bg-gray-600">취소</button>
+                                <button onclick="channelModule.saveNote()" class="bg-brand-primary text-white rounded px-3 py-2 text-sm hover:bg-brand-hover">저장</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loading Overlay -->
+                    <div id="ch-loading" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                        <div class="bg-dark-card p-4 rounded-lg flex items-center gap-3 text-white border border-brand-primary">
+                            <i class="fas fa-spinner fa-spin text-brand-primary"></i> <span id="ch-loading-text">처리 중...</span>
+                        </div>
+                    </div>
                 `;
                 // Re-attach scroll sync
                 setTimeout(() => this.setupScrollSync(), 0);
