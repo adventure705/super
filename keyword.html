@@ -593,7 +593,12 @@
                     <thead>
                         <tr>
                             <th>NO</th>
-                            <th>🇰🇷 한국어</th>
+                            <th>채널명</th>
+                            <th>🇰🇷 영상제목 (LINK)</th>
+                            <th>조회수</th>
+                            <th>댓글수</th>
+                            <th>좋아요</th>
+                            <th>게시일</th>
                             <th>🇺🇸 영어</th>
                             <th>🇯🇵 일본어</th>
                             <th>🇨🇳 중국어</th>
@@ -898,16 +903,15 @@
             const region = document.getElementById('country-select').value || 'KR';
 
             try {
-                let rawItems = [];
+                let videoIds = [];
 
                 // --- STRATEGY: SEARCH (Past/Keyword) vs POPULAR (Today & No Keyword) ---
                 if (q || !isToday) {
-                    // Use SEARCH API (Expensive: 100 units)
-                    let params = `search?part=snippet&type=video&maxResults=50&key=${k}&regionCode=${region}`;
+                    // Use SEARCH API -> Get IDs
+                    let params = `search?part=id&type=video&maxResults=50&key=${k}&regionCode=${region}`;
                     if (q) params += `&q=${encodeURIComponent(q)}`;
 
                     if (!isToday) {
-                        // Time Range for that specific day (UTC)
                         const start = new Date(selectedDate + "T00:00:00Z").toISOString();
                         const end = new Date(selectedDate + "T23:59:59Z").toISOString();
                         params += `&publishedAfter=${start}&publishedBefore=${end}&order=viewCount`;
@@ -915,42 +919,53 @@
 
                     if (!q && c) {
                         params += `&videoCategoryId=${CAT_IDS[c]}`;
-                        if (isToday) params += `&order=viewCount`; // Just in case fallback
+                        if (isToday) params += `&order=viewCount`;
                     }
 
                     const r1 = await fetchYT(params);
-                    rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }));
+                    videoIds = r1.items.map(i => i.id.videoId);
 
                     if (r1.nextPageToken) {
                         const r2 = await fetchYT(`${params}&pageToken=${r1.nextPageToken}`);
-                        rawItems = [...rawItems, ...r2.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }))];
+                        videoIds = [...videoIds, ...r2.items.map(i => i.id.videoId)];
                     }
 
                 } else {
-                    // Use VIDEOS API (Cheap: 1 unit) -> Only for TODAY + CATEGORY
+                    // Use VIDEOS API (Popular) -> Get IDs (or full data, but let's unify to IDs to be safe/consistent or fetch full directly)
+                    // Optimization: Fetch full data directly here to save 1 call? 
+                    // BUT: we need to handle paging. 
+                    // Let's stick to valid strategy: Get IDs first if we want consistency, or just fetch full.
+                    // fetching full `videos` is better.
+
                     const cid = CAT_IDS[c];
                     try {
-                        const r1 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&maxResults=50&key=${k}`);
-                        rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id }));
+                        const r1 = await fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&maxResults=50&key=${k}`);
+                        videoIds = r1.items.map(i => i.id);
                         if (r1.nextPageToken) {
-                            const r2 = await fetchYT(`videos?part=snippet&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
-                            rawItems = [...rawItems, ...r2.items.map(i => ({ title: i.snippet.title, id: i.id }))];
+                            const r2 = await fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
+                            videoIds = [...videoIds, ...r2.items.map(i => i.id)];
                         }
                     } catch {
-                        // Fallback to search if chart fails
-                        const r1 = await fetchYT(`search?part=snippet&q=${encodeURIComponent(c)}&type=video&maxResults=50&key=${k}`);
-                        rawItems = r1.items.map(i => ({ title: i.snippet.title, id: i.id.videoId }));
+                        // Fallback
+                        const r1 = await fetchYT(`search?part=id&q=${encodeURIComponent(c)}&type=video&maxResults=50&key=${k}`);
+                        videoIds = r1.items.map(i => i.id.videoId);
                     }
                 }
 
-                // Deduplicate
-                const seen = new Set();
-                const uniqueItems = [];
-                rawItems.forEach(i => {
-                    if (i.id && !seen.has(i.id)) { seen.add(i.id); uniqueItems.push(i); }
-                });
-                const finalItems = uniqueItems.slice(0, 100);
-                const titles = finalItems.map(i => i.title);
+                // Deduplicate IDs
+                const uniqueIds = [...new Set(videoIds)].slice(0, 100);
+
+                // Fetch Details (Snippet + Statistics)
+                // Chunking (Max 50 IDs per call)
+                let finalItems = [];
+                for (let i = 0; i < uniqueIds.length; i += 50) {
+                    const chunk = uniqueIds.slice(i, i + 50).join(',');
+                    const r = await fetchYT(`videos?part=snippet,statistics&id=${chunk}&key=${k}`);
+                    finalItems = [...finalItems, ...r.items];
+                }
+
+                // Prepare for Translation
+                const titles = finalItems.map(i => i.snippet.title);
 
                 let trans = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
                 if (tk) {
@@ -958,12 +973,23 @@
                     trans = await doTrans(titles, tk);
                 }
 
-                const res = finalItems.map((item, i) => ({
-                    rank: i + 1, korean: item.title, id: item.id,
-                    english: trans.en[i] || '-', japanese: trans.ja[i] || '-',
-                    chinese: trans['zh-CN'][i] || '-', spanish: trans.es[i] || '-',
-                    hindi: trans.hi[i] || '-', russian: trans.ru[i] || '-'
-                }));
+                const res = finalItems.map((item, i) => {
+                    const s = item.snippet;
+                    const st = item.statistics || {};
+                    return {
+                        rank: i + 1,
+                        korean: s.title,
+                        id: item.id,
+                        channel: s.channelTitle,
+                        views: Number(st.viewCount || 0).toLocaleString(),
+                        comments: Number(st.commentCount || 0).toLocaleString(),
+                        likes: Number(st.likeCount || 0).toLocaleString(),
+                        date: (s.publishedAt || "").split('T')[0],
+                        english: trans.en[i] || '-', japanese: trans.ja[i] || '-',
+                        chinese: trans['zh-CN'][i] || '-', spanish: trans.es[i] || '-',
+                        hindi: trans.hi[i] || '-', russian: trans.ru[i] || '-'
+                    };
+                });
 
                 const st = { query: q || c, selectedCategory: c, results: res, timestamp: Date.now() };
                 updateUI(st);
@@ -1039,7 +1065,14 @@
             (st.results || []).forEach(r => {
                 const tr = document.createElement('tr');
                 const link = r.id ? `<a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" style="color:#fff;text-decoration:none;cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.korean}</a>` : r.korean;
-                tr.innerHTML = `<td>${r.rank}</td><td style="color:#fff">${link}</td><td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
+                tr.innerHTML = `<td>${r.rank}</td>
+                                <td>${r.channel}</td>
+                                <td style="color:#fff">${link}</td>
+                                <td>${r.views}</td>
+                                <td>${r.comments}</td>
+                                <td>${r.likes}</td>
+                                <td>${r.date}</td>
+                                <td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
                 tb.appendChild(tr);
             });
         }
