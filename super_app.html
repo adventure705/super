@@ -1305,7 +1305,9 @@
                 videoSortState: { key: 'publishedAt', dir: 'desc' },
                 shortsSortState: { key: 'publishedAt', dir: 'desc' },
                 savedSortState: { key: 'lastUpdated', dir: 'desc' },
-                videoFilter: { type: 'all', search: '' }
+                shortsSortState: { key: 'publishedAt', dir: 'desc' },
+                savedSortState: { key: 'lastUpdated', dir: 'desc' },
+                videoFilter: { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0 }
             },
             API_BASE_URL: 'https://www.googleapis.com/youtube/v3/',
 
@@ -1413,14 +1415,27 @@
                                             <h3 class="font-bold text-white">비디오 목록 (<span id="va-totalVideos">0</span>)</h3>
                                             <button onclick="analysisModule.downloadCSV()" class="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded transition"><i class="fas fa-file-csv mr-1"></i>CSV</button>
                                         </div>
-                                        <div class="flex gap-2">
+                                        <div class="flex flex-wrap gap-2 items-center">
                                             <select onchange="analysisModule.filterVideo('type', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
-                                                <option value="all">전체</option>
-                                                <option value="shorts">Shorts (60초 이하)</option>
-                                                <option value="mid">미드폼 (10분 미만)</option>
-                                                <option value="long">롱폼 (10분 이상)</option>
+                                                <option value="all">길이 전체</option>
+                                                <option value="shorts">Shorts (60초↓)</option>
+                                                <option value="mid">미드폼 (10분↓)</option>
+                                                <option value="long">롱폼 (10분↑)</option>
                                             </select>
-                                            <input type="text" placeholder="제목, 설명, 태그 검색..." oninput="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-48 md:w-64">
+                                            <select onchange="analysisModule.filterVideo('views', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
+                                                <option value="0">조회수 전체</option>
+                                                <option value="100000">10만↑</option>
+                                                <option value="300000">30만↑</option>
+                                                <option value="500000">50만↑</option>
+                                                <option value="1000000">100만↑</option>
+                                            </select>
+                                            <select onchange="analysisModule.filterVideo('ratingL', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
+                                                <option value="0">좋아요별 전체</option>
+                                                <option value="3">★ 3↑</option>
+                                                <option value="4">★ 4↑</option>
+                                                <option value="5">★ 5</option>
+                                            </select>
+                                            <input type="text" placeholder="검색..." oninput="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-32 md:w-48">
                                         </div>
                                     </div>
                                     <div class="overflow-x-auto">
@@ -1433,8 +1448,10 @@
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('publishedAt')">게시일 ↕</th>
                                                     <th class="px-4 py-3 text-right">길이</th>
                                                     <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('viewCount')">조회수 ↕</th>
-                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('likeCount')">좋아요 ↕</th>
-                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('commentCount')">댓글 ↕</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('likeCount')">좋아요(★) ↕</th>
+                                                    <th class="px-4 py-3 text-right">L/V (%)</th>
+                                                    <th class="px-4 py-3 text-right va-sortable-header" onclick="analysisModule.sortVideo('commentCount')">댓글(★) ↕</th>
+                                                    <th class="px-4 py-3 text-right">C/V (%)</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="va-videoListBody" class="divide-y divide-dark-border"></tbody>
@@ -1570,6 +1587,13 @@
                         return true;
                     });
                 }
+                if (this.state.videoFilter.views) {
+                    l = l.filter(v => Number(v.viewCount) >= Number(this.state.videoFilter.views));
+                }
+                if (this.state.videoFilter.ratingL) {
+                    l = l.filter(v => this.getStarRating(v.likeCount, v.viewCount) >= Number(this.state.videoFilter.ratingL));
+                }
+
                 if (this.state.videoFilter.search) {
                     const q = this.state.videoFilter.search.toLowerCase();
                     l = l.filter(v =>
@@ -1599,6 +1623,8 @@
                     const badgeColor = type === 'Shorts' ? 'bg-red-500/20 text-red-500' : (type === '미드폼' ? 'bg-blue-500/20 text-blue-500' : 'bg-purple-500/20 text-purple-500');
                     const starsL = this.getStarRating(v.likeCount, v.viewCount);
                     const starsC = this.getStarRating(v.commentCount, v.viewCount, true);
+                    const lvRate = v.viewCount ? (v.likeCount / v.viewCount * 100).toFixed(2) : 0;
+                    const cvRate = v.viewCount ? (v.commentCount / v.viewCount * 100).toFixed(2) : 0;
 
                     return `
                     <tr class="hover:bg-dark-hover border-b border-dark-border group">
@@ -1622,10 +1648,12 @@
                             <div class="font-mono text-white">${v.likeCount.toLocaleString()}</div>
                             <div class="text-[10px] text-yellow-500 tracking-tighter">${'★'.repeat(starsL)}${'☆'.repeat(5 - starsL)}</div>
                         </td>
+                         <td class="px-4 py-3 text-right align-top text-xs text-yellow-500">${lvRate}%</td>
                         <td class="px-4 py-3 text-right align-top">
                             <div class="font-mono text-white">${v.commentCount.toLocaleString()}</div>
                             <div class="text-[10px] text-blue-400 tracking-tighter">${'★'.repeat(starsC)}${'☆'.repeat(5 - starsC)}</div>
                         </td>
+                        <td class="px-4 py-3 text-right align-top text-xs text-blue-400">${cvRate}%</td>
                     </tr>`;
                 }).join('');
             },
