@@ -674,15 +674,21 @@
 
                 if (!app.db) return;
 
-                // this.showLoading(true, "채널 불러오는 중입니다..."); // REMOVED as requested
+                this.state.loading = true; // Set loading state
+                this.showLoading(true, "채널 불러오는 중입니다...");
 
                 // Revert to global_channels as requested
                 const channelsCol = app.db.collection('global_channels');
                 const unsubChannels = channelsCol.onSnapshot(snapshot => {
                     this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // this.showLoading(false); // REMOVED
+                    this.state.loading = false; // Data received
+                    this.showLoading(false);
                     this.render(document.getElementById('main-content'));
                     this.setupScrollSync();
+                }, err => {
+                    console.error("Channel Listener Error:", err);
+                    this.state.loading = false;
+                    this.showLoading(false);
                 });
                 this.listeners.push(unsubChannels);
 
@@ -691,11 +697,18 @@
                     if (doc.exists) {
                         this.state.categories = doc.data().names || ['미분류'];
                     } else {
-                        catDoc.set({ names: ['미분류'] });
-                        this.state.categories = ['미분류'];
+                        // If document doesn't exist, ensure local state has '미분류' but don't overwrite DB
+                        // This prevents categories from disappearing if offline or doc not yet created.
+                        if (!this.state.categories || this.state.categories.length === 0) {
+                            this.state.categories = ['미분류'];
+                        }
                     }
                     this.ensureCategoryColors();
                     this.render(document.getElementById('main-content'));
+                }, err => {
+                    console.warn("Category Listener Error (Offline?):", err);
+                    // On error (e.g., offline), keep existing categories in state to prevent disappearance
+                    // The UI will continue to show the last known categories.
                 });
                 this.listeners.push(unsubCat);
             },
@@ -1020,9 +1033,10 @@
                     </div>
 
                     <!-- Loading Overlay -->
-                    <div id="ch-loading" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <!-- Loading Overlay -->
+                    <div id="ch-loading" class="${this.state.isLoading ? '' : 'hidden'} fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                         <div class="bg-dark-card p-4 rounded-lg flex items-center gap-3 text-white border border-brand-primary">
-                            <i class="fas fa-spinner fa-spin text-brand-primary"></i> <span id="ch-loading-text">처리 중...</span>
+                            <i class="fas fa-spinner fa-spin text-brand-primary"></i> <span id="ch-loading-text">채널 불러오는 중입니다...</span>
                         </div>
                     </div>
                 `;
