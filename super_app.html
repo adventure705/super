@@ -1506,10 +1506,15 @@
                 if (!id) return alert("ID 입력 필요");
                 const apiKey = app.getApiKey('youtube');
                 if (!apiKey) return alert("YouTube API 키가 없습니다");
-                this.setStatus('데이터 수집 중...', false);
+
+                this.setStatus('데이터 수집 및 분석 중...', false);
+                // Clear previous state to prevent confusion
+                this.state.allVideosData = [];
+                document.getElementById('va-resultsSection').classList.add('hidden');
+
                 try {
                     const chData = await this.fetchCh(id, apiKey);
-                    if (!chData?.items?.length) throw new Error("채널 없음");
+                    if (!chData?.items?.length) throw new Error("채널을 찾을 수 없습니다");
 
                     const item = chData.items[0];
                     const meta = { id: item.id, title: item.snippet.title, description: item.snippet.description, subscribers: item.statistics.subscriberCount, totalViews: item.statistics.viewCount, totalVideos: item.statistics.videoCount, thumbnail: item.snippet.thumbnails.default?.url || '', publishedAt: item.snippet.publishedAt, country: item.snippet.country || 'N/A' };
@@ -1538,6 +1543,7 @@
                     const stats90 = this.calc90(videos);
                     const safe = JSON.parse(JSON.stringify(meta));
 
+                    // Save Data
                     await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(meta.id).set({ metadata: safe, videos: JSON.parse(JSON.stringify(videos)), stats90, lastUpdated: new Date().toISOString() }, { merge: true });
                     await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(meta.id).set({ metadata: safe, stats90, lastUpdated: new Date().toISOString() });
 
@@ -1545,7 +1551,10 @@
                     this.setStatus('분석 완료', false);
                     this.loadNote(meta.id);
                     this.analyzeGemini(true); // Auto-run Gemini
-                } catch (e) { console.error(e); this.setStatus('오류: ' + e.message, true); }
+                } catch (e) {
+                    console.error(e);
+                    this.setStatus('오류 발생: ' + e.message, true);
+                }
             },
 
             async fetchCh(q, k) {
@@ -1747,24 +1756,29 @@
                 this.renderSavedList();
             },
             async loadSaved(id) {
+                // 1. Immediate UI Feedback
+                this.switchTab('analyze');
                 const inp = document.getElementById('va-channelId');
                 if (inp) inp.value = id;
+                this.setStatus("저장된 데이터 확인 중...", false);
 
                 try {
-                    const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
+                    // 2. Try to load
+                    const doc = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
 
-                    if (s.exists) {
-                        const d = s.data();
+                    if (doc.exists) {
+                        const d = doc.data();
                         if (d.videos && d.videos.length > 0) {
                             this.state.channelMetadata = d.metadata;
-                            // Ensure numeric types
+                            // Type safety map for saved data
                             this.state.allVideosData = d.videos.map(v => ({
                                 ...v,
                                 viewCount: Number(v.viewCount || 0),
                                 likeCount: Number(v.likeCount || 0),
                                 commentCount: Number(v.commentCount || 0),
                                 durationSeconds: Number(v.durationSeconds || 0),
-                                lvRate: v.lvRate // Preserve calculated rates if present
+                                lvRate: v.lvRate,
+                                cvRate: v.cvRate
                             }));
 
                             this.state.videoFilter = { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0 };
@@ -1772,19 +1786,17 @@
 
                             this.renderUI(d.stats90);
                             this.loadNote(id);
-                            this.switchTab('analyze');
-                            this.setStatus('저장된 데이터 로드 완료', false);
-                            return;
+                            this.setStatus("저장된 데이터 로드 완료", false);
+                            return; // Stop here if legitimate saved data found
                         }
                     }
                 } catch (e) {
-                    console.warn("Load saved failed, trying analysis:", e);
+                    console.warn("Error reading saved data:", e);
                 }
 
-                // Fallback: Start fresh analysis
-                console.log("No valid saved data found, starting analysis for:", id);
-                this.switchTab('analyze');
-                this.startAnalysis(id);
+                // 3. Fallback: Start Analysis
+                this.setStatus("저장된 데이터 없음. 최신 분석 시작...", false);
+                await this.startAnalysis(id);
             },
             async deleteSaved(id) { if (!confirm("삭제?")) return; await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(id).delete(); await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).delete(); },
             async loadNote(id) {
