@@ -513,7 +513,7 @@
                                 </div>
                             </div>
                         </div>
-                         <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden min-h-[400px]">
+                         <div class="bg-dark-card rounded-xl border border-dark-border overflow-hidden min-h-[400px] flex flex-col">
                             <div class="p-4 border-b border-dark-border flex justify-between items-center">
                                 <h3 class="font-bold text-white"><i class="fas fa-list text-brand-primary mr-2"></i>키워드 결과 (100개)</h3>
                                 <div class="flex gap-2">
@@ -521,9 +521,15 @@
                                     <button onclick="keywordModule.downloadCSV()" id="kw-csv-btn" class="hidden bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded transition-colors"><i class="fas fa-file-csv mr-1"></i> CSV 저장</button>
                                 </div>
                             </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm text-left text-gray-400">
-                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar">
+                            
+                            <!-- Top Scrollbar -->
+                            <div id="kw-top-scroll" class="overflow-x-auto bg-dark-sidebar border-b border-dark-border relative" style="min-height: 12px;">
+                                <div id="kw-top-scroll-content" class="h-1" style="width: 0px;"></div>
+                            </div>
+
+                            <div id="kw-table-container" class="overflow-x-auto flex-1">
+                                <table id="kw-result-table" class="w-full text-sm text-left text-gray-400">
+                                    <thead class="text-xs text-gray-200 uppercase bg-dark-sidebar sticky top-0 z-10">
                                         <tr>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('rank')">NO</th>
                                             <th class="px-4 py-3 cursor-pointer hover:bg-dark-hover whitespace-nowrap" onclick="keywordModule.sort('channel')">채널명</th>
@@ -556,6 +562,13 @@
                 const cSelect = document.getElementById('kw-country');
                 cSelect.innerHTML = Object.entries(COUNTRIES).map(([code, name]) => `<option value="${code}" ${code === 'KR' ? 'selected' : ''}>${name}</option>`).join('');
                 document.getElementById('kw-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') this.search(); });
+
+                const topScroll = document.getElementById('kw-top-scroll');
+                const tableContainer = document.getElementById('kw-table-container');
+                if (topScroll && tableContainer) {
+                    topScroll.onscroll = () => { tableContainer.scrollLeft = topScroll.scrollLeft; };
+                    tableContainer.onscroll = () => { topScroll.scrollLeft = tableContainer.scrollLeft; };
+                }
             },
             selectCat(el, cat) {
                 document.querySelectorAll('#kw-categories .category-pill').forEach(b => {
@@ -693,6 +706,18 @@
             updateUI() {
                 const tbody = document.getElementById('kw-results-body');
                 if (!tbody) return;
+
+                const table = document.getElementById('kw-result-table');
+                const topScrollContent = document.getElementById('kw-top-scroll-content');
+                if (table && topScrollContent) {
+                    // Update scrollbar width logic
+                    const updateWidth = () => {
+                        topScrollContent.style.width = table.scrollWidth + 'px';
+                    }
+                    updateWidth();
+                    setTimeout(updateWidth, 100); // Retry slightly later for render
+                }
+
                 tbody.innerHTML = this.currentResults.map(r => `
                     <tr class="border-b border-dark-border hover:bg-dark-card transition-colors">
                         <td class="px-4 py-3 text-center text-dark-muted">${r.rank}</td>
@@ -727,8 +752,12 @@
             downloadCSV() {
                 if (!this.currentResults.length) return alert("데이터 없음");
                 const BOM = "\uFEFF";
-                let csv = BOM + "Rank,Channel,Subscribers,Title,Views,Comments,Likes,Date,English,Japanese,Chinese,Spanish,Hindi,Russian\n";
-                this.currentResults.forEach(r => { csv += `${r.rank},"${r.channel.replace(/"/g, '""')}",${r.subsRaw},"${r.korean.replace(/"/g, '""')}",${r.views.replace(/,/g, '')},${r.comments.replace(/,/g, '')},${r.likes.replace(/,/g, '')},${r.date},"${r.english}","${r.japanese}","${r.chinese}","${r.spanish}","${r.hindi}","${r.russian}"\n`; });
+                let csv = BOM + "Rank,Channel,Subscribers,Title,Views,Comments,Likes,Date,English,Japanese,Chinese,Spanish,Hindi,Russian,Video Link,Channel Link\n";
+                this.currentResults.forEach(r => {
+                    const vLink = `https://www.youtube.com/watch?v=${r.id}`;
+                    const cLink = `https://www.youtube.com/channel/${r.channelId}`;
+                    csv += `${r.rank},"${r.channel.replace(/"/g, '""')}",${r.subsRaw},"${r.korean.replace(/"/g, '""')}",${r.views.replace(/,/g, '')},${r.comments.replace(/,/g, '')},${r.likes.replace(/,/g, '')},${r.date},"${r.english}","${r.japanese}","${r.chinese}","${r.spanish}","${r.hindi}","${r.russian}","${vLink}","${cLink}"\n`;
+                });
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
@@ -736,8 +765,3 @@
                 a.click();
             }
         };
-        window.addEventListener('DOMContentLoaded', () => app.init());
-    </script>
-</body>
-
-</html>
