@@ -454,19 +454,20 @@
         </aside>
 
         <!-- Main Content -->
-        <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <div class="flex-1 flex flex-col h-full overflow-hidden relative">
             <header
-                class="md:hidden flex items-center justify-between h-14 bg-dark-sidebar border-b border-dark-border px-4 z-20">
+                class="fixed top-0 left-0 w-full md:hidden flex items-center justify-between h-14 bg-dark-sidebar border-b border-dark-border px-4 z-30">
                 <h1 class="text-lg font-bold text-brand-primary">슈퍼 툴</h1>
                 <button onclick="app.toggleMobileMenu()" class="text-white focus:outline-none">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
             </header>
 
-            <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden"
+
+            <div id="mobile-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden md:hidden"
                 onclick="app.toggleMobileMenu()"></div>
             <div id="mobile-sidebar"
-                class="fixed inset-y-0 left-0 w-64 bg-dark-sidebar border-r border-dark-border z-40 transform -translate-x-full transition-transform duration-300 md:hidden">
+                class="fixed inset-y-0 left-0 w-64 bg-dark-sidebar border-r border-dark-border z-50 transform -translate-x-full transition-transform duration-300 md:hidden">
                 <div class="flex items-center justify-between h-14 border-b border-dark-border px-4">
                     <h1 class="text-lg font-bold text-white">메뉴</h1>
                     <button onclick="app.toggleMobileMenu()" class="text-gray-400 hover:text-white"><i
@@ -483,7 +484,7 @@
                 </div>
             </div>
 
-            <main class="flex-1 overflow-auto bg-dark-bg px-4 pt-10 pb-[120px] md:p-8 relative scroll-smooth"
+            <main class="flex-1 overflow-auto bg-dark-bg px-4 pt-20 pb-[120px] md:p-8 relative scroll-smooth"
                 id="main-content">
 
                 <div class="flex flex-col items-center justify-center h-full text-center text-dark-muted">
