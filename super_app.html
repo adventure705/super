@@ -1100,9 +1100,15 @@
                 if (!newName || newName === this.state.categories[idx]) return;
                 const oldName = this.state.categories[idx];
 
-                // Read fresh first to avoid race conditions
-                const doc = await app.db.collection('global_data').doc('channel_categories').get();
-                let currentCats = doc.exists ? (doc.data().names || ['미분류']) : ['미분류'];
+                // Read fresh first to avoid race conditions, fallback to local state if offline
+                let currentCats;
+                try {
+                    const doc = await app.db.collection('global_data').doc('channel_categories').get();
+                    currentCats = doc.exists ? (doc.data().names || ['미분류']) : ['미분류'];
+                } catch (e) {
+                    console.warn("Offline or fetch failed, using local state:", e);
+                    currentCats = [...this.state.categories];
+                }
 
                 if (idx >= currentCats.length) return; // Safety check
 
