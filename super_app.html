@@ -7,6 +7,10 @@
     <title>Super App: All-in-One Tool</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script type="importmap">
+        { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
+    </script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -187,6 +191,205 @@
 
         .va-star-empty {
             color: #4b5563;
+        }
+
+        /* Comment Module Styles */
+        .loader {
+            border: 3px solid #333;
+            border-top: 3px solid #FF4E45;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .highlight-text strong {
+            color: #FF4E45;
+            background-color: rgba(255, 78, 69, 0.1);
+            padding: 0 4px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+
+        .hover-card {
+            transition: all 0.2s ease;
+        }
+
+        .hover-card:hover {
+            transform: translateY(-2px);
+            border-color: #FF4E45;
+        }
+
+        .custom-checkbox {
+            appearance: none;
+            background-color: #333;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 0.1em solid #555;
+            border-radius: 0.15em;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+
+        .custom-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em white;
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .custom-checkbox:checked {
+            background-color: #FF4E45;
+            border-color: #FF4E45;
+        }
+
+        .custom-checkbox:checked::before {
+            transform: scale(1);
+        }
+
+        .type-badge {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .type-trend {
+            background-color: rgba(255, 78, 69, 0.15);
+            color: #FF4E45;
+            border: 1px solid rgba(255, 78, 69, 0.3);
+        }
+
+        .type-evergreen {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34D399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .type-seasonal {
+            background-color: rgba(251, 191, 36, 0.15);
+            color: #FBBF24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .comment-quote {
+            background-color: #252525;
+            border-left: 3px solid #555;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #ccc;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .comment-author {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #888;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .comment-table th {
+            background-color: #252525;
+            color: #bbb;
+            font-weight: 600;
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        .comment-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #333;
+            color: #ddd;
+            vertical-align: top;
+        }
+
+        .comment-table tr:hover td {
+            background-color: #2a2a2a;
+        }
+
+        .history-table th {
+            background-color: #252525;
+            color: #9ca3af;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 1rem;
+            text-align: left;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .history-table td {
+            padding: 1rem;
+            border-top: 1px solid #333;
+            vertical-align: middle;
+            color: #e5e7eb;
+        }
+
+        .history-table tr:hover {
+            background-color: #1a1a1a;
+        }
+
+        .modal-bg {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-bg.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #1E1E1E;
+            border: 1px solid #333;
+            border-radius: 1rem;
+            width: 95%;
+            max-width: 900px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.2s;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-bg.active .modal-content {
+            transform: scale(1);
         }
     </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -459,6 +662,12 @@
                 if (id === 'analysis') {
                     analysisModule.render(main);
                     analysisModule.init();
+                    return;
+                }
+
+                if (id === 'comment') {
+                    commentModule.render(main);
+                    commentModule.init();
                     return;
                 }
 
@@ -2624,6 +2833,524 @@
                     alert("분석 오류: " + e.message);
                     document.getElementById('a-loading').classList.add('hidden');
                 }
+            }
+        };
+
+        const commentModule = {
+            state: {
+                currentVideoInfo: null,
+                currentVideoId: null,
+                currentMarkdownText: "",
+                progressInterval: null,
+                channelVideosCache: [],
+                selectedVideoIds: new Set(),
+                selectedHistoryIds: new Set(),
+                currentChannelId: null,
+                nextPageToken: null,
+                currentHistoryKeys: [],
+                historySortState: { key: 'timestamp', order: 'desc' },
+                historyCache: {}
+            },
+
+            async init() { },
+
+            render(container) {
+                container.innerHTML = `
+                    <div class="max-w-7xl mx-auto space-y-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl font-bold text-white"><i class="fas fa-comments text-brand-primary mr-2"></i>YouTube 댓글 심층 분석기</h2>
+                            <button onclick="app.openSettings()" class="bg-dark-card hover:bg-dark-hover text-white px-4 py-2 rounded border border-dark-border transition"><i class="fas fa-cog mr-2"></i>API 설정</button>
+                        </div>
+                        <div class="bg-dark-card rounded-xl border border-dark-border shadow-lg overflow-hidden min-h-[500px]">
+                            <div class="flex border-b border-dark-border">
+                                <button onclick="commentModule.setMode('link')" id="cmt_tab-link" class="flex-1 py-4 text-center font-bold bg-[#252525] border-b-2 border-brand-primary text-brand-primary">영상 링크 분석</button>
+                                <button onclick="commentModule.setMode('channel')" id="cmt_tab-channel" class="flex-1 py-4 text-center font-bold text-dark-muted hover:text-white border-b-2 border-transparent">채널 인기 영상</button>
+                                <button onclick="commentModule.setMode('history')" id="cmt_tab-history" class="flex-1 py-4 text-center font-bold text-dark-muted hover:text-white border-b-2 border-transparent">클라우드 히스토리</button>
+                            </div>
+                            <div class="p-6 md:p-8">
+                                <div id="cmt_view-link" class="block">
+                                    <div class="flex flex-col md:flex-row gap-3"><input type="text" id="cmt_videoUrl" class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg outline-none" placeholder="https://youtu.be/..."><button onclick="commentModule.analyzeSingleVideo()" class="bg-brand-primary hover:bg-red-600 text-white px-8 py-3 rounded-lg font-bold">분석하기</button></div>
+                                </div>
+                                <div id="cmt_view-channel" class="hidden">
+                                    <div class="flex flex-col md:flex-row gap-3 mb-6"><input type="text" id="cmt_channelHandle" class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg outline-none" placeholder="@Handle"><button onclick="commentModule.searchChannelVideos()" class="bg-[#333] hover:bg-[#444] text-white px-8 py-3 rounded-lg font-bold">조회하기</button></div>
+                                    <div id="cmt_channelControls" class="hidden mb-6 p-4 bg-[#252525] rounded-lg border flex flex-wrap gap-4 items-center justify-between"><div class="flex gap-2 items-center"><span class="text-xs font-bold uppercase mr-1">정렬:</span><select id="cmt_sortOption" onchange="commentModule.sortChannelVideos()" class="bg-[#121212] text-white text-sm p-2 rounded outline-none"><option value="viewCount">조회수</option><option value="date">날짜</option></select><select id="cmt_orderOption" onchange="commentModule.sortChannelVideos()" class="bg-[#121212] text-white text-sm p-2 rounded outline-none"><option value="desc">높은순</option><option value="asc">낮은순</option></select></div><div class="flex items-center gap-3"><span id="cmt_selectedCount" class="text-sm text-blue-400 font-bold">0개 선택됨</span><button onclick="commentModule.analyzeSelectedVideos()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold disabled:opacity-50" id="cmt_btnBatchAnalyze" disabled>일괄 분석</button></div></div>
+                                    <div id="cmt_videoGrid" class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6"></div>
+                                    <div id="cmt_loadMoreContainer" class="hidden text-center mt-8"><button onclick="commentModule.loadMoreChannelVideos()" class="bg-[#333] text-white px-6 py-3 rounded-full font-bold text-sm">더보기</button></div>
+                                </div>
+                                <div id="cmt_view-history" class="hidden">
+                                    <div class="flex flex-col md:flex-row justify-between mb-6 gap-4"><h3 class="text-white font-bold text-lg">분석 기록</h3><div class="flex gap-3"><input type="text" id="cmt_historySearch" oninput="commentModule.filterHistory()" placeholder="검색" class="bg-[#121212] border border-dark-border text-white p-2 rounded text-sm outline-none"><button onclick="commentModule.downloadSelectedHistory()" class="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold disabled:opacity-50" id="cmt_btnHistoryBatchDown" disabled>선택 다운로드</button><button onclick="commentModule.clearAllHistory()" class="text-xs text-red-400 underline">전체 삭제</button></div></div>
+                                    <div id="cmt_historyLoading" class="hidden text-center"><div class="loader w-6 h-6"></div></div>
+                                    <div id="cmt_historyContainer" class="overflow-x-auto rounded-lg border border-dark-border"></div>
+                                    <div id="cmt_noHistoryMsg" class="hidden text-center text-dark-muted py-10">기록 없음</div>
+                                </div>
+                                <div id="cmt_resultArea" class="hidden mt-12 border-t border-dark-border pt-12">
+                                    <div id="cmt_statsDashboard" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+                                    <div id="cmt_loading" class="hidden py-12 text-center"><div class="loader mb-4"></div><p id="cmt_loadingText" class="text-dark-muted animate-pulse">데이터 수집 중...</p></div>
+                                    <div id="cmt_webReport" class="hidden space-y-8"><div class="bg-blue-900/10 p-5 rounded-r-lg border-l-4 border-blue-500"><h4 class="font-bold text-blue-500 mb-3">요약</h4><p id="cmt_ui-summary" class="text-gray-300"></p></div><div id="cmt_dynamicReportContent"></div><div class="text-center mt-8"><button onclick="commentModule.downloadReport()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-bold">리포트 다운로드</button></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                `;
+
+            },
+
+            setMode(m) {
+                ['link', 'channel', 'history'].forEach(t => {
+                    const v = document.getElementById(`cmt_view-${t}`), b = document.getElementById(`cmt_tab-${t}`); if (t === m) { v.classList.remove('hidden'); b.className = 'flex-1 py-4 text-center font-bold bg-[#252525] border-b-2 border-brand-primary text-brand-primary'; } else { v.classList.add('hidden'); b.className = 'flex-1 py-4 text-center font-bold text-dark-muted border-b-2 border-transparent hover:text-white'; }
+                }); if (m === 'history') this.filterHistory();
+            },
+
+            getKeys() {
+                const ytKey = app.getApiKey('youtube');
+                const geminiKey = app.getApiKey('gemini');
+                if (!ytKey || !geminiKey) {
+                    alert("YouTube 및 Gemini API 키가 필요합니다. 설정 메뉴에서 키를 등록해주세요.");
+                    app.openSettings();
+                    return null;
+                }
+                return { ytKey, geminiKey };
+            },
+
+            async analyzeSingleVideo() {
+                const k = this.getKeys(); if (!k) return;
+                const url = document.getElementById('cmt_videoUrl').value, m = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/);
+                if (m && m[2].length === 11) await this.runAnalysis(m[2], k); else alert("URL확인");
+            },
+
+            async runAnalysis(id, k) {
+                if (this.state.progressInterval) clearInterval(this.state.progressInterval);
+                this.showLoading("데이터 수집...");
+                try {
+                    const vid = await this.fetchVideo(id, k.ytKey);
+                    const cmt = await this.fetchComments(id, k.ytKey);
+                    if (!vid || !cmt) throw new Error("데이터 실패");
+                    this.renderStats(vid);
+
+                    let p = 40; this.state.progressInterval = setInterval(() => { if (p < 95) { p++; this.updateLoadingText(p, "AI 분석중..."); } }, 500);
+                    const data = await this.analyzeGemini(vid, cmt, k.geminiKey);
+                    clearInterval(this.state.progressInterval);
+                    this.state.currentVideoInfo = vid; this.state.currentVideoId = id;
+                    const ts = await this.saveAnalysis(id, vid, data);
+                    this.hideLoading();
+                    this.renderWebUI(data, id);
+                    this.state.currentMarkdownText = `# Report\n${data.summary}`;
+                    document.getElementById('cmt_resultArea').scrollIntoView({ behavior: 'smooth' });
+                } catch (e) { this.hideLoading(); alert(e.message); }
+            },
+
+            async analyzeGemini(vid, cmt, key) {
+                const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
+                const genAI = new GoogleGenerativeAI(key);
+                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp", generationConfig: { responseMimeType: "application/json" } });
+
+                const prompt = `
+                분석해줘.JSON으로.
+                            영상: ${vid.title}, ${vid.description}
+                댓글: ${cmt.substring(0, 30000)}
+                
+                Format:
+                        {
+                            "summary": "...",
+                            "viral_analysis": { "growth_trend": "", "engagement_rate": "", "subject_characteristics": "" },
+                            "content_type_analysis": { "type": "Trend/Seasonal/Evergreen", "reason": "", "strategy": "", "seo_keywords": [] },
+                            "controversy_deep_analysis": { "pros": { "title": "", "examples": [] }, "cons": { "title": "", "examples": [] }, "neutral": { "title": "", "examples": [] } },
+                            "psychology_analysis": { "reason_for_enthusiasm": "", "reason_for_criticism": "" },
+                            "insight_analysis": "", "viewer_needs": "", "sentiment_analysis": "", "sentiment_pos_percent": 0, "sentiment_neg_percent": 0,
+                            "best_comments_detailed": [{ "type": "", "text": "", "author": "" }],
+                            "keywords_detailed": []
+                        }
+                            `;
+                const r = await model.generateContent(prompt);
+                return JSON.parse(r.response.text());
+            },
+
+            async fetchVideo(id, k) { const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${id}&key=${k}`); const d = await r.json(); if (d.items?.length) return d.items[0].snippet ? { ...d.items[0].snippet, ...d.items[0].statistics } : null; return null; },
+            async fetchComments(id, k) { const r = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${id}&maxResults=100&order=relevance&key=${k}`); const d = await r.json(); return d.items ? d.items.map(i => i.snippet.topLevelComment.snippet.textDisplay).join('\n') : ""; },
+            async saveAnalysis(id, v, a) {
+                if (app.db) await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('history').doc(id).set({ timestamp: Date.now(), video: v, analysis: a }); return Date.now();
+            },
+
+            showLoading(t) { document.getElementById('cmt_resultArea').classList.remove('hidden'); document.getElementById('cmt_loading').classList.remove('hidden'); document.getElementById('cmt_webReport').classList.add('hidden'); },
+            hideLoading() { document.getElementById('cmt_loading').classList.add('hidden'); },
+            updateLoadingText(p, t) { document.getElementById('cmt_loadingText').innerText = `${t} (${p}%)`; },
+            renderStats(v) { document.getElementById('cmt_statsDashboard').innerHTML = `<div>${v.title}</div>`; },
+            renderWebUI(d, id) {
+                document.getElementById('cmt_webReport').classList.remove('hidden');
+                document.getElementById('cmt_ui-summary').innerText = d.summary;
+                document.getElementById('cmt_dynamicReportContent').innerHTML = Object.keys(d).map(k => `<div><b>${k}</b>: ${JSON.stringify(d[k])}</div>`).join('');
+            },
+            filterHistory() {
+                const h = this.state.historyCache || {}; // Ensure we have history data
+                const q = document.getElementById('cmt_historySearch').value.toLowerCase();
+                let keys = Object.keys(h).filter(k => {
+                    const i = h[k];
+                    return i.video.title.toLowerCase().includes(q) || i.video.channelTitle.toLowerCase().includes(q);
+                });
+
+                // Sort
+                keys.sort((a, b) => {
+                    const iA = h[a]; const iB = h[b];
+                    let vA, vB;
+                    if (this.state.historySortState.key === 'title') { vA = iA.video.title; vB = iB.video.title; return this.state.historySortState.order === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA); }
+                    else if (this.state.historySortState.key === 'timestamp') { vA = iA.timestamp; vB = iB.timestamp; }
+                    else if (this.state.historySortState.key === 'viewCount') { vA = parseInt(iA.video.viewCount); vB = parseInt(iB.video.viewCount); }
+                    else { vA = new Date(iA.video.publishedAt).getTime(); vB = new Date(iB.video.publishedAt).getTime(); }
+                    return this.state.historySortState.order === 'asc' ? vA - vB : vB - vA;
+                });
+                this.state.currentHistoryKeys = keys;
+                this.renderHistoryTable(keys, h);
+            },
+
+            toggleHistory(id) {
+                if (this.state.selectedHistoryIds.has(id)) this.state.selectedHistoryIds.delete(id);
+                else this.state.selectedHistoryIds.add(id);
+                this.filterHistory();
+            },
+
+            toggleAllHistory() {
+                const all = document.getElementById('cmt_selectAll').checked;
+                this.state.currentHistoryKeys.forEach(k => all ? this.state.selectedHistoryIds.add(k) : this.state.selectedHistoryIds.delete(k));
+                this.filterHistory();
+            },
+
+            async deleteHistory(e, id) {
+                e.stopPropagation();
+                if (confirm("정말 삭제하시겠습니까?")) {
+                    await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('history').doc(id).delete();
+                    delete this.state.historyCache[id]; // Update cache
+                    this.state.selectedHistoryIds.delete(id);
+                    this.filterHistory();
+                }
+            },
+
+            async clearAllHistory() {
+                if (confirm("모든 분석 기록을 삭제하시겠습니까? (복구 불가)")) {
+                    const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('history').get();
+                    const batch = app.db.batch();
+                    s.docs.forEach(d => batch.delete(d.ref));
+                    await batch.commit();
+                    this.state.historyCache = {};
+                    this.filterHistory();
+                }
+            },
+
+            async fetchCloudHistory() {
+                if (!app.db) return {};
+                const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('history').orderBy('timestamp', 'desc').get();
+                const h = {};
+                s.docs.forEach(d => h[d.id] = d.data());
+                this.state.historyCache = h; // Cache it
+                return h;
+            },
+
+            renderHistoryTable(keys, history) {
+                const c = document.getElementById('cmt_historyContainer');
+                const n = document.getElementById('cmt_noHistoryMsg');
+                if (keys.length === 0) { c.classList.add('hidden'); n.classList.remove('hidden'); return; }
+                c.classList.remove('hidden'); n.classList.add('hidden');
+
+                const fmt = (n) => Number(n).toLocaleString();
+
+                c.innerHTML = `
+                    < table class= "w-full text-left history-table" >
+                    <thead><tr>
+                        <th class="w-10 text-center"><input type="checkbox" id="cmt_selectAll" onchange="commentModule.toggleAllHistory()" class="custom-checkbox"></th>
+                        <th>제목</th><th>통계</th><th>날짜</th><th class="text-right">관리</th>
+                    </tr></thead>
+                    <tbody>
+                    ${keys.map(k => {
+                    const i = history[k];
+                    const sel = this.state.selectedHistoryIds.has(k);
+                    return `
+                        <tr class="${sel ? 'bg-white/5' : ''} cursor-pointer hover:bg-dark-hover" onclick="commentModule.loadSavedAnalysis('${k}')">
+                            <td class="text-center" onclick="event.stopPropagation()"><div class="flex justify-center"><input type="checkbox" onchange="commentModule.toggleHistory('${k}')" ${sel ? 'checked' : ''} class="custom-checkbox"></div></td>
+                            <td><div class="font-bold text-white truncate max-w-sm">${i.video.title}</div><div class="text-xs text-gray-500">${i.video.channelTitle}</div></td>
+                            <td><div class="text-xs text-gray-400">👁 ${fmt(i.video.viewCount)} <i class="fas fa-comment ml-2 mr-1"></i>${fmt(i.video.commentCount)}</div></td>
+                            <td class="text-xs text-gray-500">${new Date(i.timestamp).toLocaleDateString()}</td>
+                            <td class="text-right">
+                                <button onclick="commentModule.deleteHistory(event, '${k}')" class="text-gray-500 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>`;
+                }).join('')}
+                    </tbody>
+                </table > `;
+
+                const all = document.getElementById('cmt_selectAll');
+                if (all) all.checked = keys.length > 0 && keys.every(k => this.state.selectedHistoryIds.has(k));
+                document.getElementById('cmt_btnHistoryBatchDown').disabled = this.state.selectedHistoryIds.size === 0;
+            },
+
+            async loadSavedAnalysis(id) {
+                const h = await this.fetchCloudHistory();
+                const s = h[id];
+                if (s) {
+                    this.state.currentVideoInfo = s.video; this.state.currentVideoId = id;
+                    // this.state.currentAnalysisTimestamp = s.timestamp; // Not strictly needed
+                    document.getElementById('cmt_resultArea').classList.remove('hidden');
+                    document.getElementById('cmt_webReport').classList.remove('hidden');
+                    document.getElementById('cmt_statsDashboard').classList.remove('hidden');
+                    this.renderStats(s.video);
+                    this.renderWebUI(s.analysis, id);
+                    this.state.currentMarkdownText = "# Report: " + s.video.title + "\n\n## Summary\n" + s.analysis.summary + "\n\n(See cloud history for full details)";
+                    document.getElementById('cmt_resultArea').scrollIntoView({ behavior: 'smooth' });
+                }
+            },
+
+            async downloadSelectedHistory() {
+                const ids = Array.from(this.state.selectedHistoryIds);
+                if (ids.length === 0) return alert("선택된 항목이 없습니다.");
+
+                const zip = new JSZip();
+                const history = await this.fetchCloudHistory();
+                const batchDate = new Date().toISOString().split('T')[0];
+                let addedCount = 0;
+
+                ids.forEach((vid) => {
+                    const item = history[vid];
+                    if (item) {
+                        const md = this.generateMarkdown(item.analysis, item.video);
+                        const filename = `${item.video.channelTitle}_${item.video.title}_${item.timestamp}.txt`.replace(/[\\/:*?"<>|]/g, '_');
+                        zip.file(filename, md);
+                        addedCount++;
+                    }
+                });
+
+                if (addedCount === 0) return alert("다운로드할 데이터가 유효하지 않습니다.");
+                const content = await zip.generateAsync({ type: "blob" });
+                this.triggerDownloadBlob(content, `History_Export_${ids.length}files_${batchDate}.zip`);
+            },
+
+            sortChannelVideos() {
+                const sortKey = document.getElementById('cmt_sortOption').value;
+                const order = document.getElementById('cmt_orderOption').value;
+
+                this.state.channelVideosCache.sort((a, b) => {
+                    let valA = sortKey === 'date' ? a.date : a[sortKey];
+                    let valB = sortKey === 'date' ? b.date : b[sortKey];
+                    return order === 'asc' ? valA - valB : valB - valA;
+                });
+                this.renderChannelGrid();
+            },
+
+            async searchChannelVideos() {
+                const k = this.getKeys(); if (!k) return;
+                let q = document.getElementById('cmt_channelHandle').value;
+                if (!q) return alert("채널 정보를 입력해주세요.");
+
+                const grid = document.getElementById('cmt_videoGrid');
+                grid.innerHTML = '<div class="col-span-full text-center py-8 text-dark-muted"><div class="loader mb-2"></div>채널 검색 및 데이터 수집 중...</div>';
+                document.getElementById('cmt_channelControls').classList.add('hidden');
+                document.getElementById('cmt_loadMoreContainer').classList.add('hidden');
+                document.getElementById('cmt_resultArea').classList.add('hidden');
+
+                try {
+                    this.state.channelVideosCache = [];
+                    this.state.nextPageToken = null;
+                    this.state.selectedVideoIds.clear();
+                    this.updateBatchButton();
+
+                    let cid = q;
+                    if (!q.startsWith('UC')) {
+                        const s = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${q}&type=channel&key=${k.ytKey}`).then(r => r.json());
+                        if (!s.items?.length) throw new Error("채널을 찾을 수 없습니다.");
+                        cid = s.items[0].id.channelId;
+                    }
+                    this.state.currentChannelId = cid;
+                    await this.fetchChannelVideosPage(k.ytKey);
+
+                } catch (e) { grid.innerHTML = `<div class="col-span-full text-center text-brand-primary font-bold">${e.message}</div>`; }
+            },
+
+            async loadMoreChannelVideos() {
+                const k = this.getKeys(); if (!k) return;
+                if (!this.state.currentChannelId) return;
+                try { await this.fetchChannelVideosPage(k.ytKey); } catch (e) { alert("Load Failed"); }
+            },
+
+            async fetchChannelVideosPage(apiKey) {
+                let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${this.state.currentChannelId}&order=date&maxResults=50&type=video&key=${apiKey}`;
+                if (this.state.nextPageToken) url += `&pageToken=${this.state.nextPageToken}`;
+
+                const vRes = await fetch(url);
+                const vData = await vRes.json();
+
+                if (!vData.items?.length) {
+                    if (this.state.channelVideosCache.length === 0) document.getElementById('cmt_videoGrid').innerHTML = 'No Videos';
+                    document.getElementById('cmt_loadMoreContainer').classList.add('hidden');
+                    return;
+                }
+
+                this.state.nextPageToken = vData.nextPageToken || null;
+                if (this.state.nextPageToken) document.getElementById('cmt_loadMoreContainer').classList.remove('hidden');
+                else document.getElementById('cmt_loadMoreContainer').classList.add('hidden');
+
+                const videoIds = vData.items.map(i => i.id.videoId).join(',');
+                const dRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoIds}&key=${apiKey}`);
+                const dData = await dRes.json();
+
+                const newItems = dData.items.map(item => ({
+                    id: item.id,
+                    snippet: item.snippet,
+                    statistics: item.statistics,
+                    viewCount: parseInt(item.statistics.viewCount || 0),
+                    likeCount: parseInt(item.statistics.likeCount || 0),
+                    commentCount: parseInt(item.statistics.commentCount || 0),
+                    date: new Date(item.snippet.publishedAt)
+                }));
+
+                this.state.channelVideosCache = [...this.state.channelVideosCache, ...newItems];
+                document.getElementById('cmt_channelControls').classList.remove('hidden');
+                this.sortChannelVideos();
+            },
+
+            renderChannelGrid() {
+                const grid = document.getElementById('cmt_videoGrid');
+                if (!grid) return;
+                grid.innerHTML = '';
+
+                this.state.channelVideosCache.forEach(v => {
+                    const isSelected = this.state.selectedVideoIds.has(v.id);
+                    const borderClass = isSelected ? 'border-brand-primary ring-2 ring-brand-primary' : 'border-dark-border';
+
+                    const d = document.createElement('div');
+                    d.className = `bg-dark-card border ${borderClass} rounded-lg overflow-hidden cursor-pointer hover-card shadow-lg relative`;
+                    d.onclick = (e) => {
+                        if (e.target.closest('.analyze-btn')) return;
+                        if (this.state.selectedVideoIds.has(v.id)) this.state.selectedVideoIds.delete(v.id); else this.state.selectedVideoIds.add(v.id);
+                        this.renderChannelGrid(); this.updateBatchButton();
+                    };
+
+                    d.innerHTML = `
+                         <div class="absolute top-2 left-2 z-10">
+                             <div class="custom-checkbox ${isSelected ? 'bg-brand-primary border-brand-primary' : 'bg-black/50 border-white/50'} w-6 h-6 rounded flex items-center justify-center text-white">
+                                 ${isSelected ? '<i class="fas fa-check text-xs"></i>' : ''}
+                             </div>
+                         </div>
+                         <div class="relative aspect-video">
+                             <img src="${v.snippet.thumbnails.medium.url}" class="w-full h-full object-cover opacity-90 hover:opacity-100 transition">
+                             <button onclick="commentModule.runSingleAnalysisFromGrid(event, '${v.id}')" class="analyze-btn absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 hover:opacity-100 transition group">
+                                 <span class="bg-brand-primary text-white text-xs px-3 py-1.5 rounded font-bold transform translate-y-2 group-hover:translate-y-0 transition">단건 분석</span>
+                             </button>
+                         </div>
+                         <div class="p-3">
+                             <h4 class="font-bold text-sm text-gray-200 line-clamp-2 mb-2">${v.snippet.title}</h4>
+                             <div class="flex justify-between text-xs text-dark-muted">
+                                 <span><i class="fas fa-eye mr-1"></i>${Number(v.viewCount).toLocaleString()}</span>
+                                 <span><i class="fas fa-comment mr-1"></i>${Number(v.commentCount).toLocaleString()}</span>
+                             </div>
+                             <div class="mt-1 text-xs text-gray-500">${new Date(v.snippet.publishedAt).toLocaleDateString()}</div>
+                         </div>
+                     `;
+                    grid.appendChild(d);
+                });
+            },
+
+            async runSingleAnalysisFromGrid(e, id) {
+                e.stopPropagation();
+                const keys = this.getKeys(); if (!keys) return;
+                document.getElementById('cmt_resultArea').classList.remove('hidden');
+                setTimeout(() => { document.getElementById('cmt_resultArea').scrollIntoView({ behavior: 'smooth' }); }, 100);
+                await this.runAnalysis(id, keys);
+            },
+
+            updateBatchButton() {
+                const btn = document.getElementById('cmt_btnBatchAnalyze');
+                const count = this.state.selectedVideoIds.size;
+                document.getElementById('cmt_selectedCount').innerText = `${count}개 선택됨`;
+                btn.disabled = count === 0;
+            },
+
+            async analyzeSelectedVideos() {
+                const k = this.getKeys(); if (!k) return;
+                const ids = Array.from(this.state.selectedVideoIds);
+                if (ids.length === 0) return;
+                if (!confirm(`${ids.length}개의 영상을 순차적으로 분석하시겠습니까? API 사용량이 증가합니다.`)) return;
+
+                const btn = document.getElementById('cmt_btnBatchAnalyze');
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+
+                const zip = new JSZip();
+                let successCount = 0;
+
+                for (let i = 0; i < ids.length; i++) {
+                    const vid = ids[i];
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> 분석 중 (${i + 1}/${ids.length})`;
+                    try {
+                        const video = await this.fetchVideo(vid, k.ytKey);
+                        const comments = await this.fetchComments(vid, k.ytKey);
+                        if (video && comments) {
+                            await new Promise(r => setTimeout(r, 1000)); // Rate limit
+                            const data = await this.analyzeGemini(video, comments, k.geminiKey);
+                            await this.saveAnalysis(vid, video, data);
+                            const md = this.generateMarkdown(data, video);
+                            zip.file(`${video.channelTitle}_${video.title}_${Date.now()}.txt`.replace(/[\/:*?"<>|]/g, '_'), md);
+                            successCount++;
+                        }
+                    } catch (e) { console.error(e); }
+                }
+
+                if (successCount > 0) {
+                    const content = await zip.generateAsync({ type: "blob" });
+                    this.triggerDownloadBlob(content, `Batch_Analysis_${ids.length}Videos_${new Date().toISOString().split('T')[0]}.zip`);
+                    alert(`${successCount}개 영상 분석 완료.`);
+                } else {
+                    alert("분석 실패.");
+                }
+
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                this.state.selectedVideoIds.clear();
+                this.renderChannelGrid(); this.updateBatchButton();
+            },
+
+            downloadReport() {
+                if (!this.state.currentMarkdownText || !this.state.currentVideoInfo) return alert("다운로드할 내용이 없습니다.");
+                const filename = `${this.state.currentVideoInfo.channelTitle}_${this.state.currentVideoInfo.title}_Report.txt`.replace(/[\/:*?"<>|]/g, '_');
+                this.triggerDownloadBlob(new Blob([this.state.currentMarkdownText], { type: "text/plain" }), filename);
+            },
+
+            triggerDownloadBlob(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            },
+
+            generateMarkdown(data, video) {
+                const v = data.viral_analysis || {};
+                const s = data.content_type_analysis || {};
+                const c = data.controversy_deep_analysis || { pros: { title: '', examples: [] }, cons: { title: '', examples: [] }, neutral: { title: '', examples: [] } };
+                const p = data.psychology_analysis || {};
+
+                return `# 🎬 YouTube 심층 분석 리포트
+## 📺 영상 정보
+- 제목: ${video.title}
+- 채널: ${video.channelTitle}
+- 게시일: ${new Date(video.publishedAt).toLocaleDateString()}
+
+---
+## 📝 상세 요약
+${data.summary}
+
+## 📈 바이럴 분석
+- 성장세: ${v.growth_trend}
+- 참여도: ${v.engagement_rate}
+
+## 🧭 콘텐츠 전략
+- 유형: ${s.type}
+- 전략: ${s.strategy}
+
+## ⚔️ 쟁점 반응
+- 찬성: ${c.pros.title}
+- 반대: ${c.cons.title}
+
+## 🧠 심리 분석
+- 열광 이유: ${p.reason_for_enthusiasm}
+
+## 📊 감성 비율
+긍정: ${data.sentiment_pos_percent}% / 부정: ${data.sentiment_neg_percent}%`;
             }
         };
 
