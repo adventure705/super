@@ -486,20 +486,20 @@
         // --- CHANNEL MODULE ---
         const channelModule = {
             state: {
+                view: 'list', // 'list' or 'categories'
                 channels: [],
                 categories: ['미분류'],
                 categoryColors: {},
-                currentSort: { key: 'subscribers', direction: 'desc' },
+                currentSort: { key: 'addedAt', direction: 'desc' },
                 searchTerm: '',
                 categoryFilter: '전체',
-                isCategoryModalOpen: false,
-                editingCategoryName: null
+                editingChannelId: null, // For category selection
+                loading: false
             },
             listeners: [],
 
             init() {
                 this.setupListeners();
-                // Setup scroll sync after render
                 setTimeout(() => this.setupScrollSync(), 500);
             },
 
@@ -509,8 +509,8 @@
 
                 if (!app.db) return;
 
-                // Use artifacts path to migrate/share data with channel.html
-                const channelsCol = app.db.collection(`artifacts/${app.appId}/public/data/channels`);
+                // Revert to global_channels as requested
+                const channelsCol = app.db.collection('global_channels');
                 const unsubChannels = channelsCol.onSnapshot(snapshot => {
                     this.state.channels = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     this.render(document.getElementById('main-content'));
@@ -518,7 +518,7 @@
                 });
                 this.listeners.push(unsubChannels);
 
-                const catDoc = app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`);
+                const catDoc = app.db.collection('global_data').doc('channel_categories');
                 const unsubCat = catDoc.onSnapshot(doc => {
                     if (doc.exists) {
                         this.state.categories = doc.data().names || ['미분류'];
@@ -533,20 +533,21 @@
             },
 
             ensureCategoryColors() {
-                const palette = ['red', 'green', 'blue', 'yellow', 'purple', 'indigo', 'pink', 'teal'];
-                const colorClasses = palette.map(p => `bg-${p}-600`);
-                const newColors = { ...this.state.categoryColors, '미분류': 'bg-gray-600' };
-                let colorIndex = 0;
-                this.state.categories.forEach(cat => {
-                    if (cat !== '미분류' && !newColors[cat]) {
-                        newColors[cat] = colorClasses[colorIndex % colorClasses.length];
-                        colorIndex++;
+                // Generate distinct HSL colors
+                const newColors = { ...this.state.categoryColors };
+                this.state.categories.forEach((cat, idx) => {
+                    if (!newColors[cat]) {
+                        // Spread hue across 360 degrees based on index/length (mocking uniqueness)
+                        // Using a simple hash or index-based hue for stability
+                        const hue = (idx * 137.508) % 360; // Golden angle approx
+                        newColors[cat] = `hsl(${hue}, 70%, 40%)`;
                     }
                 });
                 this.state.categoryColors = newColors;
             },
 
             setupScrollSync() {
+                if (this.state.view !== 'list') return;
                 const top = document.getElementById('ch-top-scroll');
                 const content = document.getElementById('ch-top-scroll-content');
                 const tableContainer = document.getElementById('ch-table-container');
@@ -563,6 +564,53 @@
                 if (!container) return;
                 if (app.state.currentModule !== 'channel') return;
 
+                if (this.state.view === 'categories') {
+                    this.renderCategoryManager(container);
+                } else {
+                    this.renderList(container);
+                }
+            },
+
+            renderCategoryManager(container) {
+                const { categories } = this.state;
+                container.innerHTML = `
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-2xl font-bold text-white"><i class="fas fa-tags text-brand-primary mr-2"></i>카테고리 관리</h2>
+                            <button onclick="channelModule.setView('list')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors">
+                                <i class="fas fa-arrow-left mr-2"></i>목록으로 돌아가기
+                            </button>
+                        </div>
+
+                        <div class="bg-dark-card border border-dark-border rounded-xl p-6">
+                            <div class="flex gap-2 mb-6">
+                                <input type="text" id="new-category-input" placeholder="새 카테고리 이름" 
+                                    class="flex-1 bg-dark-bg border border-dark-border text-white rounded-lg px-4 py-3 focus:border-brand-primary outline-none">
+                                <button onclick="channelModule.addCategory()" class="bg-brand-primary hover:bg-brand-hover text-white px-6 py-3 rounded-lg font-bold">추가</button>
+                            </div>
+
+                            <div class="space-y-2" id="cat-list">
+                                ${categories.map((cat, idx) => `
+                                    <div class="flex items-center gap-3 bg-dark-bg p-3 rounded-lg border border-dark-border group">
+                                        <div class="w-6 h-6 rounded flex-shrink-0" style="background-color: ${this.state.categoryColors[cat] || '#666'}"></div>
+                                        <input type="text" value="${cat}" onchange="channelModule.updateCategoryName(${idx}, this.value)"
+                                            class="flex-1 bg-transparent border-none text-white focus:ring-0 cursor-text select-text" ${cat === '미분류' ? 'disabled' : ''}>
+                                        
+                                        <div class="flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onclick="channelModule.moveCategory(${idx}, -1)" class="p-2 text-gray-400 hover:text-white" ${idx === 0 ? 'disabled' : ''}><i class="fas fa-chevron-up"></i></button>
+                                            <button onclick="channelModule.moveCategory(${idx}, 1)" class="p-2 text-gray-400 hover:text-white" ${idx === categories.length - 1 ? 'disabled' : ''}><i class="fas fa-chevron-down"></i></button>
+                                            ${cat !== '미분류' ? `<button onclick="channelModule.deleteCategory('${cat}')" class="p-2 text-red-500 hover:text-red-400 ml-2"><i class="fas fa-trash"></i></button>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <p class="text-xs text-dark-muted mt-4">* 이름을 클릭하여 수정할 수 있습니다.</p>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderList(container) {
                 const { channels, categories, currentSort, searchTerm, categoryFilter } = this.state;
 
                 // Filter
@@ -582,14 +630,13 @@
                     let aVal = a[currentSort.key];
                     let bVal = b[currentSort.key];
 
-                    // Handle specific types
                     if (['subscribers', 'totalViews', 'totalVideos', 'avgViews90d', 'avgLikes90d', 'avgComments90d'].includes(currentSort.key)) {
                         aVal = Number(aVal || 0);
                         bVal = Number(bVal || 0);
                     } else if (currentSort.key === 'avgUploadFreqDays') {
                         aVal = parseFloat(aVal) || 999999;
                         bVal = parseFloat(bVal) || 999999;
-                    } else if (currentSort.key === 'channelCreationDate') {
+                    } else if (currentSort.key === 'channelCreationDate' || currentSort.key === 'addedAt') {
                         aVal = new Date(aVal || 0).getTime();
                         bVal = new Date(bVal || 0).getTime();
                     } else {
@@ -614,34 +661,37 @@
                     <div class="max-w-full space-y-4">
                         <div class="flex justify-between items-center">
                             <h2 class="text-2xl font-bold text-white"><i class="fas fa-tv text-brand-primary mr-2"></i>채널 목록 관리</h2>
-                            <div class="text-sm text-dark-muted">총 채널: <span class="text-white font-bold">${channels.length}</span> (필터됨: ${filtered.length})</div>
+                            <div class="text-sm text-dark-muted">총 채널: <span class="text-white font-bold">${channels.length}</span></div>
                         </div>
 
-                        <!-- Add & Search -->
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div class="md:col-span-8 flex gap-2">
-                                <input type="text" id="ch-url-input" placeholder="유튜브 URL 또는 @핸들 입력" class="flex-1 bg-dark-card border border-dark-border text-white rounded-lg px-4 py-2 focus:border-brand-primary outline-none">
-                                <button onclick="channelModule.addChannel()" class="bg-brand-primary hover:bg-brand-hover text-white px-6 py-2 rounded-lg font-bold transition-colors whitespace-nowrap">추가</button>
-                            </div>
-                            <div class="md:col-span-4 relative">
-                                <i class="fas fa-search absolute left-3 top-3 text-gray-500"></i>
-                                <input type="text" oninput="channelModule.handleSearch(this.value)" value="${searchTerm}" placeholder="검색..." class="w-full bg-dark-card border border-dark-border text-white rounded-lg pl-10 pr-4 py-2 focus:border-brand-primary outline-none">
-                            </div>
+                        <!-- Top Controls: Tabs & Search -->
+                        <div class="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-dark-card p-4 rounded-xl border border-dark-border">
+                             <div class="flex gap-2 w-full md:w-auto">
+                                <button onclick="channelModule.setView('categories')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center gap-2">
+                                    <i class="fas fa-tags"></i> 카테고리 관리
+                                </button>
+                             </div>
+                             
+                             <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                                <div class="flex gap-2">
+                                    <input type="text" id="ch-url-input" placeholder="URL 또는 @핸들" class="w-full md:w-64 bg-dark-bg border border-dark-border text-white rounded-lg px-4 py-2 focus:border-brand-primary outline-none">
+                                    <button onclick="channelModule.addChannel()" class="bg-brand-primary hover:bg-brand-hover text-white px-4 py-2 rounded-lg font-bold whitespace-nowrap">추가</button>
+                                </div>
+                                <div class="relative flex-1 md:w-64">
+                                    <i class="fas fa-search absolute left-3 top-3 text-gray-500"></i>
+                                    <input type="text" oninput="channelModule.handleSearch(this.value)" value="${searchTerm}" placeholder="검색..." class="w-full bg-dark-bg border border-dark-border text-white rounded-lg pl-10 pr-4 py-2 focus:border-brand-primary outline-none">
+                                </div>
+                             </div>
                         </div>
 
-                        <!-- Filters -->
-                        <div class="flex flex-wrap gap-2 items-center bg-dark-card p-3 rounded-xl border border-dark-border">
-                             <div class="flex flex-wrap gap-2">
-                                <button onclick="channelModule.setFilter('전체')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === '전체' ? 'bg-white text-black font-bold' : 'bg-dark-bg text-gray-400 border border-dark-border'}">전체</button>
+                        <!-- Category Filters -->
+                        <div class="flex flex-wrap gap-2 items-center px-2">
+                                <button onclick="channelModule.setFilter('전체')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === '전체' ? 'bg-white text-black font-bold' : 'bg-dark-card text-gray-400 border border-dark-border'}">전체</button>
                                 ${categories.map(cat => `
-                                    <button onclick="channelModule.setFilter('${cat}')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === cat ? 'ring-2 ring-white ' + this.state.categoryColors[cat] + ' text-white' : 'bg-dark-bg text-gray-400 border border-dark-border'}">
+                                    <button onclick="channelModule.setFilter('${cat}')" class="px-3 py-1 rounded-full text-xs transition-colors ${categoryFilter === cat ? 'ring-2 ring-white text-white' : 'bg-dark-card text-gray-400 border border-dark-border'}" style="${categoryFilter === cat ? `background-color: ${this.state.categoryColors[cat]}` : ''}">
                                         ${cat}
                                     </button>
                                 `).join('')}
-                            </div>
-                            <div class="ml-auto">
-                                <button onclick="channelModule.toggleCatModal(true)" class="text-xs text-brand-primary hover:text-white transition-colors"><i class="fas fa-cog"></i> 관리</button>
-                            </div>
                         </div>
 
                         <!-- Table Area -->
@@ -658,18 +708,18 @@
                                             <th class="px-4 py-3">프로필</th>
                                             ${Th('channelName', '채널명')}
                                             <th class="px-4 py-3">링크</th>
-                                            ${Th('customCategory', '카테고리')}
+                                            ${Th('customCategory', '카테고리 (클릭하여 변경)')}
                                             ${Th('country', '국가')}
-                                            ${Th('note', '비고(메모)')}
+                                            ${Th('note', '비고')}
                                             ${Th('subscribers', '구독자')}
                                             ${Th('totalViews', '총 조회수')}
                                             ${Th('totalVideos', '총 영상수')}
                                             ${Th('channelCreationDate', '채널 생성일')}
                                             <th class="px-4 py-3">경과 시간</th>
-                                            ${Th('avgUploadFreqDays', '평균 업로드 주기')}
-                                            ${Th('avgViews90d', '90일 평균 조회수')}
-                                            ${Th('avgLikes90d', '90일 평균 좋아요')}
-                                            ${Th('avgComments90d', '90일 평균 댓글')}
+                                            ${Th('avgUploadFreqDays', '업로드 주기')}
+                                            ${Th('avgViews90d', '90일 조회수')}
+                                            ${Th('avgLikes90d', '90일 좋아요')}
+                                            ${Th('avgComments90d', '90일 댓글')}
                                             <th class="px-4 py-3 text-right">관리</th>
                                         </tr>
                                     </thead>
@@ -682,19 +732,19 @@
                                                     <button onclick="channelModule.copyLink('${ch.channelUrl}')" class="text-green-500 hover:text-green-400 bg-dark-bg p-1 rounded border border-dark-border"><i class="fas fa-link"></i></button>
                                                 </td>
                                                 <td class="px-4 py-3">
-                                                    <span onclick="channelModule.cycleCategory('${ch.id}', '${ch.customCategory}')" class="cursor-pointer px-2 py-1 rounded text-xs text-white ${this.state.categoryColors[ch.customCategory] || 'bg-gray-600'}">
-                                                        ${ch.customCategory}
-                                                    </span>
+                                                    <select onchange="channelModule.changeCategory('${ch.id}', this.value)" class="bg-dark-bg text-white text-xs rounded border border-dark-border p-1 outline-none cursor-pointer" style="background-color: ${this.state.categoryColors[ch.customCategory] || '#333'}">
+                                                        ${categories.map(cat => `<option value="${cat}" ${ch.customCategory === cat ? 'selected' : ''} class="bg-dark-card">${cat}</option>`).join('')}
+                                                    </select>
                                                 </td>
                                                 <td class="px-4 py-3">${ch.country}</td>
-                                                <td class="px-4 py-3 max-w-[200px] truncate cursor-pointer hover:text-white" onclick="channelModule.editNote('${ch.id}', '${(ch.note || '').replace(/'/g, "\\'")}')" title="누르면 수정">${ch.note || '<span class="text-dark-muted text-xs">메모 없음</span>'}</td>
-                                                <td class="px-4 py-3 font-mono">${(ch.subscribers || 0).toLocaleString()}</td>
-                                                <td class="px-4 py-3 font-mono">${(ch.totalViews || 0).toLocaleString()}</td>
-                                                <td class="px-4 py-3 font-mono">${(ch.totalVideos || 0).toLocaleString()}</td>
-                                                <td class="px-4 py-3">${ch.channelCreationDate ? ch.channelCreationDate.split('T')[0] : '-'}</td>
-                                                <td class="px-4 py-3">${this.calculateElapsedTime(ch.channelCreationDate)}</td>
-                                                <td class="px-4 py-3">${this.formatUploadFrequency(ch.avgUploadFreqDays, ch.totalVideos)}</td>
-                                                <td class="px-4 py-3 font-mono text-brand-primary">${(ch.avgViews90d || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 max-w-[150px] truncate cursor-pointer hover:text-white" onclick="channelModule.editNote('${ch.id}', '${(ch.note || '').replace(/'/g, "\\'")}')" title="수정하려면 클릭">${ch.note || '-'}</td>
+                                                <td class="px-4 py-3 font-mono text-gray-300">${(ch.subscribers || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono text-dark-muted">${(ch.totalViews || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 font-mono text-dark-muted">${(ch.totalVideos || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-xs">${ch.channelCreationDate ? ch.channelCreationDate.split('T')[0] : '-'}</td>
+                                                <td class="px-4 py-3 text-xs">${this.calculateElapsedTime(ch.channelCreationDate)}</td>
+                                                <td class="px-4 py-3 font-mono text-brand-primary">${this.formatUploadFrequency(ch.avgUploadFreqDays, ch.totalVideos)}</td>
+                                                <td class="px-4 py-3 font-mono">${(ch.avgViews90d || 0).toLocaleString()}</td>
                                                 <td class="px-4 py-3 font-mono">${(ch.avgLikes90d || 0).toLocaleString()}</td>
                                                 <td class="px-4 py-3 font-mono">${(ch.avgComments90d || 0).toLocaleString()}</td>
                                                 <td class="px-4 py-3 text-right">
@@ -707,53 +757,15 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Category Modal -->
-                    <div id="cat-modal" class="${this.state.isCategoryModalOpen ? 'flex' : 'hidden'} fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
-                        <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
-                            <h3 class="text-lg font-bold text-white mb-4">카테고리 관리</h3>
-                            <div class="flex gap-2 mb-4">
-                                <input type="text" id="new-cat-input" placeholder="새 카테고리" class="flex-1 bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm">
-                                <button onclick="channelModule.addCategory()" class="bg-brand-primary text-white rounded px-3 py-2 text-sm">추가</button>
-                            </div>
-                            <ul class="space-y-2 max-h-60 overflow-y-auto mb-4">
-                                ${categories.map(cat => `
-                                    <li class="flex justify-between items-center text-sm p-2 bg-dark-bg rounded border border-dark-border">
-                                        <span class="${this.state.categoryColors[cat] || 'bg-gray-600'} px-2 py-0.5 rounded text-xs text-white">${cat}</span>
-                                        ${cat !== '미분류' ? `<button onclick="channelModule.deleteCategory('${cat}')" class="text-red-400 hover:text-red-500"><i class="fas fa-times"></i></button>` : ''}
-                                    </li>
-                                `).join('')}
-                            </ul>
-                            <button onclick="channelModule.toggleCatModal(false)" class="w-full bg-gray-700 text-white rounded py-2 text-sm hover:bg-gray-600">닫기</button>
-                        </div>
-                    </div>
-
-                    <!-- Note Edit Modal (Ad-hoc) -->
-                    <div id="note-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-70">
-                        <div class="bg-dark-card border border-dark-border p-6 rounded-xl w-full max-w-sm">
-                            <h3 class="text-lg font-bold text-white mb-4">메모 수정</h3>
-                            <textarea id="note-input" rows="3" class="w-full bg-dark-bg border border-dark-border text-white rounded px-3 py-2 text-sm mb-4"></textarea>
-                            <input type="hidden" id="note-id">
-                            <div class="flex justify-end gap-2">
-                                <button onclick="document.getElementById('note-modal').classList.add('hidden')" class="bg-gray-700 text-white rounded px-3 py-2 text-sm">취소</button>
-                                <button onclick="channelModule.saveNote()" class="bg-brand-primary text-white rounded px-3 py-2 text-sm">저장</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Loading Overlay -->
-                    <div id="ch-loading" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                        <div class="bg-dark-card p-4 rounded-lg flex items-center gap-3 text-white border border-brand-primary">
-                            <i class="fas fa-spinner fa-spin text-brand-primary"></i> <span id="ch-loading-text">처리 중...</span>
-                        </div>
-                    </div>
                 `;
+                // Re-attach scroll sync
+                setTimeout(() => this.setupScrollSync(), 0);
             },
 
             // --- Logic ---
+            setView(v) { this.state.view = v; this.render(document.getElementById('main-content')); },
             handleSearch(val) { this.state.searchTerm = val; this.render(document.getElementById('main-content')); },
             setFilter(cat) { this.state.categoryFilter = cat; this.render(document.getElementById('main-content')); },
-            toggleCatModal(show) { this.state.isCategoryModalOpen = show; this.render(document.getElementById('main-content')); },
             sort(key) {
                 if (this.state.currentSort.key === key) this.state.currentSort.direction = this.state.currentSort.direction === 'desc' ? 'asc' : 'desc';
                 else this.state.currentSort = { key, direction: 'desc' };
@@ -769,11 +781,12 @@
                 this.showLoading(true, "채널 정보 가져오는 중...");
                 try {
                     const data = await this.fetchYouTubeData(url, k);
-                    await app.db.collection(`artifacts/${app.appId}/public/data/channels`).add({
+                    await app.db.collection('global_channels').add({
                         ...data,
                         addedAt: new Date().toISOString()
                     });
                     this.showLoading(false);
+                    // Input clear happens on re-render if we were in React, but here we manually clear or rely on refresh
                 } catch (e) {
                     this.showLoading(false);
                     alert("오류: " + e.message);
@@ -782,33 +795,59 @@
 
             async deleteChannel(id) {
                 if (!confirm("삭제하시겠습니까?")) return;
-                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(id).delete();
+                await app.db.collection('global_channels').doc(id).delete();
             },
 
             async addCategory() {
-                const name = document.getElementById('new-cat-input').value.trim();
+                const name = document.getElementById('new-category-input').value.trim();
                 if (!name || this.state.categories.includes(name)) return;
                 const newCats = [...this.state.categories, name];
-                await app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`).set({ names: newCats }, { merge: true });
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+                this.render(document.getElementById('main-content'));
             },
 
             async deleteCategory(name) {
                 if (!confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) return;
                 const newCats = this.state.categories.filter(c => c !== name);
-                await app.db.doc(`artifacts/${app.appId}/public/data/categories/customCategories`).set({ names: newCats }, { merge: true });
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+                // Reset channels but keep them
                 const batch = app.db.batch();
                 this.state.channels.forEach(ch => {
                     if (ch.customCategory === name) {
-                        batch.update(app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(ch.id), { customCategory: '미분류' });
+                        batch.update(app.db.collection('global_channels').doc(ch.id), { customCategory: '미분류' });
                     }
                 });
                 await batch.commit();
             },
 
-            async cycleCategory(chId, currentCat) {
-                const idx = this.state.categories.indexOf(currentCat);
-                const nextCat = this.state.categories[(idx + 1) % this.state.categories.length];
-                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(chId).update({ customCategory: nextCat });
+            async updateCategoryName(idx, newName) {
+                if (!newName || newName === this.state.categories[idx]) return;
+                const oldName = this.state.categories[idx];
+                const newCats = [...this.state.categories];
+                newCats[idx] = newName;
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+
+                // Update channels
+                const batch = app.db.batch();
+                this.state.channels.forEach(ch => {
+                    if (ch.customCategory === oldName) {
+                        batch.update(app.db.collection('global_channels').doc(ch.id), { customCategory: newName });
+                    }
+                });
+                await batch.commit();
+            },
+
+            async moveCategory(idx, dir) {
+                const newCats = [...this.state.categories];
+                const targetIdx = idx + dir;
+                if (targetIdx < 0 || targetIdx >= newCats.length) return;
+
+                [newCats[idx], newCats[targetIdx]] = [newCats[targetIdx], newCats[idx]]; // Swap
+                await app.db.collection('global_data').doc('channel_categories').set({ names: newCats }, { merge: true });
+            },
+
+            async changeCategory(chId, newCat) {
+                await app.db.collection('global_channels').doc(chId).update({ customCategory: newCat });
             },
 
             editNote(id, note) {
@@ -821,7 +860,7 @@
             async saveNote() {
                 const id = document.getElementById('note-id').value;
                 const note = document.getElementById('note-input').value;
-                await app.db.collection(`artifacts/${app.appId}/public/data/channels`).doc(id).update({ note });
+                await app.db.collection('global_channels').doc(id).update({ note });
                 document.getElementById('note-modal').classList.add('hidden');
             },
 
