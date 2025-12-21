@@ -3487,12 +3487,13 @@ ${data.summary}
                 if (this.state.currentChannelId) this.fetchChannelVideosPage(this.getKeys().ytKey);
             }
         };
-            },
 
+
+/*
             async analyzeSingleVideo() {
             const k = this.getKeys(); if (!k) return;
             const url = document.getElementById('cmt_videoUrl').value, m = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/);
-            if (m && m[2].length === 11) await this.runAnalysis(m[2], k); else alert("URL확인");
+        if (m && m[2].length === 11) await this.runAnalysis(m[2], k); else alert("URL확인");
         },
 
             async runAnalysis(id, k) {
@@ -3928,7 +3929,9 @@ ${data.summary}
 ## 📊 감성 비율
 긍정: ${data.sentiment_pos_percent}% / 부정: ${data.sentiment_neg_percent}%`;
         }
-        };
+        }
+        }; 
+*/
 
         // Start the app
         app.init();
