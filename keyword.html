@@ -165,6 +165,21 @@
             box-shadow: 0 0 0 2px rgba(255, 59, 59, 0.2);
         }
 
+        /* Top Scrollbar Helper */
+        #top-scroll-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 5px;
+        }
+
+        #top-scroll-content {
+            height: 1px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
         .categories-section {
             display: flex;
             flex-direction: column;
@@ -594,18 +609,21 @@
                         onclick="downloadCSV()">💾 CSV 저장</button>
                 </div>
                 <div class="status-message" id="status-message">로딩 중...</div>
-                <div class="table-container">
+                <div id="top-scroll-container">
+                    <div id="top-scroll-content"></div>
+                </div>
+                <div class="table-container" id="real-table-container">
                     <table id="results-table">
                         <thead>
-                            <tr>
-                                <th>NO</th>
-                                <th>채널명</th>
-                                <th>구독자수</th>
-                                <th>🇰🇷 영상제목 (LINK)</th>
-                                <th>조회수</th>
-                                <th>댓글수</th>
-                                <th>좋아요</th>
-                                <th>게시일</th>
+                            <tr id="table-header-row">
+                                <th onclick="sortTable('rank')">NO <span></span></th>
+                                <th onclick="sortTable('channel')">채널명 <span></span></th>
+                                <th onclick="sortTable('subsRaw')">구독자수 <span></span></th>
+                                <th onclick="sortTable('korean')">🇰🇷 영상제목 (LINK) <span></span></th>
+                                <th onclick="sortTable('views')">조회수 <span></span></th>
+                                <th onclick="sortTable('comments')">댓글수 <span></span></th>
+                                <th onclick="sortTable('likes')">좋아요 <span></span></th>
+                                <th onclick="sortTable('date')">게시일 <span></span></th>
                                 <th>🇺🇸 영어</th>
                                 <th>🇯🇵 일본어</th>
                                 <th>🇨🇳 중국어</th>
@@ -626,7 +644,7 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>🔑 API 키 관리</h2>
-                <div style="font-size:0.8rem; color:#666">v6.0 (Firestore Sync)</div>
+
             </div>
 
             <div class="key-list-container" id="key-list">
@@ -883,8 +901,10 @@
         window.closeModal = () => document.getElementById('api-modal').style.display = "none";
         window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
 
-        // Global for CSV
+        // Global for CSV & Sorting
         let currentResults = [];
+        let sortKey = null;
+        let sortAsc = true;
 
         // App Functions
         async function getApiKey(t = 'youtube') {
@@ -1118,13 +1138,42 @@
             document.getElementById('keyword-input').onkeypress = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
 
             const m = document.getElementById('api-modal');
-            window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
+            // Removed click outside to close
+            // window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
+
+            // Sync Scroll
+            const top = document.getElementById('top-scroll-container');
+            const bot = document.getElementById('real-table-container');
+            top.onscroll = () => { bot.scrollLeft = top.scrollLeft; };
+            bot.onscroll = () => { top.scrollLeft = bot.scrollLeft; };
+        }
+
+        function sortTable(key) {
+            if (sortKey === key) {
+                sortAsc = !sortAsc;
+            } else {
+                sortKey = key;
+                sortAsc = true;
+            }
+            // Sort
+            currentResults.sort((a, b) => {
+                let va = a[key], vb = b[key];
+                // Helper for parsed numbers
+                if (['views', 'comments', 'likes', 'subsRaw', 'rank'].includes(key)) {
+                    va = Number(String(va).replace(/,/g, '')) || 0;
+                    vb = Number(String(vb).replace(/,/g, '')) || 0;
+                }
+                if (va < vb) return sortAsc ? -1 : 1;
+                if (va > vb) return sortAsc ? 1 : -1;
+                return 0;
+            });
+            updateUI({ results: currentResults, selectedCategory: getCurrentCat(), noResetInput: true });
         }
 
         function updateUI(st) {
             const inp = document.getElementById('keyword-input');
-            if (st.query && inp.value !== st.query) inp.value = st.query;
-            document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === st.selectedCategory));
+            if (st.query && inp.value !== st.query && !st.noResetInput) inp.value = st.query;
+            if (st.selectedCategory) document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === st.selectedCategory));
 
             // Show CSV Btn
             document.getElementById('csv-btn').style.display = (st.results && st.results.length) ? 'inline-block' : 'none';
@@ -1146,6 +1195,34 @@
                                 <td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
                 tb.appendChild(tr);
             });
+
+            // Update Sort Icons
+            const ths = document.querySelectorAll('#results-table th');
+            ths.forEach(th => {
+                const sp = th.querySelector('span');
+                if (sp) sp.innerText = '';
+            });
+            if (sortKey) {
+                // Find th with onclick containing sortKey
+                // Simple way: check text content or map index. 
+                // But better: search by onclick attribute or just simple ID mapping if needed.
+                // Let's rely on text content for now or add IDs? 
+                // Adding IDs to TH would be cleaner in future, but for now loop 
+                // to find the clicked one is tricky without IDs.
+                // Re-render means we lose state? No, ths are static.
+
+                // Let's add IDs to THs in the HTML block above? 
+                // Or just iterate and check 'onclick' string.
+                for (let th of ths) {
+                    if (th.getAttribute('onclick')?.includes(`'${sortKey}'`)) {
+                        th.querySelector('span').innerText = sortAsc ? ' ▲' : ' ▼';
+                    }
+                }
+            }
+
+            // Top Scroll Sync Update
+            const tbl = document.getElementById('results-table');
+            document.getElementById('top-scroll-content').style.width = tbl.offsetWidth + 'px';
         }
         function renderKeys(obj) {
             const l = document.getElementById('key-list'); l.innerHTML = '';
