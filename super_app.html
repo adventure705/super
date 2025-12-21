@@ -1176,18 +1176,44 @@
             // --- API Helpers ---
             async fetchYouTubeData(url, apiKey) {
                 let id = null;
-                if (url.includes('channel/')) id = url.split('channel/')[1].split('/')[0];
-                else if (url.includes('@')) {
-                    const handle = url.split('@')[1].split('/')[0];
-                    const s = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/search?part=id&q=@${handle}&type=channel&key=${apiKey}`);
-                    if (s.items?.[0]) id = s.items[0].id.channelId;
+                let isHandle = false;
+
+                // 1. Try to parse ID or Handle from URL/String
+                if (url.includes('channel/')) {
+                    id = url.split('channel/')[1].split('/')[0].split('?')[0];
+                } else if (url.includes('@')) {
+                    // Extract handle (e.g., https://youtube.com/@handle or just @handle)
+                    const parts = url.split('@');
+                    id = '@' + parts[parts.length - 1].split('/')[0].split('?')[0];
+                    isHandle = true;
+                } else if (url.startsWith('UC') && url.length > 20) {
+                    id = url;
                 }
-                if (!id) throw new Error("채널 ID를 찾을 수 없습니다.");
 
-                const chRes = await this.fetchWithBackoff(`https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${id}&key=${apiKey}`);
-                const item = chRes.items[0];
-                if (!item) throw new Error("채널 정보 없음");
+                let apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&key=${apiKey}`;
 
+                if (id) {
+                    if (isHandle) {
+                        apiUrl += `&forHandle=${encodeURIComponent(id)}`;
+                    } else {
+                        apiUrl += `&id=${id}`;
+                    }
+                } else {
+                    // Fallback: Search (Strictly for channel type, sorting by relevance ensuring exact match if possible is hard, but usually search works for names)
+                    // The user specifically asked for "most recent" if ambiguous, but usually handle is preferred.
+                    // If no ID/Handle found, we search.
+                    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(url)}&type=channel&key=${apiKey}`;
+                    const searchRes = await this.fetchWithBackoff(searchUrl);
+                    if (!searchRes.items?.[0]) throw new Error("채널을 찾을 수 없습니다.");
+                    apiUrl += `&id=${searchRes.items[0].id.channelId}`;
+                }
+
+                const res = await this.fetchWithBackoff(apiUrl);
+                if (!res.items?.[0]) throw new Error("채널 상세 정보를 가져올 수 없습니다.");
+
+                const item = res.items[0];
+
+                // Fetch recent videos for stats
                 const uploadsId = item.contentDetails.relatedPlaylists.uploads;
                 const videos = await this.fetchRecentVideos(uploadsId, apiKey);
 
