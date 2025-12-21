@@ -1424,16 +1424,22 @@
                                             </select>
                                             <select onchange="analysisModule.filterVideo('views', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
                                                 <option value="0">조회수 전체</option>
-                                                <option value="100000">10만↑</option>
-                                                <option value="300000">30만↑</option>
-                                                <option value="500000">50만↑</option>
                                                 <option value="1000000">100만↑</option>
+                                                <option value="3000000">300만↑</option>
+                                                <option value="5000000">500만↑</option>
+                                                <option value="10000000">1000만↑</option>
                                             </select>
                                             <select onchange="analysisModule.filterVideo('ratingL', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
                                                 <option value="0">좋아요별 전체</option>
-                                                <option value="3">★ 3↑</option>
-                                                <option value="4">★ 4↑</option>
-                                                <option value="5">★ 5</option>
+                                                <option value="3">👍 ★ 3↑</option>
+                                                <option value="4">👍 ★ 4↑</option>
+                                                <option value="5">👍 ★ 5</option>
+                                            </select>
+                                            <select onchange="analysisModule.filterVideo('ratingC', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1">
+                                                <option value="0">댓글별 전체</option>
+                                                <option value="3">💬 ★ 3↑</option>
+                                                <option value="4">💬 ★ 4↑</option>
+                                                <option value="5">💬 ★ 5</option>
                                             </select>
                                             <input type="text" placeholder="검색..." oninput="analysisModule.filterVideo('search', this.value)" class="bg-dark-bg text-white text-sm border border-dark-border rounded px-2 py-1 w-32 md:w-48">
                                         </div>
@@ -1483,8 +1489,11 @@
 
             setStatus(m, isErr) { const e = document.getElementById('va-statusMessage'); if (e) { e.innerText = m; e.className = isErr ? "mt-4 text-center text-sm font-medium animate-pulse text-red-500" : "mt-4 text-center text-sm font-medium animate-pulse text-green-500"; } },
 
-            async startAnalysis() {
-                const id = document.getElementById('va-channelId').value.trim();
+            async startAnalysis(inputChId) {
+                let id = inputChId;
+                if (!id) id = document.getElementById('va-channelId').value.trim();
+                else document.getElementById('va-channelId').value = id;
+
                 if (!id) return alert("ID 입력 필요");
                 const apiKey = app.getApiKey('youtube');
                 if (!apiKey) return alert("YouTube API 키가 없습니다");
@@ -1513,6 +1522,7 @@
                     this.renderUI(stats90);
                     this.setStatus('분석 완료', false);
                     this.loadNote(meta.id);
+                    this.analyzeGemini(true); // Auto-run Gemini
                 } catch (e) { console.error(e); this.setStatus('오류: ' + e.message, true); }
             },
 
@@ -1592,6 +1602,9 @@
                 }
                 if (this.state.videoFilter.ratingL) {
                     l = l.filter(v => this.getStarRating(v.likeCount, v.viewCount) >= Number(this.state.videoFilter.ratingL));
+                }
+                if (this.state.videoFilter.ratingC) {
+                    l = l.filter(v => this.getStarRating(v.commentCount, v.viewCount, true) >= Number(this.state.videoFilter.ratingC));
                 }
 
                 if (this.state.videoFilter.search) {
@@ -1709,23 +1722,26 @@
             },
             async loadSaved(id) {
                 const s = await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).get();
-                if (s.exists) {
+                const inp = document.getElementById('va-channelId');
+                if (inp) inp.value = id; // Always update input field with the ID being loaded/analyzed
+
+                if (s.exists && s.data().videos && s.data().videos.length > 0) {
                     const d = s.data();
                     this.state.channelMetadata = d.metadata;
                     this.state.allVideosData = d.videos || [];
 
                     // Reset filter/sort for freshness
-                    this.state.videoFilter = { type: 'all', search: '' };
+                    this.state.videoFilter = { type: 'all', search: '', views: 0, ratingL: 0, ratingC: 0 };
                     this.state.videoSortState = { key: 'publishedAt', dir: 'desc' };
 
                     this.renderUI(d.stats90);
                     this.loadNote(id);
                     this.switchTab('analyze');
                     this.setStatus('로딩 완료', false);
-
-                    // Fill Input
-                    const inp = document.getElementById('va-channelId');
-                    if (inp) inp.value = d.metadata.id; // Or title
+                } else {
+                    // Not found or empty, treat as new analysis
+                    this.switchTab('analyze');
+                    this.startAnalysis(id);
                 }
             },
             async deleteSaved(id) { if (!confirm("삭제?")) return; await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channel_list').doc(id).delete(); await app.db.collection('artifacts').doc(app.appId).collection('public').doc('data').collection('channels').doc(id).delete(); },
