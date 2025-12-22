@@ -2138,9 +2138,50 @@
                 btn.innerText = "분석 중..."; btn.disabled = true;
                 try {
                     const meta = this.state.channelMetadata;
-                    const prompt = `Analyze YouTube channel '${meta.title}' (${meta.subscribers} subs). Description: ${meta.description}. Provide JSON: { summary, pros, cons, topic, genre, tone, style, audience, ad_domain, ad_type, engagement_memo } in Korean. 'topic' should be brief keywords.`;
+
+                    // Prepare Context Data
+                    const topVideos = [...this.state.allVideosData]
+                        .sort((a, b) => Number(b.viewCount) - Number(a.viewCount))
+                        .slice(0, 10)
+                        .map(v => `${v.title} (조회수: ${Number(v.viewCount).toLocaleString()}, 좋아요: ${Number(v.likeCount).toLocaleString()})`);
+
+                    const recentVideos = [...this.state.allVideosData]
+                        .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+                        .slice(0, 5)
+                        .map(v => v.title);
+
+                    const prompt = `
+                    You are a professional YouTube Marketing Analyst. Analyze this channel based on the provided data.
+                    
+                    Channel: ${meta.title}
+                    Subscribers: ${meta.subscribers}
+                    Description: ${meta.description || 'No description'}
+                    
+                    Top 10 Videos by Views (Popular Content):
+                    ${topVideos.join('\n')}
+                    
+                    Recent 5 Videos (Latest Trends):
+                    ${recentVideos.join('\n')}
+                    
+                    Based on this information, provide a JSON response with the following keys in Korean:
+                    {
+                        "summary": "Comprehensive summary of the channel's identity and performance",
+                        "pros": "Key strengths (comma separated)",
+                        "cons": "Potential weaknesses or risks (comma separated)",
+                        "topic": "Main topics covered (brief keywords)",
+                        "genre": "Main genre/category",
+                        "tone": "Tone and manner",
+                        "style": "Editing and directing style",
+                        "audience": "Estimated target audience demographics",
+                        "ad_domain": "Suitable industries for advertising",
+                        "ad_type": "Recommended ad campaign types",
+                        "engagement_memo": "Analysis of viewer engagement"
+                    }
+                    Return ONLY the JSON.`;
+
                     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${gk}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
                     const j = await r.json();
+                    if (!j.candidates || !j.candidates[0].content) throw new Error("Gemini 응답 오류");
                     const text = j.candidates[0].content.parts[0].text.replace(/\`\`\`json|\`\`\`/g, '').trim();
                     const res = JSON.parse(text);
                     const set = (k, v) => { if (document.getElementById(k)) document.getElementById(k).value = v || ''; };
