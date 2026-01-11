@@ -95,9 +95,11 @@ async function init() {
         }
     });
 
-    // Initial Load from Firestore
-    await loadCategoriesFromFirestore();
-    await loadSessionsFromFirestore();
+    // Initial Load from Firestore (Parallel)
+    await Promise.all([
+        loadCategoriesFromFirestore(),
+        loadSessionsFromFirestore()
+    ]);
 
     // Select the first session based on visual order (Category order -> Session order)
     if (state.sessions.length > 0) {
@@ -203,21 +205,24 @@ function initSortable() {
 
 // --- Category Management ---
 async function loadCategoriesFromFirestore() {
-    try {
-        const snapshot = await db.collection(CATEGORY_COLLECTION).orderBy('order', 'asc').get();
-        state.categories = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+    return new Promise((resolve) => {
+        db.collection(CATEGORY_COLLECTION).orderBy('order', 'asc').onSnapshot((snapshot) => {
+            state.categories = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
 
-        const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
-        if (state.categories.length === 0 || !hasDefault) {
-            // Create default category with FIXED ID to prevent session mismatch
-            await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-        }
-    } catch (e) {
-        console.error("Categories Load Error:", e);
-    }
+            const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
+            if (state.categories.length === 0 || !hasDefault) {
+                addNewCategoryUI('미분류', DEFAULT_CAT_ID);
+            }
+            renderSidebarContent();
+            resolve();
+        }, (e) => {
+            console.error("Categories Sync Error:", e);
+            resolve();
+        });
+    });
 }
 
 async function addNewCategory() {
@@ -269,20 +274,21 @@ window.deleteCategory = async (id) => {
 
 // --- Firestore Data Handling ---
 async function loadSessionsFromFirestore() {
-    try {
-        // Fetch all without strict orderBy to prevent documents with missing fields from being filtered out
-        const snapshot = await db.collection(COLLECTION_NAME).get();
-        state.sessions = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-        // Sort in memory instead
-        state.sessions.sort((a, b) => (a.order || 0) - (b.order || 0));
-        renderSidebarContent();
-    } catch (e) {
-        console.error("Firestore Load Error:", e);
-        showToast("데이터를 불러오는데 실패했습니다.");
-    }
+    return new Promise((resolve) => {
+        db.collection(COLLECTION_NAME).onSnapshot((snapshot) => {
+            state.sessions = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            state.sessions.sort((a, b) => (a.order || 0) - (b.order || 0));
+            renderSidebarContent();
+            resolve();
+        }, (e) => {
+            console.error("Sessions Sync Error:", e);
+            showToast("데이터 동기화 실패.");
+            resolve();
+        });
+    });
 }
 
 async function saveSessionToFirestore(session) {
@@ -591,8 +597,7 @@ async function parseAndSyncMarkdown(md, filename) {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // Ensure consistency by re-fetching all sessions from Firestore
-        await loadSessionsFromFirestore();
+        // No need to manually re-fetch, onSnapshot handles it!
 
         showToast(`업로드 완료! 총 ${savedCount}개의 포스트가 저장되었습니다.`, 5000, 100);
         await switchSession(sessionId);
