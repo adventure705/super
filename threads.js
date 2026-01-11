@@ -449,68 +449,90 @@ async function handleFileUpload(e) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (event) => {
-        const md = event.target.result;
-        const chunks = md.split('---');
-        const newPosts = [];
+        try {
+            const md = event.target.result;
+            const chunks = md.split('---');
+            const newPosts = [];
+            const timestamp = Date.now();
 
-        chunks.forEach((chunk, i) => {
-            let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
-            let time = '00:00', date = '';
-            if (dateMatch) { date = dateMatch[1]; time = dateMatch[2]; }
-            else { dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/); if (!dateMatch) return; date = dateMatch[1]; }
+            chunks.forEach((chunk, i) => {
+                let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
+                let time = '00:00', date = '';
+                if (dateMatch) { date = dateMatch[1]; time = dateMatch[2]; }
+                else { dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/); if (!dateMatch) return; date = dateMatch[1]; }
 
-            const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
-            let images = [];
-            let m;
-            while ((m = imageRegex.exec(chunk)) !== null) images.push(m[1].trim());
+                const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
+                let images = [];
+                let m;
+                while ((m = imageRegex.exec(chunk)) !== null) images.push(m[1].trim());
 
-            let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
-            if (content || images.length > 0) {
-                // Stable unique ID based on content hash and index
-                const contentKey = btoa(unescape(encodeURIComponent(content.substring(0, 40)))).replace(/[^a-zA-Z0-9]/g, '');
-                const postId = `p_${date}_${contentKey}_${i}`;
-                newPosts.push({ id: postId, date, time, index: i, content, images });
+                let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
+                if (content || images.length > 0) {
+                    const postId = `p_${timestamp}_${i}`;
+                    newPosts.push({ id: postId, date, time, index: i, content, images });
+                }
+            });
+
+            if (newPosts.length === 0) {
+                showToast("업로드할 유효한 포스트가 없습니다.");
+                return;
             }
-        });
 
-        const sName = file.name.replace('.md', '').replace(/_part\d+$/, '');
-        let s = state.sessions.find(x => x.name === sName);
-        let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
+            const sName = file.name.replace('.md', '').replace(/_part\d+$/, '');
+            let s = state.sessions.find(x => x.name === sName);
+            let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
 
-        if (!s) {
-            s = { id: sId, name: sName, categoryId: state.categories[0]?.id || DEFAULT_CAT_ID, order: state.sessions.length, updatedAt: new Date() };
-            await db.collection(COLLECTION_NAME).doc(sId).set({ ...s, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            state.sessions.push(s);
-            renderSidebarContent(); // Immediate UI feedback
-        }
-
-        const batchSize = 500;
-        const chunks_batches = [];
-        for (let i = 0; i < newPosts.length; i += batchSize) {
-            chunks_batches.push(newPosts.slice(i, i + batchSize));
-        }
-
-        let savedCount = 0;
-        const CONCURRENCY = 10;
-        for (let i = 0; i < chunks_batches.length; i += CONCURRENCY) {
-            const group = chunks_batches.slice(i, i + CONCURRENCY);
-            await Promise.all(group.map(async (chunk) => {
-                const batch = db.batch();
-                chunk.forEach(p => {
-                    const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
-                    batch.set(ref, p, { merge: true });
+            if (!s) {
+                s = {
+                    id: sId,
+                    name: sName,
+                    categoryId: state.categories[0]?.id || DEFAULT_CAT_ID,
+                    order: state.sessions.length,
+                    updatedAt: new Date()
+                };
+                await db.collection(COLLECTION_NAME).doc(sId).set({
+                    ...s,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                await batch.commit();
-                savedCount += chunk.length;
-                showToast(`초고속 병렬 업로드 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
-            }));
-        }
+                state.sessions.push(s);
+                renderSidebarContent();
+            }
 
-        await db.collection(COLLECTION_NAME).doc(sId).update({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-        showToast("업로드 완료!");
-        await refreshData();
-        await switchSession(sId);
+            const batchSize = 250; // Reduced for safer limits
+            const chunks_batches = [];
+            for (let i = 0; i < newPosts.length; i += batchSize) {
+                chunks_batches.push(newPosts.slice(i, i + batchSize));
+            }
+
+            let savedCount = 0;
+            const CONCURRENCY = 5; // Balanced concurrency
+            for (let i = 0; i < chunks_batches.length; i += CONCURRENCY) {
+                const group = chunks_batches.slice(i, i + CONCURRENCY);
+                await Promise.all(group.map(async (chunk) => {
+                    const batch = db.batch();
+                    chunk.forEach(p => {
+                        const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
+                        batch.set(ref, p, { merge: true });
+                    });
+                    await batch.commit();
+                    savedCount += chunk.length;
+                    showToast(`초고속 실시간 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
+                }));
+            }
+
+            await db.collection(COLLECTION_NAME).doc(sId).update({
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast("업로드 완료!", 2000);
+            await refreshData();
+            await switchSession(sId);
+
+        } catch (error) {
+            console.error("Upload Error:", error);
+            showToast("업로드 중 오류가 발생했습니다: " + error.message);
+        }
     };
+    reader.onerror = () => showToast("파일을 읽는 중 오류가 발생했습니다.");
     reader.readAsText(file);
     e.target.value = '';
 }
