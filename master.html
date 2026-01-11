@@ -583,6 +583,7 @@
             { id: 'analysis', name: '영상 분석', icon: 'fas fa-chart-line' },
             { id: 'comment', name: '댓글 분석', icon: 'fas fa-comments' },
             { id: 'estimate', name: '수익 예측', icon: 'fas fa-coins' },
+            { id: 'threads', name: '쓰레드 분석', icon: 'fas fa-hashtag', link: 'threads.html' },
         ];
 
         // --- APP CORE ---
@@ -644,6 +645,12 @@
                     b.classList.add('bg-dark-hover', 'text-white');
                     b.querySelector('i').classList.add('text-brand-primary');
                 });
+
+                const module = MODULES.find(m => m.id === id);
+                if (module && module.link) {
+                    window.location.href = module.link;
+                    return;
+                }
 
                 document.getElementById('mobile-sidebar').classList.add('-translate-x-full');
                 document.getElementById('mobile-menu-overlay').classList.add('hidden');
