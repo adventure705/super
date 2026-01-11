@@ -68,6 +68,17 @@ async function init() {
     els.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
     els.addCategoryBtn.addEventListener('click', addNewCategory);
 
+    // Modal Events
+    els.closeModal.onclick = closeModal;
+    els.imageModal.onclick = (e) => {
+        if (e.target === els.imageModal) closeModal();
+    };
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && els.imageModal.style.display === 'flex') {
+            closeModal();
+        }
+    });
+
     // Initial Load from Firestore
     await loadCategoriesFromFirestore();
     await loadSessionsFromFirestore();
@@ -75,17 +86,6 @@ async function init() {
     if (state.sessions.length > 0) {
         switchSession(state.sessions[0].id);
     }
-
-    // Modal Events
-    els.closeModal.onclick = closeModal;
-    els.imageModal.onclick = (e) => {
-        if (e.target === els.imageModal) closeModal();
-    };
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && els.imageModal.classList.contains('show')) {
-            closeModal();
-        }
-    });
 
     // Infinite Scroll Event
     els.contentView.addEventListener('scroll', handleScroll);
