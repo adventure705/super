@@ -23,6 +23,7 @@ const state = {
     categories: [],
     activeSessionId: null,
     sortOrder: 'desc',
+    visiblePosts: 20, // Number of posts to show initially
 };
 
 // UI Elements
@@ -49,6 +50,7 @@ const els = {
     imageModal: document.getElementById('image-modal'),
     modalImg: document.getElementById('modal-img'),
     closeModal: document.querySelector('.close-modal'),
+    contentView: document.querySelector('.content-view'),
 };
 
 // --- Initialization ---
@@ -84,6 +86,19 @@ async function init() {
             closeModal();
         }
     });
+
+    // Infinite Scroll Event
+    els.contentView.addEventListener('scroll', handleScroll);
+}
+
+function handleScroll() {
+    const { scrollTop, scrollHeight, clientHeight } = els.contentView;
+    if (scrollTop + clientHeight >= scrollHeight - 300) {
+        if (state.visiblePosts < state.filteredPosts.length) {
+            state.visiblePosts += 20;
+            renderPosts(true); // true means append mode
+        }
+    }
 }
 
 function toggleSidebar(open) {
@@ -463,6 +478,7 @@ function updateUI() {
         return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
+    state.visiblePosts = 20; // Reset pagination
     renderPosts();
     updateStats();
     updateDateNavigatorActive();
@@ -535,7 +551,7 @@ window.filterByMonth = (year, month) => {
     updateUI();
 };
 
-function renderPosts() {
+function renderPosts(append = false) {
     if (state.allPosts.length === 0 && state.sessions.length > 0) {
         els.postsFeed.innerHTML = `<div class="empty-state"><div class="empty-icon">📂</div><h2>라이브러리에서 파일을 선택해주세요</h2></div>`;
         return;
@@ -545,8 +561,27 @@ function renderPosts() {
         return;
     }
 
-    els.postsFeed.innerHTML = state.filteredPosts.map((post, idx) => `
-        <article class="post-card" style="animation-delay: ${idx * 0.01}s">
+    const postsToShow = state.filteredPosts.slice(0, state.visiblePosts);
+
+    // To minimize DOM updates, only append if we're loading more
+    if (append) {
+        const currentCount = els.postsFeed.querySelectorAll('.post-card').length;
+        const newPosts = state.filteredPosts.slice(currentCount, state.visiblePosts);
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = newPosts.map((post, idx) => renderPostCard(post, currentCount + idx)).join('');
+
+        while (tempDiv.firstChild) {
+            els.postsFeed.appendChild(tempDiv.firstChild);
+        }
+    } else {
+        els.postsFeed.innerHTML = postsToShow.map((post, idx) => renderPostCard(post, idx)).join('');
+    }
+}
+
+function renderPostCard(post, idx) {
+    return `
+        <article class="post-card" style="animation-delay: ${idx % 20 * 0.01}s">
             <div class="post-header">
                 <span class="post-date">${post.date}</span>
                 <button class="btn-icon" onclick="copyContent('${post.id}')" title="내용 복사">
@@ -559,13 +594,13 @@ function renderPosts() {
                     ${post.images.map(img => {
         const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(img)}&w=800&q=80`;
         return `<img src="${proxyUrl}" alt="Post image" loading="lazy" 
-                            onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300?text=이미지+로드+실패';"
-                            onclick="openModal('${proxyUrl}')">`;
+                                            onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300?text=이미지+로드+실패';"
+                                            onclick="openModal('${proxyUrl}')">`;
     }).join('')}
                 </div>
             ` : ''}
         </article>
-    `).join('');
+    `;
 }
 
 function updateStats() {
