@@ -504,26 +504,21 @@ async function handleFileUpload(e) {
                 renderSidebarContent();
             }
 
-            const batchSize = 250; // Reduced for safer limits
-            const chunks_batches = [];
-            for (let i = 0; i < newPosts.length; i += batchSize) {
-                chunks_batches.push(newPosts.slice(i, i + batchSize));
-            }
-
+            const batchSize = 500; // Increased to max for efficiency
             let savedCount = 0;
-            const CONCURRENCY = 5; // Balanced concurrency
-            for (let i = 0; i < chunks_batches.length; i += CONCURRENCY) {
-                const group = chunks_batches.slice(i, i + CONCURRENCY);
-                await Promise.all(group.map(async (chunk) => {
-                    const batch = db.batch();
-                    chunk.forEach(p => {
-                        const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
-                        batch.set(ref, p, { merge: true });
-                    });
-                    await batch.commit();
-                    savedCount += chunk.length;
-                    showToast(`초고속 실시간 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
-                }));
+
+            // Sequential processing to avoid Firestore SDK internal assertion errors 
+            // during high-concurrency writes with persistence enabled.
+            for (let i = 0; i < newPosts.length; i += batchSize) {
+                const chunk = newPosts.slice(i, i + batchSize);
+                const batch = db.batch();
+                chunk.forEach(p => {
+                    const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
+                    batch.set(ref, p, { merge: true });
+                });
+                await batch.commit();
+                savedCount += chunk.length;
+                showToast(`초고속 실시간 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
             }
 
             await db.collection(COLLECTION_NAME).doc(sId).update({
