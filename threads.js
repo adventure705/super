@@ -504,21 +504,26 @@ async function handleFileUpload(e) {
                 renderSidebarContent();
             }
 
-            const batchSize = 500; // Increased to max for efficiency
-            let savedCount = 0;
-
-            // Sequential processing to avoid Firestore SDK internal assertion errors 
-            // during high-concurrency writes with persistence enabled.
+            const batchSize = 500;
+            const batchChunks = [];
             for (let i = 0; i < newPosts.length; i += batchSize) {
-                const chunk = newPosts.slice(i, i + batchSize);
-                const batch = db.batch();
-                chunk.forEach(p => {
-                    const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
-                    batch.set(ref, p, { merge: true });
-                });
-                await batch.commit();
-                savedCount += chunk.length;
-                showToast(`초고속 실시간 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
+                batchChunks.push(newPosts.slice(i, i + batchSize));
+            }
+
+            let savedCount = 0;
+            const CONCURRENCY = 8; // Restoration of parallel power
+            for (let i = 0; i < batchChunks.length; i += CONCURRENCY) {
+                const group = batchChunks.slice(i, i + CONCURRENCY);
+                await Promise.all(group.map(async (chunk) => {
+                    const batch = db.batch();
+                    chunk.forEach(p => {
+                        const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
+                        batch.set(ref, p, { merge: true });
+                    });
+                    await batch.commit();
+                    savedCount += chunk.length;
+                    showToast(`초고속 병렬 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
+                }));
             }
 
             await db.collection(COLLECTION_NAME).doc(sId).update({
