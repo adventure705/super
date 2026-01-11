@@ -333,75 +333,115 @@ async function parseAndSyncMarkdown(md, filename) {
             .trim();
 
         if (content || images.length > 0) {
-            newPosts.push({ id: Math.random().toString(36).substr(2, 9), date, content, images });
+            // Generate deterministic ID for deduplication
+            const uniqueKey = `${date}_${content.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '')}`;
+            newPosts.push({
+                // Use deterministic ID for deduplication in subcollection
+                id: uniqueKey,
+                date,
+                content,
+                images
+            });
         }
     });
 
-    // Strip suffixes to group split files together
+    // Strip suffixes
     const sessionRefName = filename.replace('.md', '').replace(/_part\d+$/, '').replace(/[-_]\d+$/, '').replace(/\s*\(\d+\)$/, '');
 
-    // Match by refName OR name
     let session = state.sessions.find(s =>
         (s.refName === sessionRefName) ||
         (s.name === sessionRefName)
     );
 
+    let sessionId;
     if (session) {
-        // Cumulative update
-        const existingPosts = session.posts;
-        const postMap = new Map();
-        existingPosts.forEach(p => {
-            const key = p.date + p.content.substring(0, 100);
-            postMap.set(key, p);
-        });
-
-        let addedCount = 0;
-        newPosts.forEach(p => {
-            const key = p.date + p.content.substring(0, 100);
-            if (!postMap.has(key)) {
-                postMap.set(key, p);
-                addedCount++;
-            }
-        });
-
-        session.posts = Array.from(postMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-        await saveSessionToFirestore(session);
-        showToast(`${addedCount}개의 새로운 포스트가 추가되었습니다.`);
+        sessionId = session.id;
+        showToast(`'${session.name}'에 데이터를 병합합니다...`);
     } else {
-        // Create new session
-        const newId = db.collection(COLLECTION_NAME).doc().id;
+        sessionId = db.collection(COLLECTION_NAME).doc().id;
         session = {
-            id: newId,
-            name: sessionRefName, // Initial display name
-            refName: sessionRefName, // Hidden internal match key
-            posts: newPosts.sort((a, b) => new Date(b.date) - new Date(a.date)),
+            id: sessionId,
+            name: sessionRefName,
+            refName: sessionRefName,
             order: state.sessions.length,
-            categoryId: state.categories[0] ? state.categories[0].id : 'default'
+            categoryId: state.categories[0] ? state.categories[0].id : 'default',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-        state.sessions.unshift(session);
-        await saveSessionToFirestore(session);
-        showToast(`'${sessionRefName}' 라이브러리에 추가되었습니다.`);
+        // Save metadata only (no posts array)
+        await db.collection(COLLECTION_NAME).doc(sessionId).set(session);
+        state.sessions.unshift({ ...session, posts: [] });
     }
 
-    switchSession(session.id);
-    renderSidebarContent();
+    // Batch write posts to subcollection
+    const batchSize = 400;
+    const chunks_posts = [];
+    for (let i = 0; i < newPosts.length; i += batchSize) {
+        chunks_posts.push(newPosts.slice(i, i + batchSize));
+    }
+
+    let savedCount = 0;
+    try {
+        for (const chunk of chunks_posts) {
+            const batch = db.batch();
+            chunk.forEach(post => {
+                const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(post.id);
+                batch.set(ref, post, { merge: true });
+            });
+            await batch.commit();
+            savedCount += chunk.length;
+        }
+
+        // Update timestamp
+        await db.collection(COLLECTION_NAME).doc(sessionId).update({
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        showToast(`${savedCount}개의 포스트가 저장되었습니다.`);
+        await switchSession(sessionId); // Reload to see changes
+        renderSidebarContent();
+    } catch (e) {
+        console.error("Save Error:", e);
+        showToast(`저장 중 오류 발생: ${e.message}`);
+    }
 }
 
 // --- App Functions ---
-window.switchSession = (id) => {
+window.switchSession = async (id) => {
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
-    if (session) {
-        state.allPosts = session.posts;
-        renderDateNavigator();
-        updateUI();
-        renderSidebarContent();
+    if (!session) return;
 
-        // Close sidebar on mobile after selection
-        if (window.innerWidth <= 1024) {
-            toggleSidebar(false);
-        }
+    showToast("데이터를 불러오는 중...");
+
+    // Load from subcollection
+    try {
+        const postsSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
+        let subcollectionPosts = postsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Merge with legacy array-based posts if they exist in local state (backward compat)
+        let legacyPosts = session.posts || [];
+
+        // deduplicate
+        const allPostsMap = new Map();
+        [...legacyPosts, ...subcollectionPosts].forEach(p => {
+            const key = p.date + p.content.substring(0, 50);
+            allPostsMap.set(key, p);
+        });
+
+        state.allPosts = Array.from(allPostsMap.values());
+
+        // Mobile UI handle
+        if (window.innerWidth <= 1024) toggleSidebar(false);
+
+    } catch (e) {
+        console.error("Load Posts Error:", e);
+        showToast("포스트 로딩 실패");
+        state.allPosts = session.posts || []; // Fallback
     }
+
+    renderDateNavigator();
+    updateUI();
+    renderSidebarContent();
 };
 
 window.renameSession = async (id) => {
