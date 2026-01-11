@@ -448,7 +448,10 @@ async function handleFileUpload(e) {
 
             let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
             if (content || images.length > 0) {
-                newPosts.push({ id: `p_${Date.now()}_${i}`, date, time, index: i, content, images });
+                // Stable unique ID based on content hash and index
+                const contentKey = btoa(unescape(encodeURIComponent(content.substring(0, 40)))).replace(/[^a-zA-Z0-9]/g, '');
+                const postId = `p_${date}_${contentKey}_${i}`;
+                newPosts.push({ id: postId, date, time, index: i, content, images });
             }
         });
 
@@ -461,15 +464,26 @@ async function handleFileUpload(e) {
             await db.collection(COLLECTION_NAME).doc(sId).set(s);
         }
 
-        const batchSize = 100;
+        const batchSize = 500;
+        const chunks_batches = [];
         for (let i = 0; i < newPosts.length; i += batchSize) {
-            const batch = db.batch();
-            newPosts.slice(i, i + batchSize).forEach(p => {
-                const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
-                batch.set(ref, p, { merge: true });
-            });
-            await batch.commit();
-            showToast(`업로드 중... ${Math.round((i / newPosts.length) * 100)}%`);
+            chunks_batches.push(newPosts.slice(i, i + batchSize));
+        }
+
+        let savedCount = 0;
+        const CONCURRENCY = 10;
+        for (let i = 0; i < chunks_batches.length; i += CONCURRENCY) {
+            const group = chunks_batches.slice(i, i + CONCURRENCY);
+            await Promise.all(group.map(async (chunk) => {
+                const batch = db.batch();
+                chunk.forEach(p => {
+                    const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
+                    batch.set(ref, p, { merge: true });
+                });
+                await batch.commit();
+                savedCount += chunk.length;
+                showToast(`초고속 병렬 업로드 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
+            }));
         }
 
         await db.collection(COLLECTION_NAME).doc(sId).update({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
