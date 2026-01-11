@@ -7,6 +7,7 @@ const state = {
     sortOrder: 'desc',
     visiblePosts: 20,
     postCache: new Map(),
+    isSyncing: false,
 };
 window.state = state; // Global DEBUG Access
 console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V1");
@@ -55,41 +56,98 @@ function initElements() {
         modalImg: document.getElementById('modal-img'),
         closeModal: document.querySelector('.close-modal'),
         contentView: document.querySelector('.content-view'),
+        progressContainer: document.getElementById('progress-container'),
+        progressBar: document.getElementById('progress-bar'),
+        progressPercent: document.getElementById('progress-percent'),
+        progressLabel: document.getElementById('progress-label'),
     };
 }
 
+// --- Initialization ---
 // --- Initialization ---
 async function init() {
     initElements();
     setupEventListeners();
 
+    // 0. Instant Hot-Start (Restore last view immediately)
+    restoreStateFromCache();
+
     try {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
+
+        firebase.firestore().enablePersistence({ synchronizeTabs: true })
+            .catch(err => console.log("Persistence:", err.code));
+
         db = firebase.firestore();
 
-        // DISABLED Persistence for raw speed with large datasets (5,000+ items)
-        // This prevents the browser from hanging while indexing data to disk.
+        // Load Sidebar Cache
+        const cachedSessions = localStorage.getItem('threads_sessions');
+        const cachedCategories = localStorage.getItem('threads_categories');
+
+        if (cachedSessions) {
+            try {
+                state.sessions = JSON.parse(cachedSessions);
+                console.log(`Restored ${state.sessions.length} sessions from local cache.`);
+            } catch (e) { console.error("Cache parse error", e); }
+        }
+        if (cachedCategories) {
+            try {
+                state.categories = JSON.parse(cachedCategories);
+            } catch (e) { }
+        }
+        renderSidebarContent();
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
-                console.log("Authenticated User ID:", user.uid);
                 updateSyncStatus(true);
-                await refreshData();
+                // Background Sync: Only refresh if we don't have data, or strictly in background
+                if (state.sessions.length === 0) await refreshData();
+                else refreshData(); // Fire and forget, don't await to block UI
             } else {
-                console.log("Not authenticated. Signing in anonymously...");
                 await firebase.auth().signInAnonymously();
             }
         });
     } catch (e) {
         console.error("Init Error:", e);
-        showToast("초기화 실패");
+    }
+}
+
+function saveStateToCache() {
+    if (!state.activeSessionId) return;
+    try {
+        // Cache only the first 400 posts to stay within LocalStorage limits (~5MB)
+        const hotCache = {
+            sessionId: state.activeSessionId,
+            posts: state.allPosts.slice(0, 400),
+            timestamp: Date.now()
+        };
+        localStorage.setItem('threads_hot_cache', JSON.stringify(hotCache));
+    } catch (e) {
+        console.warn("Cache quota exceeded", e);
+    }
+}
+
+function restoreStateFromCache() {
+    try {
+        const raw = localStorage.getItem('threads_hot_cache');
+        if (!raw) return;
+        const cache = JSON.parse(raw);
+        if (!cache.sessionId || !cache.posts) return;
+
+        console.log("⚡ Instant Hot-Start: Restoring " + cache.posts.length + " posts");
+        state.activeSessionId = cache.sessionId;
+        state.allPosts = cache.posts;
+        updateUI(); // Immediate Render
+        if (els.postsFeed) els.postsFeed.style.opacity = '1';
+    } catch (e) {
+        console.error("Hot-start failed:", e);
     }
 }
 
 async function refreshData() {
-    showToast("데이터를 불러오는 중...", 1000);
+    // Silent Refresh
     await Promise.all([
         loadCategories(),
         loadSessions()
@@ -131,12 +189,14 @@ async function loadCategories() {
 
         if (docs.length > 0) {
             state.categories = docs.sort((a, b) => (a.order || 0) - (b.order || 0));
+            localStorage.setItem('threads_categories', JSON.stringify(state.categories));
             console.log(`Successfully loaded ${state.categories.length} categories.`);
         } else {
             console.warn("No categories found in cloud. Creating default fallback...");
             await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
             const retry = await db.collection(CATEGORY_COLLECTION).get();
             state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+            localStorage.setItem('threads_categories', JSON.stringify(state.categories));
         }
         renderSidebarContent();
     } catch (e) {
@@ -163,6 +223,7 @@ async function loadSessions() {
         const legacyCount = state.sessions.filter(s => s.posts && s.posts.length > 0).length;
         if (legacyCount > 0) console.log(`Found ${legacyCount} sessions with legacy data bloat. Optimizing on-access.`);
 
+        localStorage.setItem('threads_sessions', JSON.stringify(state.sessions));
         console.log(`Successfully loaded ${state.sessions.length} sessions.`);
         renderSidebarContent();
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
@@ -190,16 +251,20 @@ async function switchSession(id) {
         return;
     }
 
-    showToast("데이터를 초고속으로 불러오는 중...", 1000);
+    // showToast("데이터를 초고속으로 불러오는 중...", 1000); // Removed in favor of progress bar
+    updateProgressBar(10, "데이터 로딩 시작...");
     state.allPosts = [];
     updateUI();
 
     try {
+        state.isSyncing = true;
+        updateStats(); // Show syncing state immediately
         console.log(`🚀 Loading Session: ${session.name} (ID: ${id})`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // Step 1: Rapid 100-post fetch (No index required)
-        const firstSnap = await colRef.limit(100).get();
+        // Step 1: Rapid 200-post fetch (No index required)
+        updateProgressBar(30, "최신 글 불러오는 중...");
+        const firstSnap = await colRef.limit(200).get();
         let initialPosts = firstSnap.docs.map(doc => {
             const data = doc.data();
             const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
@@ -215,6 +280,7 @@ async function switchSession(id) {
         }
 
         state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+        updateProgressBar(50, "전체 백그라운드 동기화...");
         updateUI();
 
         // Step 2: Full Sync in Background
@@ -230,7 +296,10 @@ async function switchSession(id) {
                 const unified = new Map();
                 allPostsCombined.forEach(p => unified.set(p.id, p));
                 const final = Array.from(unified.values());
+
+                // Cache unconditionally so it's ready when we come back
                 state.postCache.set(id, final);
+
                 state.allPosts = final;
                 updateUI();
 
@@ -238,12 +307,30 @@ async function switchSession(id) {
                     db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
                     session.posts = [];
                 }
+                saveStateToCache(); // Update Hot-Start Cache
+            } else {
+                // Even if user switched away, cache the result!
+                const unified = new Map();
+                allPostsCombined.forEach(p => unified.set(p.id, p));
+                const final = Array.from(unified.values());
+                state.postCache.set(id, final);
+                console.log(`Cached session ${id} in background`);
             }
-        }).catch(err => console.warn("Background sync delay/error:", err));
+            state.isSyncing = false;
+            updateProgressBar(100, "로딩 완료");
+            hideProgressBar();
+            updateUI();
+        }).catch(err => {
+            console.warn("Background sync delay/error:", err);
+            state.isSyncing = false;
+            updateUI();
+        });
 
     } catch (e) {
         console.error("Critical Load Error:", e);
         showToast("데이터 연동 실패");
+        updateProgressBar(0, "오류 발생");
+        hideProgressBar();
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -540,9 +627,12 @@ function highlightText(text, q) {
 async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
+    updateProgressBar(0, "파일 분석 시작...");
+
     const reader = new FileReader();
     reader.onload = async (event) => {
         try {
+            updateProgressBar(10, "데이터 파싱 중...");
             const md = event.target.result;
             const chunks = md.split('---');
             const newPosts = [];
@@ -610,30 +700,49 @@ async function handleFileUpload(e) {
             for (let i = 0; i < batchChunks.length; i += CONCURRENCY) {
                 const group = batchChunks.slice(i, i + CONCURRENCY);
                 await Promise.all(group.map(async (chunk) => {
-                    const batch = db.batch();
-                    chunk.forEach(p => {
-                        const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
-                        batch.set(ref, p, { merge: true });
-                    });
-                    await batch.commit();
-                    savedCount += chunk.length;
-                    showToast(`초고속 병렬 분석 중... ${Math.round((savedCount / newPosts.length) * 100)}%`, 0);
+                    try {
+                        const batch = db.batch();
+                        chunk.forEach(p => {
+                            const ref = db.collection(COLLECTION_NAME).doc(sId).collection('posts').doc(p.id);
+                            batch.set(ref, p, { merge: true });
+                        });
+                        await batch.commit();
+                        savedCount += chunk.length;
+                        const percent = Math.round((savedCount / newPosts.length) * 100);
+                        updateProgressBar(percent, "클라우드 저장 중...");
+                    } catch (err) {
+                        console.error("Batch upload error:", err);
+                        // Continue processing other batches, but log this one
+                    }
                 }));
             }
 
             await db.collection(COLLECTION_NAME).doc(sId).update({
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
+            updateProgressBar(100, "완료!");
             showToast("업로드 완료!", 2000);
-            await refreshData();
+            hideProgressBar();
+
+            // Do NOT call refreshData() here immediately. 
+            // Firestore queries are eventually consistent, and immediate re-fetch 
+            // might miss the newly created session, causing it to disappear from the UI.
+            // We already have the session in state.sessions.
+
             await switchSession(sId);
 
         } catch (error) {
             console.error("Upload Error:", error);
-            showToast("업로드 중 오류가 발생했습니다: " + error.message);
+            console.error("Upload Error:", error);
+            showToast("업로드 실패: " + error.message);
+            updateProgressBar(0, "오류 발생");
+            setTimeout(hideProgressBar, 3000);
         }
     };
-    reader.onerror = () => showToast("파일을 읽는 중 오류가 발생했습니다.");
+    reader.onerror = () => {
+        showToast("파일 읽기 오류");
+        hideProgressBar();
+    };
     reader.readAsText(file);
     e.target.value = '';
 }
@@ -654,7 +763,7 @@ function toggleSort() {
 }
 
 function updateStats() {
-    els.totalPosts.textContent = state.filteredPosts.length;
+    els.totalPosts.innerHTML = `${state.filteredPosts.length}${state.isSyncing ? ' <span class="sync-spinner">↻</span>' : ''}`;
     els.totalImages.textContent = state.filteredPosts.reduce((acc, p) => acc + (p.images ? p.images.length : 0), 0);
 }
 
@@ -727,5 +836,25 @@ window.copyContent = (id) => {
 };
 
 function autoSelectFirstSession() { if (state.sessions.length > 0) switchSession(state.sessions[0].id); }
+
+function updateProgressBar(percent, text) {
+    if (!els.progressContainer) return;
+    els.progressContainer.style.display = 'block';
+
+    requestAnimationFrame(() => {
+        els.progressBar.style.width = `${percent}%`;
+        els.progressPercent.textContent = `${percent}%`;
+        if (text) els.progressLabel.textContent = text;
+    });
+}
+
+function hideProgressBar() {
+    if (!els.progressContainer) return;
+    setTimeout(() => {
+        els.progressContainer.style.display = 'none';
+        els.progressBar.style.width = '0%';
+        els.progressPercent.textContent = '0%';
+    }, 2000);
+}
 
 init();
