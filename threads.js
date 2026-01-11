@@ -112,6 +112,9 @@ function setupEventListeners() {
     if (els.addCategoryBtn) els.addCategoryBtn.addEventListener('click', addNewCategory);
     if (els.closeModal) els.closeModal.onclick = closeModal;
     if (els.imageModal) els.imageModal.onclick = (e) => { if (e.target === els.imageModal) closeModal(); };
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && els.imageModal.style.display === 'flex') closeModal();
+    });
     if (els.contentView) els.contentView.addEventListener('scroll', handleScroll);
 }
 
