@@ -334,7 +334,10 @@ async function parseAndSyncMarkdown(md, filename) {
 
         if (content || images.length > 0) {
             // Generate deterministic ID for deduplication
-            const uniqueKey = `${date}_${content.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '')}`;
+            // MORE ROBUST KEY
+            const contentKey = content.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
+            const uniqueKey = `${date}_${images.length}_${content.length}_${contentKey}`;
+
             newPosts.push({
                 // Use deterministic ID for deduplication in subcollection
                 id: uniqueKey,
@@ -381,7 +384,12 @@ async function parseAndSyncMarkdown(md, filename) {
 
     let savedCount = 0;
     try {
+        const totalToSave = newPosts.length;
+        let batchIndex = 0;
+
         for (const chunk of chunks_posts) {
+            batchIndex++;
+            showToast(`데이터 저장 중... ${Math.round((savedCount / totalToSave) * 100)}% (${batchIndex}/${chunks_posts.length})`);
             const batch = db.batch();
             chunk.forEach(post => {
                 const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(post.id);
@@ -396,7 +404,7 @@ async function parseAndSyncMarkdown(md, filename) {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        showToast(`${savedCount}개의 포스트가 저장되었습니다.`);
+        showToast(`완료! 총 ${savedCount}개의 포스트가 성공적으로 저장되었습니다.`);
         await switchSession(sessionId); // Reload to see changes
         renderSidebarContent();
     } catch (e) {
@@ -418,17 +426,9 @@ window.switchSession = async (id) => {
         const postsSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
         let subcollectionPosts = postsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Merge with legacy array-based posts if they exist in local state (backward compat)
-        let legacyPosts = session.posts || [];
-
-        // deduplicate
-        const allPostsMap = new Map();
-        [...legacyPosts, ...subcollectionPosts].forEach(p => {
-            const key = p.date + p.content.substring(0, 50);
-            allPostsMap.set(key, p);
-        });
-
-        state.allPosts = Array.from(allPostsMap.values());
+        // Trust subcollection data completely
+        state.allPosts = subcollectionPosts;
+        state.allPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         // Mobile UI handle
         if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -645,7 +645,7 @@ function renderPostCard(post, idx) {
 
 function updateStats() {
     els.totalPosts.textContent = state.filteredPosts.length.toLocaleString();
-    const imgCount = state.filteredPosts.reduce((acc, p) => acc + p.images.length, 0);
+    const imgCount = state.filteredPosts.reduce((acc, p) => acc + (p.images ? p.images.length : 0), 0);
     els.totalImages.textContent = imgCount.toLocaleString();
 }
 
