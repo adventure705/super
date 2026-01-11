@@ -100,6 +100,7 @@ async function saveSessionToFirestore(session) {
         const { id, ...data } = session;
         await db.collection(COLLECTION_NAME).doc(id).set({
             ...data,
+            refName: data.refName || data.name, // Ensure refName exists
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
     } catch (e) {
@@ -167,8 +168,9 @@ async function parseAndSyncMarkdown(md, filename) {
         }
     });
 
-    const sessionName = filename.replace('.md', '');
-    let session = state.sessions.find(s => s.name === sessionName);
+    const sessionRefName = filename.replace('.md', '');
+    // Match by internal refName (the original file name)
+    let session = state.sessions.find(s => (s.refName || s.name) === sessionRefName);
 
     if (session) {
         // Cumulative update
@@ -196,13 +198,14 @@ async function parseAndSyncMarkdown(md, filename) {
         const newId = db.collection(COLLECTION_NAME).doc().id;
         session = {
             id: newId,
-            name: sessionName,
+            name: sessionRefName, // Initial display name
+            refName: sessionRefName, // Hidden internal match key
             posts: newPosts.sort((a, b) => new Date(b.date) - new Date(a.date)),
             order: state.sessions.length
         };
         state.sessions.unshift(session);
         await saveSessionToFirestore(session);
-        showToast(`'${sessionName}' 라이브러리에 추가되었습니다.`);
+        showToast(`'${sessionRefName}' 라이브러리에 추가되었습니다.`);
     }
 
     switchSession(session.id);
