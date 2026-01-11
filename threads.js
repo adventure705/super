@@ -16,102 +16,110 @@ const COLLECTION_NAME = 'threads_sessions';
 const CATEGORY_COLLECTION = 'threads_categories';
 const DEFAULT_CAT_ID = 'uncategorized_default';
 
-// UI Elements
-const els = {
-    fileInput: document.getElementById('file-input'),
-    uploadBtn: document.getElementById('upload-btn'),
-    postsFeed: document.getElementById('posts-feed'),
-    searchInput: document.getElementById('global-search'),
-    startDateFilter: document.getElementById('start-date-filter'),
-    endDateFilter: document.getElementById('end-date-filter'),
-    resetFilters: document.getElementById('reset-filters'),
-    sortToggle: document.getElementById('sort-toggle'),
-    sortIcon: document.getElementById('sort-icon'),
-    sortText: document.getElementById('sort-text'),
-    totalPosts: document.getElementById('total-posts'),
-    totalImages: document.getElementById('total-images'),
-    sidebarContent: document.getElementById('sidebar-content'),
-    dateNavigator: document.getElementById('date-navigator'),
-    toast: document.getElementById('toast'),
-    mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
-    sidebar: document.querySelector('.sidebar'),
-    sidebarOverlay: document.getElementById('sidebar-overlay'),
-    addCategoryBtn: document.getElementById('add-category-btn'),
-    imageModal: document.getElementById('image-modal'),
-    modalImg: document.getElementById('modal-img'),
-    closeModal: document.querySelector('.close-modal'),
-    contentView: document.querySelector('.content-view'),
+// --- Firebase Configuration ---
+const firebaseConfig = {
+    apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4",
+    authDomain: "template-3530f.firebaseapp.com",
+    projectId: "template-3530f",
+    storageBucket: "template-3530f.firebasestorage.app",
+    messagingSenderId: "891098188622",
+    appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
 };
+
+// UI Elements (Initialized in init for DOM safety)
+let els = {};
+
+function initElements() {
+    els = {
+        fileInput: document.getElementById('file-input'),
+        uploadBtn: document.getElementById('upload-btn'),
+        postsFeed: document.getElementById('posts-feed'),
+        searchInput: document.getElementById('global-search'),
+        startDateFilter: document.getElementById('start-date-filter'),
+        endDateFilter: document.getElementById('end-date-filter'),
+        resetFilters: document.getElementById('reset-filters'),
+        sortToggle: document.getElementById('sort-toggle'),
+        sortIcon: document.getElementById('sort-icon'),
+        sortText: document.getElementById('sort-text'),
+        totalPosts: document.getElementById('total-posts'),
+        totalImages: document.getElementById('total-images'),
+        sidebarContent: document.getElementById('sidebar-content'),
+        dateNavigator: document.getElementById('date-navigator'),
+        toast: document.getElementById('toast'),
+        mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
+        sidebar: document.querySelector('.sidebar'),
+        sidebarOverlay: document.getElementById('sidebar-overlay'),
+        addCategoryBtn: document.getElementById('add-category-btn'),
+        imageModal: document.getElementById('image-modal'),
+        modalImg: document.getElementById('modal-img'),
+        closeModal: document.querySelector('.close-modal'),
+        contentView: document.querySelector('.content-view'),
+    };
+}
 
 // --- Initialization ---
 async function init() {
-    try {
-        // Load Config from JSON (Shared with other apps)
-        const response = await fetch('firebase-config.json');
-        if (!response.ok) throw new Error("Firebase config load failed");
-        const firebaseConfig = await response.json();
+    initElements();
+    setupEventListeners();
 
+    try {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
         db = firebase.firestore();
 
-        // PERSISTENCE DISABLED for direct real-time cross-device sync
-        console.log("Firestore initialized in Real-time Mode (No Local Cache Lock)");
+        // persistence disabled for real-time sync across devices
+        console.log("Threads Analyzer: Real-time Sync Mode Active");
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
-                console.log("Firebase Authenticated - Device UID:", user.uid);
-                showToast("서버와 실시간 연결됨", 1500);
+                console.log("Firebase Authenticated:", user.uid);
+                showToast("서버 실시간 연동 중...", 1000);
                 updateSyncStatus(true);
 
-                // Fetch shared data
                 await Promise.all([
                     loadCategoriesFromFirestore(),
                     loadSessionsFromFirestore()
                 ]);
             } else {
-                console.log("No auth session. Signing in anonymously...");
                 await firebase.auth().signInAnonymously();
             }
         });
 
-        setupEventListeners();
-
-        // Monitor server connection
+        // Connection monitor
         db.collection(COLLECTION_NAME).limit(1).onSnapshot({ includeMetadataChanges: true }, (snap) => {
             updateSyncStatus(!snap.metadata.fromCache);
         }, (err) => {
-            console.error("Connection Status Error:", err);
             updateSyncStatus(false);
         });
 
     } catch (e) {
-        console.error("Init Error:", e);
-        showToast("초기화 중 오류 발생: " + e.message);
+        console.error("Firebase Init Error:", e);
+        showToast("초기화 실패: " + e.message);
     }
 }
 
 function setupEventListeners() {
-    els.uploadBtn.addEventListener('click', () => els.fileInput.click());
-    els.fileInput.addEventListener('change', handleFileUpload);
-    els.searchInput.addEventListener('input', updateUI);
-    els.startDateFilter.addEventListener('change', updateUI);
-    els.endDateFilter.addEventListener('change', updateUI);
-    els.resetFilters.addEventListener('click', resetFilters);
-    els.sortToggle.addEventListener('click', toggleSort);
+    if (els.uploadBtn) els.uploadBtn.addEventListener('click', () => els.fileInput.click());
+    if (els.fileInput) els.fileInput.addEventListener('change', handleFileUpload);
+    if (els.searchInput) els.searchInput.addEventListener('input', updateUI);
+    if (els.startDateFilter) els.startDateFilter.addEventListener('change', updateUI);
+    if (els.endDateFilter) els.endDateFilter.addEventListener('change', updateUI);
+    if (els.resetFilters) els.resetFilters.addEventListener('click', resetFilters);
+    if (els.sortToggle) els.sortToggle.addEventListener('click', toggleSort);
 
-    els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
-    els.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
-    els.addCategoryBtn.addEventListener('click', addNewCategory);
+    if (els.mobileMenuToggle) els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
+    if (els.sidebarOverlay) els.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
+    if (els.addCategoryBtn) els.addCategoryBtn.addEventListener('click', addNewCategory);
 
-    els.closeModal.onclick = closeModal;
-    els.imageModal.onclick = (e) => { if (e.target === els.imageModal) closeModal(); };
+    if (els.closeModal) els.closeModal.onclick = closeModal;
+    if (els.imageModal) els.imageModal.onclick = (e) => { if (e.target === els.imageModal) closeModal(); };
+
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && els.imageModal.style.display === 'flex') closeModal();
+        if (e.key === 'Escape' && els.imageModal && els.imageModal.style.display === 'flex') closeModal();
     });
 
-    els.contentView.addEventListener('scroll', handleScroll);
+    if (els.contentView) els.contentView.addEventListener('scroll', handleScroll);
 }
 
 // --- App Controls ---
@@ -157,6 +165,7 @@ function toggleSidebar(open) {
 }
 
 function initSortable() {
+    if (!els.sidebarContent) return;
     new Sortable(els.sidebarContent, {
         animation: 150,
         handle: '.category-header',
@@ -211,9 +220,6 @@ async function loadCategoriesFromFirestore() {
                 ...doc.data()
             }));
 
-            const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
-
-            // Only create default category if we are 100% sure the server is empty
             if (state.categories.length === 0 && !snapshot.metadata.fromCache) {
                 addNewCategoryUI('미분류', DEFAULT_CAT_ID);
             }
@@ -222,9 +228,6 @@ async function loadCategoriesFromFirestore() {
             resolve();
         }, (e) => {
             console.error("Categories Sync Error:", e);
-            if (e.code === 'permission-denied') {
-                showToast("권한 오류: Firebase Rules에서 읽기 권한을 확인해주세요.");
-            }
             resolve();
         });
     });
@@ -235,7 +238,6 @@ function updateSyncStatus(isSynced) {
     if (logoIcon) {
         logoIcon.style.boxShadow = isSynced ? '0 0 10px #4caf50' : '0 0 10px #f44336';
         logoIcon.style.transition = 'box-shadow 0.3s ease';
-        logoIcon.title = isSynced ? '동기화 완료 (서버 연결됨)' : '동기화 대기 중 (오프라인/로컬 캐시)';
     }
 }
 
@@ -249,15 +251,9 @@ async function addNewCategory() {
 
 async function addNewCategoryUI(name, fixedId = null) {
     const id = fixedId || db.collection(CATEGORY_COLLECTION).doc().id;
-    const category = {
-        name: name,
-        order: state.categories.length
-    };
+    const category = { name: name, order: state.categories.length };
     await db.collection(CATEGORY_COLLECTION).doc(id).set(category, { merge: true });
-
-    if (!state.categories.find(c => c.id === id)) {
-        state.categories.push({ id, ...category });
-    }
+    if (!state.categories.find(c => c.id === id)) state.categories.push({ id, ...category });
 }
 
 window.renameCategory = async (id) => {
@@ -268,70 +264,46 @@ window.renameCategory = async (id) => {
         category.name = newName.trim();
         await db.collection(CATEGORY_COLLECTION).doc(id).update({ name: category.name });
         renderSidebarContent();
-        showToast('카테고리 이름이 변경되었습니다.');
     }
 };
 
 window.deleteCategory = async (id) => {
     const sessCount = state.sessions.filter(s => s.categoryId === id).length;
-    if (sessCount > 0) {
-        alert('이 카테고리에 포함된 세션이 있습니다. 세션을 이동시킨 후 삭제해주세요.');
-        return;
-    }
-    if (!confirm('이 카테고리를 삭제하시겠습니까?')) return;
+    if (sessCount > 0) return alert('카테고리가 비어있지 않습니다.');
+    if (!confirm('삭제하시겠습니까?')) return;
     await db.collection(CATEGORY_COLLECTION).doc(id).delete();
     state.categories = state.categories.filter(c => c.id !== id);
     renderSidebarContent();
-    showToast('삭제되었습니다.');
 };
 
 // --- Firestore Data Handling ---
 async function loadSessionsFromFirestore() {
     return new Promise((resolve) => {
         db.collection(COLLECTION_NAME).onSnapshot((snapshot) => {
-            state.sessions = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             state.sessions.sort((a, b) => (a.order || 0) - (b.order || 0));
-
             renderSidebarContent();
-
-            if (!state.activeSessionId && state.sessions.length > 0) {
-                autoSelectFirstSession();
-            }
-
+            if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
             resolve();
         }, (e) => {
             console.error("Sessions Sync Error:", e);
-            if (e.code === 'permission-denied') {
-                showToast("권한 오류: 타 기기의 데이터를 불러올 권한이 없습니다.");
-            } else {
-                showToast("데이터 동기화 오류.");
-            }
             resolve();
         });
     });
 }
 
 async function saveSessionToFirestore(session) {
-    try {
-        const { id, ...data } = session;
-        await db.collection(COLLECTION_NAME).doc(id).set({
-            ...data,
-            refName: data.refName || data.name,
-            categoryId: data.categoryId || (state.categories[0] ? state.categories[0].id : 'default'),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-    } catch (e) {
-        console.error("Firestore Save Error:", e);
-        showToast("데이터 저장에 실패했습니다.");
-    }
+    const { id, ...data } = session;
+    await db.collection(COLLECTION_NAME).doc(id).set({
+        ...data,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
 }
 
 function renderSidebarContent() {
+    if (!els.sidebarContent) return;
     if (state.categories.length === 0) {
-        els.sidebarContent.innerHTML = `<div class="empty-lib">라이브러리가 비어있습니다</div>`;
+        els.sidebarContent.innerHTML = `<div class="empty-lib">데이터가 없습니다</div>`;
         return;
     }
 
@@ -344,20 +316,18 @@ function renderSidebarContent() {
                 <div class="category-header">
                     <span class="category-title">${category.name}</span>
                     <div class="category-actions" onclick="event.stopPropagation()">
-                        <button class="action-btn" onclick="renameCategory('${category.id}')" title="이름 변경">✎</button>
-                        <button class="action-btn delete" onclick="deleteCategory('${category.id}')" title="삭제">✕</button>
+                        <button class="action-btn" onclick="renameCategory('${category.id}')">✎</button>
+                        <button class="action-btn delete" onclick="deleteCategory('${category.id}')">✕</button>
                     </div>
                 </div>
                 <ul class="session-list" data-category-id="${category.id}">
                     ${catSessions.map(session => `
-                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" 
-                            data-id="${session.id}"
-                            onclick="switchSession('${session.id}')">
+                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" data-id="${session.id}" onclick="switchSession('${session.id}')">
                             <span class="drag-handle">☰</span>
-                            <span class="session-name" title="${session.name}">${session.name}</span>
+                            <span class="session-name">${session.name}</span>
                             <div class="session-actions" onclick="event.stopPropagation()">
-                                <button class="action-btn" onclick="renameSession('${session.id}')" title="이름 변경">✎</button>
-                                <button class="action-btn delete" onclick="deleteSession('${session.id}')" title="삭제">✕</button>
+                                <button class="action-btn" onclick="renameSession('${session.id}')">✎</button>
+                                <button class="action-btn delete" onclick="deleteSession('${session.id}')">✕</button>
                             </div>
                         </li>
                     `).join('')}
@@ -366,28 +336,16 @@ function renderSidebarContent() {
         `;
     }).join('');
 
-    const categoryIds = state.categories.map(c => c.id);
-    const uncategorizedSessions = state.sessions.filter(s => !s.categoryId || !categoryIds.includes(s.categoryId))
-        .sort((a, b) => (a.order || 0) - (b.order || 0));
-
+    const uncategorizedSessions = state.sessions.filter(s => !s.categoryId || !state.categories.some(c => c.id === s.categoryId));
     let uncategorizedHtml = '';
     if (uncategorizedSessions.length > 0) {
         uncategorizedHtml = `
             <div class="category-section" data-id="uncategorized">
-                <div class="category-header">
-                    <span class="category-title">미분류 세션</span>
-                </div>
+                <div class="category-header"><span class="category-title">미분류</span></div>
                 <ul class="session-list" data-category-id="default">
                     ${uncategorizedSessions.map(session => `
-                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" 
-                            data-id="${session.id}"
-                            onclick="switchSession('${session.id}')">
-                            <span class="drag-handle">☰</span>
-                            <span class="session-name" title="${session.name}">${session.name}</span>
-                            <div class="session-actions" onclick="event.stopPropagation()">
-                                <button class="action-btn" onclick="renameSession('${session.id}')" title="이름 변경">✎</button>
-                                <button class="action-btn delete" onclick="deleteSession('${session.id}')" title="삭제">✕</button>
-                            </div>
+                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" data-id="${session.id}" onclick="switchSession('${session.id}')">
+                            <span class="drag-handle">☰</span><span class="session-name">${session.name}</span>
                         </li>
                     `).join('')}
                 </ul>
@@ -402,13 +360,8 @@ function renderSidebarContent() {
 async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    showToast("파일 분석 중...");
     const reader = new FileReader();
-    reader.onload = async (event) => {
-        const content = event.target.result;
-        await parseAndSyncMarkdown(content, file.name);
-    };
+    reader.onload = async (event) => await parseAndSyncMarkdown(event.target.result, file.name);
     reader.readAsText(file);
     e.target.value = '';
 }
@@ -418,169 +371,42 @@ async function parseAndSyncMarkdown(md, filename) {
         showToast("파일 분석 중...", 0, 0);
         const chunks = md.split('---');
         const newPosts = [];
+        chunks.forEach((chunk, i) => {
+            let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
+            let time = '00:00', date = '';
+            if (dateMatch) { date = dateMatch[1]; time = dateMatch[2]; }
+            else { dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/); if (!dateMatch) return; date = dateMatch[1]; }
+            let images = [];
+            const m_images = chunk.match(/!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g);
+            if (m_images) m_images.forEach(imgLink => images.push(imgLink.match(/\((.*?)\)/)[1]));
+            let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
+            if (content || images.length > 0) newPosts.push({ id: `${date}_${i}`, date, time, index: i, content, images });
+        });
 
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            try {
-                let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
-                let time = '00:00';
-                let date = '';
-                if (dateMatch) {
-                    date = dateMatch[1];
-                    time = dateMatch[2];
-                } else {
-                    dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/);
-                    if (!dateMatch) continue;
-                    date = dateMatch[1];
-                }
+        const sessionRefName = filename.replace('.md', '').replace(/_part\d+$/, '');
+        let session = state.sessions.find(s => s.name === sessionRefName);
+        let sessionId = session ? session.id : db.collection(COLLECTION_NAME).doc().id;
 
-                const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
-                let images = [];
-                let m;
-                if (chunk.length < 100000) {
-                    while ((m = imageRegex.exec(chunk)) !== null) {
-                        images.push(m[1].trim());
-                    }
-                }
-
-                let content = chunk
-                    .replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '')
-                    .replace(/!\[[\s\S]*?\]\(.*?\)/g, '')
-                    .replace(/^\//gm, '')
-                    .trim();
-
-                if (content || images.length > 0) {
-                    const contentKey = content.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-                    const uniqueKey = `${date}_${images.length}_${content.length}_${contentKey}`;
-
-                    newPosts.push({
-                        id: uniqueKey,
-                        date,
-                        time,
-                        index: i,
-                        content,
-                        images
-                    });
-                }
-            } catch (chunkErr) {
-                console.warn("Skipping chunk:", chunkErr);
-            }
-        }
-
-        showToast(`분석 완료: 총 ${newPosts.length}개`, 3000);
-        showToast("업로드 준비 중...", 0, 0);
-
-        const sessionRefName = filename.replace('.md', '').replace(/_part\d+$/, '').replace(/\s*\(\d+\)$/, '').replace(/\s+\d+$/, '');
-        let session = state.sessions.find(s => (s.refName === sessionRefName) || (s.name === sessionRefName));
-        let sessionId;
-        let isNewSession = false;
-
-        if (session) {
-            sessionId = session.id;
-            showToast(`'${session.name}'에 병합 중...`, 0, 0);
-        } else {
-            sessionId = db.collection(COLLECTION_NAME).doc().id;
-            session = {
-                id: sessionId,
-                name: sessionRefName,
-                refName: sessionRefName,
-                order: state.sessions.length > 0 ? Math.min(...state.sessions.map(s => s.order || 0)) - 1 : 0,
-                categoryId: state.categories.length > 0 ? state.categories[0].id : DEFAULT_CAT_ID,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            state.sessions.unshift({ ...session, posts: [] });
-            isNewSession = true;
-            renderSidebarContent();
+        if (!session) {
+            session = { id: sessionId, name: sessionRefName, categoryId: state.categories[0]?.id || DEFAULT_CAT_ID, order: 0, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+            await db.collection(COLLECTION_NAME).doc(sessionId).set(session);
         }
 
         const batchSize = 500;
-        const chunks_posts = [];
-        for (let i = 0; i < newPosts.length; i += batchSize) {
-            chunks_posts.push(newPosts.slice(i, i + batchSize));
-        }
-
         let savedCount = 0;
-        const totalToSave = newPosts.length;
-        if (totalToSave === 0) {
-            alert("저장할 포스트가 없습니다.");
-            return;
+        for (let i = 0; i < newPosts.length; i += batchSize) {
+            const batch = db.batch();
+            newPosts.slice(i, i + batchSize).forEach(p => {
+                const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(p.id.replace(/\//g, '_'));
+                batch.set(ref, p, { merge: true });
+            });
+            await batch.commit();
+            savedCount += Math.min(batchSize, newPosts.length - i);
+            showToast(`업로드 중... ${Math.round((savedCount / newPosts.length) * 100)}%`);
         }
-
-        resetFilters();
-        if (isNewSession) {
-            state.activeSessionId = sessionId;
-            state.allPosts = [];
-            try {
-                const sessionToSave = { ...session, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-                await db.collection(COLLECTION_NAME).doc(sessionId).set(sessionToSave);
-            } catch (e) {
-                showToast("세션 생성 실패!", 3000);
-                throw e;
-            }
-        } else {
-            if (state.activeSessionId !== sessionId) await switchSession(sessionId);
-        }
-
-        renderSidebarContent();
-        renderDateNavigator();
-        updateUI();
-
-        showToast(`업로드 시작... (총 ${totalToSave}개)`, 0, 0);
-
-        const CONCURRENCY = 8;
-        const uploadBatches = async () => {
-            const groups = [];
-            for (let i = 0; i < chunks_posts.length; i += CONCURRENCY) {
-                groups.push(chunks_posts.slice(i, i + CONCURRENCY));
-            }
-
-            for (const group of groups) {
-                await Promise.all(group.map(async (chunk) => {
-                    const batch = db.batch();
-                    chunk.forEach(post => {
-                        const safeId = post.id.replace(/\//g, '_').replace(/\./g, '_');
-                        const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(safeId);
-                        batch.set(ref, post, { merge: true });
-                    });
-
-                    let success = false;
-                    for (let attempt = 1; attempt <= 3; attempt++) {
-                        try {
-                            await batch.commit();
-                            success = true;
-                            break;
-                        } catch (e) {
-                            await new Promise(r => setTimeout(r, 1000 * attempt));
-                        }
-                    }
-
-                    if (success) {
-                        savedCount += chunk.length;
-                        state.allPosts.push(...chunk);
-                        showToast(`업로드 중... ${Math.round((savedCount / totalToSave) * 100)}%`, 0, Math.round((savedCount / totalToSave) * 100));
-                    } else {
-                        throw new Error("전송 실패");
-                    }
-                }));
-                renderDateNavigator();
-            }
-        };
-
-        try {
-            await uploadBatches();
-        } catch (err) {
-            alert(`업로드 중 오류: ${err.message}`);
-        }
-
-        await db.collection(COLLECTION_NAME).doc(sessionId).update({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-        showToast(`업로드 완료!`, 5000, 100);
+        showToast("업로드 완료");
         await switchSession(sessionId);
-        renderSidebarContent();
-
-    } catch (e) {
-        console.error("Process Error:", e);
-        showToast("작업 실패!", 0);
-    }
+    } catch (e) { console.error(e); showToast("오류 발생"); }
 }
 
 window.refreshSidebar = async () => {
@@ -589,192 +415,64 @@ window.refreshSidebar = async () => {
 };
 
 window.switchSession = async (id) => {
-    if (postsUnsubscribe) { postsUnsubscribe(); postsUnsubscribe = null; }
+    if (postsUnsubscribe) postsUnsubscribe();
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
-
-    showToast("동기화 중...", 0, 50);
-
-    postsUnsubscribe = db.collection(COLLECTION_NAME).doc(id).collection('posts')
-        .onSnapshot((snapshot) => {
-            let subcollectionPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            let legacyPosts = session.posts || [];
-            const allPostsMap = new Map();
-
-            legacyPosts.forEach(p => {
-                const key = p.id || `${p.date}_${p.content.substring(0, 30)}`;
-                allPostsMap.set(key, p);
-            });
-
-            subcollectionPosts.forEach(p => {
-                allPostsMap.set(p.id, p);
-            });
-
-            state.allPosts = Array.from(allPostsMap.values());
-            if (state.sortOrder === 'desc') updateSortUI();
-            renderDateNavigator();
-            updateUI();
-
-            if (!snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) {
-                showToast("최신 데이터 동기화됨", 1000);
-            }
-        }, (e) => {
-            console.error("Posts Sync Error:", e);
-        });
-
+    postsUnsubscribe = db.collection(COLLECTION_NAME).doc(id).collection('posts').onSnapshot(snap => {
+        state.allPosts = snap.docs.map(doc => doc.data());
+        renderDateNavigator();
+        updateUI();
+    });
     if (window.innerWidth <= 1024) toggleSidebar(false);
     renderSidebarContent();
 };
 
 window.renameSession = async (id) => {
-    const session = state.sessions.find(s => s.id === id);
-    if (!session) return;
-    const newName = prompt('새 이름을 입력하세요:', session.name);
-    if (newName && newName.trim()) {
-        session.name = newName.trim();
-        await saveSessionToFirestore(session);
-        renderSidebarContent();
-    }
+    const s = state.sessions.find(x => x.id === id);
+    const n = prompt('이름:', s.name);
+    if (n) { s.name = n; await db.collection(COLLECTION_NAME).doc(id).update({ name: n }); renderSidebarContent(); }
 };
 
 window.deleteSession = async (id) => {
-    if (!confirm('삭제하시겠습니까?')) return;
-    try {
-        await db.collection(COLLECTION_NAME).doc(id).delete();
-        state.sessions = state.sessions.filter(s => s.id !== id);
-        if (state.activeSessionId === id) { state.allPosts = []; state.activeSessionId = null; updateUI(); }
-        renderSidebarContent();
-    } catch (e) { }
+    if (confirm('삭제?')) { await db.collection(COLLECTION_NAME).doc(id).delete(); state.sessions = state.sessions.filter(s => s.id !== id); renderSidebarContent(); }
 };
 
-function resetFilters() {
-    els.searchInput.value = '';
-    els.startDateFilter.value = '';
-    els.endDateFilter.value = '';
-    state.sortOrder = 'desc';
-    updateSortUI();
-    renderDateNavigator();
-    updateUI();
-}
-
-function toggleSort() {
-    state.sortOrder = state.sortOrder === 'desc' ? 'asc' : 'desc';
-    updateSortUI();
-    updateUI();
-}
-
-function updateSortUI() {
-    if (state.sortOrder === 'desc') {
-        els.sortIcon.textContent = '↓';
-        els.sortText.textContent = '최신순';
-    } else {
-        els.sortIcon.textContent = '↑';
-        els.sortText.textContent = '과거순';
-    }
-}
+function resetFilters() { els.searchInput.value = ''; els.startDateFilter.value = ''; els.endDateFilter.value = ''; updateUI(); }
+function toggleSort() { state.sortOrder = state.sortOrder === 'desc' ? 'asc' : 'desc'; updateUI(); }
 
 function updateUI() {
-    const query = els.searchInput.value.toLowerCase();
-    const startDate = els.startDateFilter.value;
-    const endDate = els.endDateFilter.value;
-
-    state.filteredPosts = state.allPosts.filter(post => {
-        const matchesSearch = post.content.toLowerCase().includes(query) || post.date.includes(query);
-        const postDate = post.date;
-        const matchesStart = startDate ? postDate >= startDate : true;
-        const matchesEnd = endDate ? postDate <= endDate : true;
-        return matchesSearch && matchesStart && matchesEnd;
-    });
-
-    state.filteredPosts.sort((a, b) => {
-        const dateA = new Date(a.date + (a.time ? 'T' + a.time : ''));
-        const dateB = new Date(b.date + (b.time ? 'T' + b.time : ''));
-        if (dateA - dateB !== 0) return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-        return (a.index || 0) - (b.index || 0);
-    });
-
-    state.visiblePosts = 20;
+    state.filteredPosts = state.allPosts.filter(p => p.content.includes(els.searchInput.value) && (!els.startDateFilter.value || p.date >= els.startDateFilter.value));
+    state.filteredPosts.sort((a, b) => state.sortOrder === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
     renderPosts();
     updateStats();
-    updateDateNavigatorActive();
 }
 
 function renderDateNavigator() {
-    if (state.allPosts.length === 0) { els.dateNavigator.innerHTML = ''; return; }
-    const dateMap = {};
-    state.allPosts.forEach(post => {
-        const [year, month] = post.date.split('-');
-        if (!dateMap[year]) dateMap[year] = new Set();
-        dateMap[year].add(month);
-    });
-    const years = Object.keys(dateMap).sort((a, b) => b - a);
-    els.dateNavigator.innerHTML = years.map(year => {
-        const months = Array.from(dateMap[year]).sort((a, b) => b - a);
-        return `<div class="year-group"><span class="year-label">${year}</span><div class="month-list">${months.map(month => `<button class="month-btn" onclick="filterByMonth('${year}', '${month}')" data-date="${year}-${month}">${parseInt(month)}월</button>`).join('')}</div></div>`;
-    }).join('');
+    if (!els.dateNavigator) return;
+    const years = [...new Set(state.allPosts.map(p => p.date.split('-')[0]))].sort().reverse();
+    els.dateNavigator.innerHTML = years.map(y => `<div>${y}</div>`).join('');
 }
 
-function updateDateNavigatorActive() {
-    const startDate = els.startDateFilter.value;
-    const endDate = els.endDateFilter.value;
-    document.querySelectorAll('.month-btn').forEach(btn => {
-        const btnDate = btn.getAttribute('data-date');
-        const [year, month] = btnDate.split('-');
-        if (startDate === `${year}-${month}-01` && endDate === new Date(year, month, 0).toISOString().split('T')[0]) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
-}
-
-window.filterByMonth = (year, month) => {
-    const firstDay = `${year}-${month}-01`;
-    const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
-    if (els.startDateFilter.value === firstDay && els.endDateFilter.value === lastDay) { els.startDateFilter.value = ''; els.endDateFilter.value = ''; }
-    else { els.startDateFilter.value = firstDay; els.endDateFilter.value = lastDay; }
-    updateUI();
-};
-
-function renderPosts(append = false) {
-    if (state.allPosts.length === 0 && state.sessions.length > 0) {
-        els.postsFeed.innerHTML = `<div class="empty-state"><h2>라이브러리에서 파일을 선택해주세요</h2></div>`;
-        return;
-    }
-    if (state.filteredPosts.length === 0) {
-        els.postsFeed.innerHTML = `<div class="empty-state"><h2>검색 결과가 없습니다</h2></div>`;
-        return;
-    }
-    const postsToShow = state.filteredPosts.slice(0, state.visiblePosts);
-    if (append) {
-        const currentCount = els.postsFeed.querySelectorAll('.post-card').length;
-        const newPosts = state.filteredPosts.slice(currentCount, state.visiblePosts);
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = newPosts.map((post, idx) => renderPostCard(post, currentCount + idx)).join('');
-        while (tempDiv.firstChild) els.postsFeed.appendChild(tempDiv.firstChild);
-    } else {
-        els.postsFeed.innerHTML = postsToShow.map((post, idx) => renderPostCard(post, idx)).join('');
-    }
-}
-
-function renderPostCard(post, idx) {
-    return `<article class="post-card" style="animation-delay: ${idx % 20 * 0.01}s"><div class="post-header"><span class="post-date">${post.date}</span><button class="btn-icon" onclick="copyContent('${post.id}')">📋</button></div><div class="post-content">${highlightText(post.content, els.searchInput.value)}</div>${post.images.length > 0 ? `<div class="post-images">${post.images.map(img => `<img src="https://wsrv.nl/?url=${encodeURIComponent(img)}&w=800&q=80" loading="lazy" onclick="openModal(this.src)">`).join('')}</div>` : ''}</article>`;
+function renderPosts() {
+    if (!els.postsFeed) return;
+    els.postsFeed.innerHTML = state.filteredPosts.map(p => `<div class="post-card"><div>${p.date}</div><div>${p.content}</div></div>`).join('');
 }
 
 function updateStats() {
-    els.totalPosts.textContent = state.filteredPosts.length.toLocaleString();
-    els.totalImages.textContent = state.filteredPosts.reduce((acc, p) => acc + (p.images ? p.images.length : 0), 0).toLocaleString();
+    if (els.totalPosts) els.totalPosts.textContent = state.filteredPosts.length;
 }
 
-function highlightText(text, query) {
-    if (!query) return text;
-    return text.replace(new RegExp(`(${query})`, 'gi'), '<mark style="background: rgba(59, 130, 246, 0.4); color: white;">$1</mark>');
+function showToast(m, d = 3000) {
+    if (!els.toast) return;
+    els.toast.textContent = m;
+    els.toast.classList.add('show');
+    setTimeout(() => els.toast.classList.remove('show'), d);
 }
 
-function openModal(url) { els.modalImg.src = url; els.imageModal.style.display = 'flex'; els.imageModal.classList.add('show'); document.body.style.overflow = 'hidden'; }
-function closeModal() { els.imageModal.classList.remove('show'); setTimeout(() => els.imageModal.style.display = 'none', 300); document.body.style.overflow = 'auto'; }
+function openModal(url) { els.modalImg.src = url; els.imageModal.style.display = 'flex'; }
+function closeModal() { els.imageModal.style.display = 'none'; }
 
-window.copyContent = (id) => {
-    const post = state.allPosts.find(p => p.id === id);
-    if (post) { navigator.clipboard.writeText(post.content); showToast('복사됨'); }
-};
-
-init();
+// Start
+document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'interactive' || document.readyState === 'complete') init();
