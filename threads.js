@@ -68,17 +68,8 @@ async function init() {
         }
         db = firebase.firestore();
 
-        // Restore Persistence for reliability and cross-tab sync
-        try {
-            await db.enablePersistence({ synchronizeTabs: true });
-            console.log("Firestore Persistence Enabled");
-        } catch (err) {
-            if (err.code === 'failed-precondition') {
-                console.warn("Persistence failed: Multiple tabs open.");
-            } else if (err.code === 'unimplemented') {
-                console.warn("Persistence failed: Browser not supported (e.g. Incognito).");
-            }
-        }
+        // DISABLED Persistence for raw speed with large datasets (5,000+ items)
+        // This prevents the browser from hanging while indexing data to disk.
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
@@ -90,10 +81,9 @@ async function init() {
                 await firebase.auth().signInAnonymously();
             }
         });
-
     } catch (e) {
         console.error("Init Error:", e);
-        showToast("초기화 실패: " + e.message);
+        showToast("초기화 실패");
     }
 }
 
@@ -187,9 +177,8 @@ async function switchSession(id) {
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    // 1. Instant Access from Cache
+    // 0. Instant Cache Access
     if (state.postCache.has(id)) {
-        console.log("Loading session from memory cache...");
         state.allPosts = state.postCache.get(id);
         updateUI();
         if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -197,68 +186,64 @@ async function switchSession(id) {
         return;
     }
 
-    showToast("초고속 데이터 동기화 중...", 1000);
+    showToast("초고속 병렬 분석 중...", 1000);
 
     try {
-        console.log(`Starting Streaming Load for: ${session.name}`);
+        console.log(`🚀 Multi-Channel Parallel Download Initiation: ${session.name}`);
+        const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // Step 1: Initial Partial Load (First 100 posts) for immediate feedback
-        const firstSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts')
-            .orderBy('date', 'desc').limit(100).get();
+        // Channel Definitions (Parallel Years)
+        const channels = [
+            { name: '2026', q: colRef.where('date', '>=', '2026-01-01').where('date', '<=', '2026-12-31') },
+            { name: '2025', q: colRef.where('date', '>=', '2025-01-01').where('date', '<=', '2025-12-31') },
+            { name: '2024', q: colRef.where('date', '>=', '2024-01-01').where('date', '<=', '2024-12-31') },
+            { name: 'Legacy', q: colRef.where('date', '<', '2024-01-01') }
+        ];
 
-        let initialPosts = firstSnapshot.docs.map(doc => {
-            const data = doc.data();
-            const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
-            return { ...data, _ts: ts };
-        });
+        let finalMap = new Map();
 
-        // Step 2: Merge with legacy posts (if any) and show instantly
-        const legacyPosts = (session.posts || []).map(p => {
+        // Merge with session document data if blooming
+        (session.posts || []).forEach(p => {
             const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
-            return { ...p, _ts: ts };
+            finalMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, { ...p, _ts: ts });
         });
 
-        const initialMap = new Map();
-        legacyPosts.forEach(p => initialMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
-        initialPosts.forEach(p => initialMap.set(p.id, p));
+        // 🚀 Parallel Exec: Fetch ALL channels at once
+        const fetchStartTime = Date.now();
+        const snapshots = await Promise.all(channels.map(c => c.q.get()));
 
-        state.allPosts = Array.from(initialMap.values());
-        updateUI(); // Visual update within milliseconds!
-
-        // Step 3: Background Full Sync
-        db.collection(COLLECTION_NAME).doc(id).collection('posts').get().then(fullSnapshot => {
-            const allSubPosts = fullSnapshot.docs.map(doc => {
+        snapshots.forEach((snap, idx) => {
+            console.log(`Channel [${channels[idx].name}] received: ${snap.size} posts`);
+            snap.docs.forEach(doc => {
                 const data = doc.data();
                 const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
-                return { ...data, _ts: ts };
+                finalMap.set(doc.id, { ...data, _ts: ts });
             });
-
-            const finalMap = new Map();
-            legacyPosts.forEach(p => finalMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
-            allSubPosts.forEach(p => finalMap.set(p.id, p));
-
-            const finalCombined = Array.from(finalMap.values());
-            state.postCache.set(id, finalCombined);
-
-            // If the user hasn't switched away, update the UI with full data
-            if (state.activeSessionId === id) {
-                state.allPosts = finalCombined;
-                updateUI();
-                console.log(`Background sync complete: ${finalCombined.length} posts loaded.`);
-
-                // PERFORMANCE FIX: Migration & Data Diet
-                if (legacyPosts.length > 0) {
-                    console.log("Cleaning up legacy data bloat from session document...");
-                    db.collection(COLLECTION_NAME).doc(id).update({
-                        posts: firebase.firestore.FieldValue.delete()
-                    });
-                    session.posts = []; // Clear local memory representation
-                }
-            }
         });
+
+        const combinedPosts = Array.from(finalMap.values());
+        console.log(`Total Parallel Load: ${Date.now() - fetchStartTime}ms for ${combinedPosts.length} posts.`);
+
+        state.postCache.set(id, combinedPosts);
+        state.allPosts = combinedPosts;
+        updateUI();
+
+        // Diet Maintenance: Clean up doc bloat async
+        if (session.posts && session.posts.length > 0) {
+            console.log("Cleaning up legacy document bloat...");
+            db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
+            session.posts = [];
+        }
+
     } catch (e) {
-        console.error("Fetch error:", e);
-        showToast("데이터 로딩 중 문제가 발생했습니다.");
+        console.error("Parallel Fetch Error:", e);
+        showToast("데이터 병렬 로딩 중 문제가 발생했습니다.");
+        // Simple fallback
+        try {
+            const snap = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
+            state.allPosts = snap.docs.map(doc => ({ ...doc.data(), _ts: new Date(doc.data().date).getTime() }));
+            updateUI();
+        } catch (ee) { }
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
