@@ -8,7 +8,7 @@ const firebaseConfig = {
     appId: "1:891098188622:web:392c0121a17f1cd4402c1f"
 };
 
-// Initialize Firebase
+// Initialize Firebase (Synchronous to prevent undefined 'db')
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
@@ -55,6 +55,13 @@ const els = {
 
 // --- Initialization ---
 async function init() {
+    // Auth for persistent access
+    try {
+        await firebase.auth().signInAnonymously();
+    } catch (e) {
+        console.warn("Firebase Auth Error:", e);
+    }
+
     els.uploadBtn.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', handleFileUpload);
     els.searchInput.addEventListener('input', updateUI);
@@ -248,11 +255,14 @@ window.deleteCategory = async (id) => {
 // --- Firestore Data Handling ---
 async function loadSessionsFromFirestore() {
     try {
-        const snapshot = await db.collection(COLLECTION_NAME).orderBy('order', 'asc').get();
+        // Fetch all without strict orderBy to prevent documents with missing fields from being filtered out
+        const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
+        // Sort in memory instead
+        state.sessions.sort((a, b) => (a.order || 0) - (b.order || 0));
         renderSidebarContent();
     } catch (e) {
         console.error("Firestore Load Error:", e);
@@ -281,7 +291,7 @@ function renderSidebarContent() {
         return;
     }
 
-    els.sidebarContent.innerHTML = state.categories.map(category => {
+    const categoryHtml = state.categories.map(category => {
         const catSessions = state.sessions.filter(s => s.categoryId === category.id)
             .sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -311,6 +321,38 @@ function renderSidebarContent() {
             </div>
         `;
     }).join('');
+
+    // Handle sessions without a valid category (Safety Net)
+    const categoryIds = state.categories.map(c => c.id);
+    const uncategorizedSessions = state.sessions.filter(s => !s.categoryId || !categoryIds.includes(s.categoryId))
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    let uncategorizedHtml = '';
+    if (uncategorizedSessions.length > 0) {
+        uncategorizedHtml = `
+            <div class="category-section" data-id="uncategorized">
+                <div class="category-header">
+                    <span class="category-title">미분류 세션</span>
+                </div>
+                <ul class="session-list" data-category-id="default">
+                    ${uncategorizedSessions.map(session => `
+                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" 
+                            data-id="${session.id}"
+                            onclick="switchSession('${session.id}')">
+                            <span class="drag-handle">☰</span>
+                            <span class="session-name" title="${session.name}">${session.name}</span>
+                            <div class="session-actions" onclick="event.stopPropagation()">
+                                <button class="action-btn" onclick="renameSession('${session.id}')" title="이름 변경">✎</button>
+                                <button class="action-btn delete" onclick="deleteSession('${session.id}')" title="삭제">✕</button>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    els.sidebarContent.innerHTML = categoryHtml + uncategorizedHtml;
     initSortable();
 }
 
@@ -413,7 +455,7 @@ async function parseAndSyncMarkdown(md, filename) {
                 id: sessionId,
                 name: sessionRefName,
                 refName: sessionRefName,
-                order: state.sessions.length,
+                order: state.sessions.length > 0 ? Math.min(...state.sessions.map(s => s.order || 0)) - 1 : 0, // Truly put at the top
                 categoryId: state.categories[0] ? state.categories[0].id : 'default',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             };
@@ -668,16 +710,17 @@ function updateUI() {
     });
 
     state.filteredPosts.sort((a, b) => {
-        // Priority 1: File Index (if available)
-        if (a.index !== undefined && b.index !== undefined) {
-            return state.sortOrder === 'desc' ? b.index - a.index : a.index - b.index;
-        }
-
-        // Priority 2: Date & TimeFallback
+        // Priority 1: Date & Time (Overall Chronology)
         const dateA = new Date(a.date + (a.time ? 'T' + a.time : ''));
         const dateB = new Date(b.date + (b.time ? 'T' + b.time : ''));
 
-        return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+        if (dateA - dateB !== 0) {
+            return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+        }
+
+        // Priority 2: Original MD Order (Tie-breaker for same date/time)
+        // User requested: "Within same date, follow MD order"
+        return (a.index || 0) - (b.index || 0);
     });
 
     state.visiblePosts = 20; // Reset pagination
