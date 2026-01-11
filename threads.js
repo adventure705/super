@@ -13,8 +13,17 @@ if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const db = firebase.firestore();
+
+// Enable Persistence
+try {
+    db.enablePersistence({ synchronizeTabs: true });
+} catch (err) {
+    console.warn("Persistence failed:", err.code);
+}
+
 const COLLECTION_NAME = 'threads_sessions';
 const CATEGORY_COLLECTION = 'threads_categories';
+const DEFAULT_CAT_ID = 'uncategorized_default';
 
 const state = {
     allPosts: [],
@@ -200,9 +209,11 @@ async function loadCategoriesFromFirestore() {
             id: doc.id,
             ...doc.data()
         }));
-        if (state.categories.length === 0) {
-            // Create default category
-            await addNewCategoryUI('미분류');
+
+        const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
+        if (state.categories.length === 0 || !hasDefault) {
+            // Create default category with FIXED ID to prevent session mismatch
+            await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
         }
     } catch (e) {
         console.error("Categories Load Error:", e);
@@ -217,14 +228,18 @@ async function addNewCategory() {
     }
 }
 
-async function addNewCategoryUI(name) {
-    const newId = db.collection(CATEGORY_COLLECTION).doc().id;
+async function addNewCategoryUI(name, fixedId = null) {
+    const id = fixedId || db.collection(CATEGORY_COLLECTION).doc().id;
     const category = {
         name: name,
         order: state.categories.length
     };
-    await db.collection(CATEGORY_COLLECTION).doc(newId).set(category);
-    state.categories.push({ id: newId, ...category });
+    await db.collection(CATEGORY_COLLECTION).doc(id).set(category, { merge: true });
+
+    // Check if already in state to avoid dupes
+    if (!state.categories.find(c => c.id === id)) {
+        state.categories.push({ id, ...category });
+    }
 }
 
 window.renameCategory = async (id) => {
@@ -456,7 +471,7 @@ async function parseAndSyncMarkdown(md, filename) {
                 name: sessionRefName,
                 refName: sessionRefName,
                 order: state.sessions.length > 0 ? Math.min(...state.sessions.map(s => s.order || 0)) - 1 : 0, // Truly put at the top
-                categoryId: state.categories[0] ? state.categories[0].id : 'default',
+                categoryId: state.categories.length > 0 ? state.categories[0].id : DEFAULT_CAT_ID,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
