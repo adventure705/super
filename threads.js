@@ -181,9 +181,18 @@ async function switchSession(id) {
 
     try {
         const snapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
-        let subPosts = snapshot.docs.map(doc => doc.data());
+        const subPosts = snapshot.docs.map(doc => {
+            const data = doc.data();
+            // Pre-calculate timestamp for lightning-fast sorting
+            const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
+            return { ...data, _ts: ts };
+        });
 
-        let legacyPosts = session.posts || [];
+        let legacyPosts = (session.posts || []).map(p => {
+            const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
+            return { ...p, _ts: ts };
+        });
+
         const allMap = new Map();
         legacyPosts.forEach(p => allMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
         subPosts.forEach(p => allMap.set(p.id, p));
@@ -384,9 +393,8 @@ function updateUI() {
     });
 
     state.filteredPosts.sort((a, b) => {
-        const dateA = new Date(a.date + (a.time ? 'T' + a.time : ''));
-        const dateB = new Date(b.date + (b.time ? 'T' + b.time : ''));
-        if (dateA - dateB !== 0) return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+        const diff = state.sortOrder === 'desc' ? b._ts - a._ts : a._ts - b._ts;
+        if (diff !== 0) return diff;
         return (a.index || 0) - (b.index || 0);
     });
 
