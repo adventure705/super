@@ -69,35 +69,33 @@ const els = {
     contentView: document.querySelector('.content-view'),
 };
 
+let postsUnsubscribe = null;
+
 // --- Initialization ---
 async function init() {
     // Auth for persistent access
-    try {
-        const userCredential = await firebase.auth().signInAnonymously();
-        console.log("Firebase Authenticated - UserID:", userCredential.user.uid);
+    firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+            console.log("Firebase Authenticated - UserID:", user.uid);
+            console.info(`Connected to Project: ${firebaseConfig.projectId}`);
+            showToast("데이터 동기화 활성화됨", 2000);
+            updateSyncStatus(true);
 
-        // Show subtle debug info if needed
-        console.info(`Connected to Project: ${firebaseConfig.projectId}`);
-
-        showToast("데이터 동기화 활성화됨", 2000);
-        updateSyncStatus(true);
-    } catch (e) {
-        console.error("Firebase Auth Error:", e);
-        showToast("인증 실패: 데이터 연동이 제한될 수 있습니다.");
-        updateSyncStatus(false);
-    }
-
-    // Monitor online/offline status
-    db.doc('.info/connected').onSnapshot((snapshot) => {
-        const isConnected = snapshot.data() ? snapshot.data().connected : true; // Fallback for Firestore info path
-        // Note: Firestore doesn't have .info/connected like RTDB, 
-        // using a manual check for snapshot sources instead.
-    });
-
-    // Better way to monitor Firestore connectivity:
-    db.collection(COLLECTION_NAME).limit(1).onSnapshot({ includeMetadataChanges: true }, (snapshot) => {
-        const isFromCache = snapshot.metadata.fromCache;
-        updateSyncStatus(!isFromCache);
+            // Fetch data once auth is confirmed
+            await Promise.all([
+                loadCategoriesFromFirestore(),
+                loadSessionsFromFirestore()
+            ]);
+        } else {
+            console.log("No user authenticated. Attempting anonymous sign-in...");
+            try {
+                await firebase.auth().signInAnonymously();
+            } catch (e) {
+                console.error("Firebase Auth Error:", e);
+                showToast("인증 실패!");
+                updateSyncStatus(false);
+            }
+        }
     });
 
     els.uploadBtn.addEventListener('click', () => els.fileInput.click());
@@ -107,6 +105,11 @@ async function init() {
     els.endDateFilter.addEventListener('change', updateUI);
     els.resetFilters.addEventListener('click', resetFilters);
     els.sortToggle.addEventListener('click', toggleSort);
+
+    // Connectivity monitoring
+    db.collection(COLLECTION_NAME).limit(1).onSnapshot({ includeMetadataChanges: true }, (snapshot) => {
+        updateSyncStatus(!snapshot.metadata.fromCache);
+    });
 
     // Mobile Menu
     els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
@@ -123,14 +126,6 @@ async function init() {
             closeModal();
         }
     });
-
-    // Initial Load from Firestore
-    await Promise.all([
-        loadCategoriesFromFirestore(),
-        loadSessionsFromFirestore()
-    ]);
-
-    // Initial session selection is handled within loadSessionsFromFirestore to accommodate real-time sync
 
     // Infinite Scroll Event
     els.contentView.addEventListener('scroll', handleScroll);
@@ -666,55 +661,74 @@ async function parseAndSyncMarkdown(md, filename) {
     }
 }
 
+window.refreshSidebar = async () => {
+    showToast("데이터 동기화 업데이트 중...", 1000);
+    await Promise.all([
+        loadCategoriesFromFirestore(),
+        loadSessionsFromFirestore()
+    ]);
+};
+
 // --- App Functions ---
 window.switchSession = async (id) => {
+    if (postsUnsubscribe) {
+        postsUnsubscribe();
+        postsUnsubscribe = null;
+    }
+
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    showToast("데이터를 불러오는 중...", 0, 50);
+    showToast("데이터 실시간 동기화 중...", 0, 50);
 
-    // Load from subcollection
-    try {
-        const postsSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
-        let subcollectionPosts = postsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Live listener for posts
+    postsUnsubscribe = db.collection(COLLECTION_NAME).doc(id).collection('posts')
+        .onSnapshot((snapshot) => {
+            let subcollectionPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Restore backward compatibility for old sessions stored in array
-        let legacyPosts = session.posts || [];
+            // Restore backward compatibility for old sessions stored in array
+            let legacyPosts = session.posts || [];
 
-        // Merge legacy and new posts (new posts take precedence if ID matches)
-        const allPostsMap = new Map();
+            // Merge legacy and new posts (new posts take precedence if ID matches)
+            const allPostsMap = new Map();
 
-        // Add legacy posts first
-        legacyPosts.forEach(p => {
-            const key = p.id || `${p.date}_${p.content.substring(0, 30)}`;
-            allPostsMap.set(key, p);
+            // Add legacy posts first
+            legacyPosts.forEach(p => {
+                const key = p.id || `${p.date}_${p.content.substring(0, 30)}`;
+                allPostsMap.set(key, p);
+            });
+
+            // Overwrite/Add subcollection posts
+            subcollectionPosts.forEach(p => {
+                allPostsMap.set(p.id, p);
+            });
+
+            state.allPosts = Array.from(allPostsMap.values());
+
+            // Initial Sort (Default Descending for Latest First) if not already filtered
+            if (state.sortOrder === 'desc') {
+                updateSortUI();
+            }
+
+            renderDateNavigator();
+            updateUI();
+
+            // Only show loading toast for the initial fetch
+            if (snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
+                // Keep showing if it's just from cache
+            } else {
+                showToast("동기화 완료", 1000);
+            }
+        }, (e) => {
+            console.error("Posts Sync Error:", e);
+            showToast("실시간 동기화 실패. 권한을 확인하세요.");
         });
 
-        // Overwrite/Add subcollection posts
-        subcollectionPosts.forEach(p => {
-            allPostsMap.set(p.id, p);
-        });
+    // Mobile UI handle
+    if (window.innerWidth <= 1024) toggleSidebar(false);
 
-        state.allPosts = Array.from(allPostsMap.values());
-
-        // Initial Sort (Default Descending for Latest First)
-        state.sortOrder = 'desc';
-        updateSortUI();
-
-        // Mobile UI handle
-        if (window.innerWidth <= 1024) toggleSidebar(false);
-
-    } catch (e) {
-        console.error("Load Posts Error:", e);
-        showToast("포스트 로딩 실패");
-        state.allPosts = session.posts || []; // Fallback
-    }
-
-    renderDateNavigator();
-    updateUI();
     renderSidebarContent();
-    showToast("로딩 완료!", 1000);
 };
 
 window.renameSession = async (id) => {
