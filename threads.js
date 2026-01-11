@@ -66,26 +66,23 @@ async function init() {
         }
         db = firebase.firestore();
 
-        // Enable Persistence for shared state between tabs
-        try {
-            await db.enablePersistence({ synchronizeTabs: true });
-        } catch (err) {
-            console.warn("Persistence failed:", err.code);
-        }
+        // Removed enablePersistence to avoid issues in Incognito/Secret windows 
+        // and ensure the most fresh data is always fetched from the server.
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
-                console.log("Authenticated:", user.uid);
+                console.log("Authenticated User ID:", user.uid);
                 updateSyncStatus(true);
                 await refreshData();
             } else {
+                console.log("Not authenticated. Signing in anonymously...");
                 await firebase.auth().signInAnonymously();
             }
         });
 
     } catch (e) {
         console.error("Init Error:", e);
-        showToast("초기화 실패");
+        showToast("초기화 실패: " + e.message);
     }
 }
 
@@ -123,27 +120,46 @@ function setupEventListeners() {
 // --- Data Fetching ---
 async function loadCategories() {
     try {
-        const snapshot = await db.collection(CATEGORY_COLLECTION).orderBy('order', 'asc').get();
+        // Fetch all categories without server-side orderBy to ensure visibility
+        const snapshot = await db.collection(CATEGORY_COLLECTION).get();
         state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort locally in JS
+        state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
         if (state.categories.length === 0) {
             await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-            const retry = await db.collection(CATEGORY_COLLECTION).orderBy('order', 'asc').get();
+            // After adding, refresh local state
+            const retry = await db.collection(CATEGORY_COLLECTION).get();
             state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
         }
         renderSidebarContent();
     } catch (e) {
         console.error("Categories fetch error:", e);
+        showToast("카테고리 로드 실패");
     }
 }
 
 async function loadSessions() {
     try {
-        const snapshot = await db.collection(COLLECTION_NAME).orderBy('updatedAt', 'desc').get();
+        // Fetch all sessions to avoid missing field issues with server-side orderBy
+        const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort locally: respect manual 'order' if exists, otherwise use 'updatedAt'
+        state.sessions.sort((a, b) => {
+            if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+            const dateA = a.updatedAt?.seconds || 0;
+            const dateB = b.updatedAt?.seconds || 0;
+            return dateB - dateA;
+        });
+
         renderSidebarContent();
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
     } catch (e) {
         console.error("Sessions fetch error:", e);
+        showToast("세션 로드 실패");
     }
 }
 
