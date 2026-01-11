@@ -66,8 +66,17 @@ async function init() {
         }
         db = firebase.firestore();
 
-        // Removed enablePersistence to avoid issues in Incognito/Secret windows 
-        // and ensure the most fresh data is always fetched from the server.
+        // Restore Persistence for reliability and cross-tab sync
+        try {
+            await db.enablePersistence({ synchronizeTabs: true });
+            console.log("Firestore Persistence Enabled");
+        } catch (err) {
+            if (err.code === 'failed-precondition') {
+                console.warn("Persistence failed: Multiple tabs open.");
+            } else if (err.code === 'unimplemented') {
+                console.warn("Persistence failed: Browser not supported (e.g. Incognito).");
+            }
+        }
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
@@ -120,30 +129,29 @@ function setupEventListeners() {
 // --- Data Fetching ---
 async function loadCategories() {
     try {
-        // Fetch all categories without server-side orderBy to ensure visibility
+        console.log("Loading categories from Firestore...");
         const snapshot = await db.collection(CATEGORY_COLLECTION).get();
-        state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Sort locally in JS
-        state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
-
-        if (state.categories.length === 0) {
+        if (docs.length > 0) {
+            state.categories = docs.sort((a, b) => (a.order || 0) - (b.order || 0));
+            console.log(`Successfully loaded ${state.categories.length} categories.`);
+        } else {
+            console.warn("No categories found in cloud. Creating default fallback...");
             await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-            // After adding, refresh local state
             const retry = await db.collection(CATEGORY_COLLECTION).get();
-            state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
+            state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
         }
         renderSidebarContent();
     } catch (e) {
         console.error("Categories fetch error:", e);
-        showToast("카테고리 로드 실패");
+        showToast("데이터 연동 중 오류가 발생했습니다.");
     }
 }
 
 async function loadSessions() {
     try {
-        // Fetch all sessions to avoid missing field issues with server-side orderBy
+        console.log("Loading sessions from Firestore...");
         const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -155,11 +163,12 @@ async function loadSessions() {
             return dateB - dateA;
         });
 
+        console.log(`Successfully loaded ${state.sessions.length} sessions.`);
         renderSidebarContent();
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
     } catch (e) {
         console.error("Sessions fetch error:", e);
-        showToast("세션 로드 실패");
+        showToast("데이터를 불러오는 중 오류가 발생했습니다.");
     }
 }
 
