@@ -186,13 +186,14 @@ async function switchSession(id) {
         return;
     }
 
-    showToast("초고속 병렬 분석 중...", 1000);
+    showToast("초고속 실시간 동기화 중...", 1000);
+    state.allPosts = []; // Clear for instant visual feedback
+    updateUI();
 
     try {
-        console.log(`🚀 Multi-Channel Parallel Download Initiation: ${session.name}`);
+        console.log(`🚀 Racing Multi-Channel Stream Initiation: ${session.name}`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // Channel Definitions (Parallel Years)
         const channels = [
             { name: '2026', q: colRef.where('date', '>=', '2026-01-01').where('date', '<=', '2026-12-31') },
             { name: '2025', q: colRef.where('date', '>=', '2025-01-01').where('date', '<=', '2025-12-31') },
@@ -203,47 +204,56 @@ async function switchSession(id) {
         let finalMap = new Map();
 
         // Merge with session document data if blooming
-        (session.posts || []).forEach(p => {
-            const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
-            finalMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, { ...p, _ts: ts });
-        });
-
-        // 🚀 Parallel Exec: Fetch ALL channels at once
-        const fetchStartTime = Date.now();
-        const snapshots = await Promise.all(channels.map(c => c.q.get()));
-
-        snapshots.forEach((snap, idx) => {
-            console.log(`Channel [${channels[idx].name}] received: ${snap.size} posts`);
-            snap.docs.forEach(doc => {
-                const data = doc.data();
-                const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
-                finalMap.set(doc.id, { ...data, _ts: ts });
-            });
-        });
-
-        const combinedPosts = Array.from(finalMap.values());
-        console.log(`Total Parallel Load: ${Date.now() - fetchStartTime}ms for ${combinedPosts.length} posts.`);
-
-        state.postCache.set(id, combinedPosts);
-        state.allPosts = combinedPosts;
-        updateUI();
-
-        // Diet Maintenance: Clean up doc bloat async
         if (session.posts && session.posts.length > 0) {
-            console.log("Cleaning up legacy document bloat...");
-            db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
-            session.posts = [];
+            session.posts.forEach(p => {
+                const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
+                finalMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, { ...p, _ts: ts });
+            });
+            state.allPosts = Array.from(finalMap.values());
+            updateUI();
         }
+
+        let completedChannels = 0;
+        const fetchStartTime = Date.now();
+
+        // 🚀 Kick off ALL channels in parallel, but handle them INDIVIDUALLY
+        channels.forEach(async (chan) => {
+            try {
+                const snap = await chan.q.get();
+                console.log(`📡 Channel [${chan.name}] arrived: ${snap.size} posts`);
+
+                snap.docs.forEach(doc => {
+                    const data = doc.data();
+                    const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
+                    finalMap.set(doc.id, { ...data, _ts: ts });
+                });
+
+                // Update UI immediately as each chunk arrives for maximum perceived speed
+                if (state.activeSessionId === id) {
+                    state.allPosts = Array.from(finalMap.values());
+                    updateUI();
+                }
+
+                completedChannels++;
+                if (completedChannels === channels.length) {
+                    console.log(`✅ All streams synced. Total Time: ${Date.now() - fetchStartTime}ms`);
+                    state.postCache.set(id, state.allPosts);
+
+                    // Diet Maintenance: Clean up doc bloat
+                    if (session.posts && session.posts.length > 0) {
+                        db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
+                        session.posts = [];
+                    }
+                }
+            } catch (err) {
+                console.error(`Channel [${chan.name}] error:`, err);
+                completedChannels++;
+            }
+        });
 
     } catch (e) {
         console.error("Parallel Fetch Error:", e);
-        showToast("데이터 병렬 로딩 중 문제가 발생했습니다.");
-        // Simple fallback
-        try {
-            const snap = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
-            state.allPosts = snap.docs.map(doc => ({ ...doc.data(), _ts: new Date(doc.data().date).getTime() }));
-            updateUI();
-        } catch (ee) { }
+        showToast("데이터 로딩 중 문제가 발생했습니다.");
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -481,8 +491,15 @@ function renderPosts(append = false) {
     }
 }
 
+let lastDateMapHash = "";
 function renderDateNavigator() {
     if (!els.dateNavigator) return;
+
+    // Performance Cache: Only re-render if post count or session changed
+    const currentHash = `${state.activeSessionId}_${state.allPosts.length}_${els.startDateFilter.value}`;
+    if (lastDateMapHash === currentHash) return;
+    lastDateMapHash = currentHash;
+
     const dateMap = {};
     state.allPosts.forEach(p => {
         const [y, m] = p.date.split('-');
@@ -498,7 +515,7 @@ function renderDateNavigator() {
                 <span class="year-label">${y}</span>
                 <div class="month-list">
                     ${months.map(m => `
-                        <button class="month-btn ${els.startDateFilter.value === `${y}-${m}-01` ? 'active' : ''}" 
+                        <button class="month-btn ${els.startDateFilter.value.startsWith(`${y}-${m}`) ? 'active' : ''}" 
                                 onclick="filterByMonth('${y}', '${m}')">${parseInt(m)}월</button>
                     `).join('')}
                 </div>
