@@ -979,6 +979,136 @@ function updateHeaderProfile(session) { // Changed to accept session object
     }
 }
 
+window.exportData = () => {
+    try {
+        const backup = {
+            timestamp: new Date().toISOString(),
+            version: "1.0",
+            activeSessionId: state.activeSessionId,
+            categories: state.categories,
+            sessions: state.sessions,
+            // Include currently active posts
+            activeSessionPosts: state.allPosts,
+            // Dump memory cache
+            cachedSessions: {}
+        };
+
+        // Serialize Map to Object for JSON
+        state.postCache.forEach((posts, id) => {
+            backup.cachedSessions[id] = posts;
+        });
+
+        const dataStr = JSON.stringify(backup, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `threads_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast("데이터 백업 파일이 다운로드되었습니다.");
+    } catch (e) {
+        console.error("Backup failed:", e);
+        showToast("백업 생성 중 오류가 발생했습니다.");
+    }
+};
+
+window.importData = async (input) => {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (!confirm("⚠️ 경고: 현재 데이터가 백업 파일의 내용으로 '모두' 덮어쓰여집니다.\n계속하시겠습니까?")) {
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data.version || !data.sessions) throw new Error("유효하지 않은 백업 파일입니다.");
+
+            updateProgressBar(10, "데이터 복원 시작...");
+
+            // 1. Clear current state locally
+            state.categories = [];
+            state.sessions = [];
+            state.allPosts = [];
+            state.postCache.clear();
+
+            // 2. Restore Collections (Blind Overwrite - Careful!)
+            // Ideally we should delete current collections, but for now we merge/overwrite
+
+            updateProgressBar(30, "카테고리 복원 중...");
+            const catBatch = db.batch();
+            data.categories.forEach(c => {
+                catBatch.set(db.collection(CATEGORY_COLLECTION).doc(c.id), c);
+            });
+            await catBatch.commit();
+            state.categories = data.categories;
+
+            updateProgressBar(50, "세션 복원 중...");
+            // Sessions & Posts restoration is complex due to subcollections.
+            // For this 'Light' version, we restore Metadata and rely on Lazy Loading or Cache if possible.
+            // We cannot easily delete ALL existing posts in Firestore without recursive delete.
+            // So we focus on ensuring 'sessions' list is correct.
+
+            const sessBatch = db.batch();
+            data.sessions.forEach(s => {
+                const sRef = db.collection(COLLECTION_NAME).doc(s.id);
+                // We keep existing posts in subcollection, just update metadata
+                sessBatch.set(sRef, s, { merge: true });
+            });
+            await sessBatch.commit();
+            state.sessions = data.sessions;
+
+            // 3. Restore Memory Cache (Critical for Hot Start)
+            if (data.cachedSessions) {
+                Object.keys(data.cachedSessions).forEach(sid => {
+                    const posts = data.cachedSessions[sid];
+                    // Re-instantiate Dates
+                    const rev = posts.map(p => ({
+                        ...p,
+                        // Ensure timestamp exists
+                        _ts: p._ts || new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0
+                    }));
+                    state.postCache.set(sid, rev);
+                });
+            }
+
+            // 4. Update LocalStorage
+            localStorage.setItem('threads_categories', JSON.stringify(state.categories));
+            localStorage.setItem('threads_sessions', JSON.stringify(state.sessions));
+            updateProgressBar(90, "마무리 중...");
+
+            // 5. Restore View
+            if (data.activeSessionId && state.sessions.find(s => s.id === data.activeSessionId)) {
+                await switchSession(data.activeSessionId);
+            } else {
+                renderSidebarContent();
+                autoSelectFirstSession();
+            }
+
+            updateProgressBar(100, "복원 완료!");
+            showToast("데이터가 성공적으로 복원되었습니다.");
+            setTimeout(hideProgressBar, 2000);
+
+        } catch (err) {
+            console.error("Import Error:", err);
+            showToast("복원 실패: " + err.message);
+            updateProgressBar(0, "오류 발생");
+            hideProgressBar();
+        }
+    };
+    reader.onerror = () => showToast("파일 읽기 실패");
+    reader.readAsText(file);
+    input.value = '';
+};
+
 window.copyHeaderId = () => {
     const txt = els.displayUsername.textContent.replace('@', '');
     if (txt) { navigator.clipboard.writeText(txt); showToast('아이디 복사됨'); }
