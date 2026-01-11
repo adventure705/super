@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>퀀트 수량 계산기</title>
+    <!-- Tailwind CSS CDN 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter 폰트 설정 및 기본 스타일 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        /* 입력 필드 기본 스타일 조정 */
+        /* type="text"로 변경했으므로 number input 관련 CSS 제거 */
+        input[type="text"] {
+            /* 모든 숫자 입력 필드에 body의 font-family(Inter) 적용 */
+            font-family: 'Inter', sans-serif; 
+        }
+        /* 가로 스크롤바 스타일 */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1; /* gray-300 */
+            border-radius: 4px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<!-- 모바일: p-2 (타이트), PC: lg:p-4 (적당) -->
+<body class="p-2 lg:p-4 flex flex-col items-center justify-start min-h-screen"> 
+
+    <!-- 모바일: space-y-2 (타이트), PC: lg:space-y-8 (적당) -->
+    <div class="w-full max-w-7xl space-y-2 lg:space-y-8">
+        <!-- 타이틀 크기 조정 (모바일: 3xl, PC: 4xl) -->
+        <h1 class="text-3xl lg:text-4xl font-extrabold text-gray-800 text-center">퀀트 수량 계산기</h1>
+        
+        <!-- === [ START: Unified Total Amount Input ] === -->
+        <div class="w-full p-3 bg-white rounded-xl shadow-2xl border-4 border-indigo-400">
+            <label for="totalAmount" class="block text-base font-bold text-gray-800 mb-1">
+                💰 총 금액 (USD)
+            </label>
+            <!-- type="text" 및 inputmode="decimal"로 변경 -->
+            <input type="text" inputmode="decimal" id="totalAmount" placeholder="총 금액(숫자만)을 입력하세요" min="0"
+                   class="w-full p-3 border border-gray-400 rounded-lg text-xl text-right focus:ring-blue-500 focus:border-blue-500 transition duration-150"
+                   oninput="calculateAll()">
+        </div>
+        <!-- === [ END: Unified Total Amount Input ] === -->
+
+        <!-- 세 개의 계산기 인스턴스를 담는 컨테이너: space-x-2 (간격 최소화)
+             PC 환경에서는 4열 그리드로 변경 (lg:grid-cols-4) -->
+        <div class="flex space-x-2 pb-4 overflow-x-auto lg:grid lg:grid-cols-4 lg:gap-4 lg:space-x-0 lg:overflow-visible">
+
+            <!-- ============================================== -->
+            <!-- 계산기 인스턴스 1: min-w-[300px]로 너비 조정 -->
+            <!-- ============================================== -->
+            <div id="calculator-1" class="flex-none min-w-[300px] lg:min-w-0 bg-white shadow-xl rounded-xl p-4 space-y-4 border-4 border-indigo-400">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-3">계산기 1️⃣</h2> 
+                
+                <!-- 입력 필드 그룹 및 중간 결과 포함 -->
+                <div class="space-y-3">
+                    <!-- 백분율 입력 -->
+                    <div>
+                        <label for="percentage1" class="block text-sm font-medium text-gray-700 mb-1">비율 (%)</label>
+                        <div class="relative">
+                            <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                            <input type="text" inputmode="decimal" id="percentage1" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 pr-10 text-right"
+                                   oninput="calculateQuantity(1)">
+                            <span class="absolute right-0 top-0 h-full flex items-center pr-3 text-gray-500 text-sm">%</span>
+                        </div>
+                    </div>
+
+                    <!-- 비율 금액 (중간 결과) - 색상 연하게 변경 -->
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-inner">
+                        <span class="text-base font-semibold text-gray-700">비율 금액</span>
+                        <span id="adjustedAmountDisplay1" class="text-xl font-extrabold text-blue-700">0.00</span>
+                    </div>
+
+                    <!-- 단위 가격 입력 -->
+                    <div>
+                        <label for="unitPrice1" class="block text-sm font-medium text-gray-700 mb-1">단위 가격 (매수/매도가)</label>
+                        <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                        <input type="text" inputmode="decimal" id="unitPrice1" min="0.01" step="any"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-right"
+                               oninput="calculateQuantity(1)">
+                    </div>
+                </div>
+
+                <!-- 최종 수량 결과 표시 섹션 - 배경색 진하게 변경 + 모바일 2열 -->
+                <div class="bg-indigo-700 p-4 rounded-lg space-y-3 shadow-2xl">
+                    <h3 class="text-lg font-semibold text-white border-b border-indigo-500 pb-2">최종 수량 결과</h3>
+
+                    <!-- New Responsive Result Grid (2 Columns on Mobile) -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Decimal Column -->
+                        <div class="flex flex-col items-center bg-indigo-500 p-2 rounded-lg shadow-sm">
+                            <span class="text-xs font-semibold text-white mb-1 opacity-80">소수점 2자리</span>
+                            <span id="quantityDecimal1" class="text-xl font-extrabold text-white truncate">0.00</span>
+                        </div>
+
+                        <!-- Integer Column: 크기 통일 및 색상 강조 -->
+                        <div class="flex flex-col items-center bg-indigo-900 p-2 rounded-lg shadow-xl">
+                            <span class="text-xs font-semibold text-indigo-200 mb-1 opacity-80">반올림 정수</span>
+                            <span id="quantityInteger1" class="text-xl font-extrabold text-red-400 truncate">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 에러 메시지: text-xs와 h-6 적용으로 줄바꿈 및 넘침 방지 -->
+                <p id="errorMessage1" class="text-red-600 text-xs text-center font-medium h-6"></p>
+            </div>
+
+
+            <!-- ============================================== -->
+            <!-- 계산기 인스턴스 2: min-w-[300px]로 너비 조정 -->
+            <!-- ============================================== -->
+            <div id="calculator-2" class="flex-none min-w-[300px] lg:min-w-0 bg-white shadow-xl rounded-xl p-4 space-y-4 border-4 border-indigo-400">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-3">계산기 2️⃣</h2>
+                
+                <!-- 입력 필드 그룹 및 중간 결과 포함 -->
+                <div class="space-y-3">
+                    <!-- 백분율 입력 -->
+                    <div>
+                        <label for="percentage2" class="block text-sm font-medium text-gray-700 mb-1">비율 (%)</label>
+                        <div class="relative">
+                            <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                            <input type="text" inputmode="decimal" id="percentage2" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 pr-10 text-right"
+                                   oninput="calculateQuantity(2)">
+                            <span class="absolute right-0 top-0 h-full flex items-center pr-3 text-gray-500 text-sm">%</span>
+                        </div>
+                    </div>
+
+                    <!-- 비율 금액 (중간 결과) - 색상 연하게 변경 -->
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-inner">
+                        <span class="text-base font-semibold text-gray-700">비율 금액</span>
+                        <span id="adjustedAmountDisplay2" class="text-xl font-extrabold text-blue-700">0.00</span>
+                    </div>
+
+                    <!-- 단위 가격 입력 -->
+                    <div>
+                        <label for="unitPrice2" class="block text-sm font-medium text-gray-700 mb-1">단위 가격 (매수/매도가)</label>
+                        <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                        <input type="text" inputmode="decimal" id="unitPrice2" min="0.01" step="any"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-right"
+                               oninput="calculateQuantity(2)">
+                    </div>
+                </div>
+
+                <!-- 최종 수량 결과 표시 섹션 - 배경색 진하게 변경 + 모바일 2열 -->
+                <div class="bg-indigo-700 p-4 rounded-lg space-y-3 shadow-2xl">
+                    <h3 class="text-lg font-semibold text-white border-b border-indigo-500 pb-2">최종 수량 결과</h3>
+
+                    <!-- New Responsive Result Grid (2 Columns on Mobile) -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Decimal Column -->
+                        <div class="flex flex-col items-center bg-indigo-500 p-2 rounded-lg shadow-sm">
+                            <span class="text-xs font-semibold text-white mb-1 opacity-80">소수점 2자리</span>
+                            <span id="quantityDecimal2" class="text-xl font-extrabold text-white truncate">0.00</span>
+                        </div>
+
+                        <!-- Integer Column: 크기 통일 및 색상 강조 -->
+                        <div class="flex flex-col items-center bg-indigo-900 p-2 rounded-lg shadow-xl">
+                            <span class="text-xs font-semibold text-indigo-200 mb-1 opacity-80">반올림 정수</span>
+                            <span id="quantityInteger2" class="text-xl font-extrabold text-red-400 truncate">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 에러 메시지: text-xs와 h-6 적용으로 줄바꿈 및 넘침 방지 -->
+                <p id="errorMessage2" class="text-red-600 text-xs text-center font-medium h-6"></p>
+            </div>
+
+
+            <!-- ============================================== -->
+            <!-- 계산기 인스턴스 3: min-w-[300px]로 너비 조정 -->
+            <!-- ============================================== -->
+            <div id="calculator-3" class="flex-none min-w-[300px] lg:min-w-0 bg-white shadow-xl rounded-xl p-4 space-y-4 border-4 border-indigo-400">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-3">계산기 3️⃣</h2>
+                
+                <!-- 입력 필드 그룹 및 중간 결과 포함 -->
+                <div class="space-y-3">
+                    <!-- 백분율 입력 -->
+                    <div>
+                        <label for="percentage3" class="block text-sm font-medium text-gray-700 mb-1">비율 (%)</label>
+                        <div class="relative">
+                            <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                            <input type="text" inputmode="decimal" id="percentage3" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 pr-10 text-right"
+                                   oninput="calculateQuantity(3)">
+                            <span class="absolute right-0 top-0 h-full flex items-center pr-3 text-gray-500 text-sm">%</span>
+                        </div>
+                    </div>
+
+                    <!-- 비율 금액 (중간 결과) - 색상 연하게 변경 -->
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-inner">
+                        <span class="text-base font-semibold text-gray-700">비율 금액</span>
+                        <span id="adjustedAmountDisplay3" class="text-xl font-extrabold text-blue-700">0.00</span>
+                    </div>
+
+                    <!-- 단위 가격 입력 -->
+                    <div>
+                        <label for="unitPrice3" class="block text-sm font-medium text-gray-700 mb-1">단위 가격 (매수/매도가)</label>
+                        <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                        <input type="text" inputmode="decimal" id="unitPrice3" min="0.01" step="any"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-right"
+                               oninput="calculateQuantity(3)">
+                    </div>
+                </div>
+
+                <!-- 최종 수량 결과 표시 섹션 - 배경색 진하게 변경 + 모바일 2열 -->
+                <div class="bg-indigo-700 p-4 rounded-lg space-y-3 shadow-2xl">
+                    <h3 class="text-lg font-semibold text-white border-b border-indigo-500 pb-2">최종 수량 결과</h3>
+
+                    <!-- New Responsive Result Grid (2 Columns on Mobile) -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Decimal Column -->
+                        <div class="flex flex-col items-center bg-indigo-500 p-2 rounded-lg shadow-sm">
+                            <span class="text-xs font-semibold text-white mb-1 opacity-80">소수점 2자리</span>
+                            <span id="quantityDecimal3" class="text-xl font-extrabold text-white truncate">0.00</span>
+                        </div>
+
+                        <!-- Integer Column: 크기 통일 및 색상 강조 -->
+                        <div class="flex flex-col items-center bg-indigo-900 p-2 rounded-lg shadow-xl">
+                            <span class="text-xs font-semibold text-indigo-200 mb-1 opacity-80">반올림 정수</span>
+                            <span id="quantityInteger3" class="text-xl font-extrabold text-red-400 truncate">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 에러 메시지: text-xs와 h-6 적용으로 줄바꿈 및 넘침 방지 -->
+                <p id="errorMessage3" class="text-red-600 text-xs text-center font-medium h-6"></p>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- 계산기 인스턴스 4: min-w-[300px]로 너비 조정 -->
+            <!-- ============================================== -->
+            <div id="calculator-4" class="flex-none min-w-[300px] lg:min-w-0 bg-white shadow-xl rounded-xl p-4 space-y-4 border-4 border-indigo-400">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-3">계산기 4️⃣</h2>
+                
+                <!-- 입력 필드 그룹 및 중간 결과 포함 -->
+                <div class="space-y-3">
+                    <!-- 백분율 입력 -->
+                    <div>
+                        <label for="percentage4" class="block text-sm font-medium text-gray-700 mb-1">비율 (%)</label>
+                        <div class="relative">
+                            <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                            <input type="text" inputmode="decimal" id="percentage4" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 pr-10 text-right"
+                                   oninput="calculateQuantity(4)">
+                            <span class="absolute right-0 top-0 h-full flex items-center pr-3 text-gray-500 text-sm">%</span>
+                        </div>
+                    </div>
+
+                    <!-- 비율 금액 (중간 결과) - 색상 연하게 변경 -->
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-inner">
+                        <span class="text-base font-semibold text-gray-700">비율 금액</span>
+                        <span id="adjustedAmountDisplay4" class="text-xl font-extrabold text-blue-700">0.00</span>
+                    </div>
+
+                    <!-- 단위 가격 입력 -->
+                    <div>
+                        <label for="unitPrice4" class="block text-sm font-medium text-gray-700 mb-1">단위 가격 (매수/매도가)</label>
+                        <!-- type="text" 및 inputmode="decimal"로 변경 -->
+                        <input type="text" inputmode="decimal" id="unitPrice4" min="0.01" step="any"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-right"
+                               oninput="calculateQuantity(4)">
+                    </div>
+                </div>
+
+                <!-- 최종 수량 결과 표시 섹션 - 배경색 진하게 변경 + 모바일 2열 -->
+                <div class="bg-indigo-700 p-4 rounded-lg space-y-3 shadow-2xl">
+                    <h3 class="text-lg font-semibold text-white border-b border-indigo-500 pb-2">최종 수량 결과</h3>
+
+                    <!-- New Responsive Result Grid (2 Columns on Mobile) -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Decimal Column -->
+                        <div class="flex flex-col items-center bg-indigo-500 p-2 rounded-lg shadow-sm">
+                            <span class="text-xs font-semibold text-white mb-1 opacity-80">소수점 2자리</span>
+                            <span id="quantityDecimal4" class="text-xl font-extrabold text-white truncate">0.00</span>
+                        </div>
+
+                        <!-- Integer Column: 크기 통일 및 색상 강조 -->
+                        <div class="flex flex-col items-center bg-indigo-900 p-2 rounded-lg shadow-xl">
+                            <span class="text-xs font-semibold text-indigo-200 mb-1 opacity-80">반올림 정수</span>
+                            <span id="quantityInteger4" class="text-xl font-extrabold text-red-400 truncate">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 에러 메시지: text-xs와 h-6 적용으로 줄바꿈 및 넘침 방지 -->
+                <p id="errorMessage4" class="text-red-600 text-xs text-center font-medium h-6"></p>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // Firebase 관련 전역 변수 설정 (사용하지 않지만 환경 요구사항을 위해 포함)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        /**
+         * 세 개의 모든 계산기를 다시 계산합니다.
+         * 4개 인스턴스로 업데이트됨.
+         */
+        function calculateAll() {
+            calculateQuantity(1);
+            calculateQuantity(2);
+            calculateQuantity(3);
+            calculateQuantity(4); // 4번째 계산기 추가
+        }
+
+        /**
+         * 지정된 인덱스에 해당하는 계산기의 입력값을 기반으로 최종 수량을 계산하고 결과를 표시합니다.
+         * 공통 총 금액은 단일 ID 'totalAmount'에서 가져옵니다.
+         * @param {number} index - 계산기 인스턴스의 인덱스 (1, 2, 3, 4)
+         */
+        function calculateQuantity(index) {
+            // 공통 총 금액을 가져옵니다.
+            const totalAmountInput = document.getElementById('totalAmount');
+            
+            // 인덱스에 맞는 개별 입력값을 가져옵니다.
+            const percentageInput = document.getElementById(`percentage${index}`);
+            const unitPriceInput = document.getElementById(`unitPrice${index}`);
+
+            // Raw value check for empty string
+            const rawTotalAmount = totalAmountInput.value;
+            const rawPercentage = percentageInput.value;
+            const rawUnitPrice = unitPriceInput.value;
+
+            // type="text"로 변경되었으므로, 입력값을 그대로 파싱합니다.
+            const totalAmount = parseFloat(rawTotalAmount.replace(/,/g, ''));
+            const percentage = parseFloat(rawPercentage.replace(/,/g, ''));
+            const unitPrice = parseFloat(rawUnitPrice.replace(/,/g, ''));
+
+            // 인덱스에 맞는 결과 표시 요소를 가져옵니다.
+            const quantityDecimalDisplay = document.getElementById(`quantityDecimal${index}`);
+            const quantityIntegerDisplay = document.getElementById(`quantityInteger${index}`);
+            const adjustedAmountDisplay = document.getElementById(`adjustedAmountDisplay${index}`);
+            const errorMessageDisplay = document.getElementById(`errorMessage${index}`);
+
+            errorMessageDisplay.innerHTML = ''; // innerHTML로 변경
+            let percentageValue = 0;
+            let finalQuantity = 0;
+
+            // 입력값 유효성 검사
+            const isAmountValid = rawTotalAmount.trim() !== "" && !isNaN(totalAmount) && totalAmount >= 0;
+            const isPercentageValid = rawPercentage.trim() !== "" && !isNaN(percentage);
+            const isUnitPriceEntered = rawUnitPrice.trim() !== "";
+            const isUnitPriceValid = isUnitPriceEntered && !isNaN(unitPrice) && unitPrice > 0;
+
+            
+            // --- STEP 1: 비율 금액 (중간 결과) 계산 및 표시 ---
+            // 총 금액과 비율만 입력되어도 계산되어야 함
+            if (isAmountValid && isPercentageValid) {
+                percentageValue = totalAmount * (percentage / 100);
+                
+                // 비율 금액 표시
+                adjustedAmountDisplay.textContent = percentageValue.toLocaleString('ko-KR', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                });
+            } else {
+                // 비율 금액 리셋
+                adjustedAmountDisplay.textContent = '0.00';
+            }
+
+
+            // --- STEP 2: 최종 수량 계산 및 표시 ---
+            // 최종 수량은 비율 금액과 단위 가격이 모두 유효할 때만 계산
+            if (isAmountValid && isPercentageValid && isUnitPriceValid) {
+                // 최종 수량 계산 (비율 금액 / 단위 가격)
+                finalQuantity = percentageValue / unitPrice;
+                
+                // 소수점 2자리까지
+                const decimalResult = finalQuantity.toFixed(2);
+                quantityDecimalDisplay.textContent = decimalResult;
+
+                // 반올림한 정수
+                const integerResult = Math.round(finalQuantity);
+                quantityIntegerDisplay.textContent = integerResult.toLocaleString('ko-KR');
+
+            } else {
+                // 최종 수량 리셋
+                quantityDecimalDisplay.textContent = '0.00';
+                quantityIntegerDisplay.textContent = '0';
+                
+                // 에러 메시지/힌트 표시
+                if (isAmountValid && isPercentageValid) {
+                    if (isUnitPriceEntered && unitPrice <= 0) {
+                        errorMessageDisplay.innerHTML = '단위 가격은 0보다 커야 합니다.';
+                    } 
+                    // else if (!isUnitPriceEntered) {
+                    //     // 요청에 따라 단위 가격 입력 안내 메시지 삭제
+                    //     errorMessageDisplay.innerHTML = '최종 수량을 계산하려면<br>단위 가격을 입력하세요.';
+                    // }
+                }
+            }
+        }
+
+        // 페이지 로드 시 초기 계산 실행 (4개 인스턴스 모두)
+        window.onload = function() {
+            // 모든 입력 필드가 비어 있으므로, 모든 결과는 0.00으로 초기화됩니다.
+            calculateAll();
+        };
+    </script>
+</body>
+</html>

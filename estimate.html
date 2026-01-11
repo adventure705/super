@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Revenue Master</title>
+    <style>
+        /* Default is Dark Mode Now */
+        :root {
+            --primary: #ff4d4d;
+            --primary-hover: #ff7676;
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --border: #333333;
+            --text-main: #e0e0e0;
+            --text-sub: #a0a0a0;
+            --input-bg: #2c2c2c;
+            --input-border: #444;
+            --card-gradient-start: #2a1a1a;
+            --card-gradient-end: #1e1e1e;
+            --card-border: #5a2a2a;
+            --highlight-bg: #252525;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --modal-bg: rgba(0, 0, 0, 0.8);
+        }
+
+        [data-theme="light"] {
+            --primary: #ff0000;
+            --primary-hover: #d40000;
+            --bg: #f9f9f9;
+            --surface: #ffffff;
+            --border: #e5e5e5;
+            --text-main: #0f0f0f;
+            --text-sub: #606060;
+            --input-bg: #ffffff;
+            --input-border: #ddd;
+            --card-gradient-start: #fff5f5;
+            --card-gradient-end: #ffffff;
+            --card-border: #ffd1d1;
+            --highlight-bg: #f8f8f8;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --modal-bg: rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--surface);
+            border-radius: 20px;
+            box-shadow: 0 4px 20px var(--shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s;
+            position: relative;
+        }
+
+        /* Header */
+        header {
+            background: var(--surface);
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            background: rgba(255, 0, 0, 0.1);
+            color: var(--primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .theme-toggle,
+        .key-mgr-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover,
+        .key-mgr-btn:hover {
+            background: var(--highlight-bg);
+        }
+
+        .key-mgr-btn {
+            border-color: var(--primary);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Global Settings Bar */
+        .global-settings {
+            background: var(--highlight-bg);
+            padding: 20px 30px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--border);
+            align-items: flex-end;
+        }
+
+        .g-input-group {
+            flex: 1;
+            min-width: 130px;
+        }
+
+        .g-input-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .g-input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: var(--text-main);
+            background: var(--input-bg);
+            box-sizing: border-box;
+        }
+
+        .active-key-display {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .active-key-badge {
+            background: var(--primary);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-sub);
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            white-space: nowrap;
+            font-size: 0.95rem;
+        }
+
+        .tab-btn:hover {
+            background: var(--highlight-bg);
+            color: var(--text-main);
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Content Area */
+        .content {
+            padding: 30px;
+            min-height: 400px;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Input Styles */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-wrapper label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        .input-wrapper input,
+        .input-wrapper select {
+            padding: 12px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: var(--input-bg);
+            color: var(--text-main);
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        button.action-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: 44px;
+            align-self: flex-end;
+            white-space: nowrap;
+        }
+
+        button.action-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        /* Results */
+        .result-card {
+            background: linear-gradient(135deg, var(--card-gradient-start) 0%, var(--card-gradient-end) 100%);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .result-label {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            margin-bottom: 5px;
+        }
+
+        .result-main {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 5px 0;
+            word-break: break-all;
+        }
+
+        .result-sub {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+        }
+
+        /* Split Result Box */
+        .split-result {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .split-box {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .split-title {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--text-sub);
+            margin-bottom: 5px;
+        }
+
+        .split-val {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .split-desc {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            margin-top: 4px;
+        }
+
+        /* Channel Profile */
+        .channel-profile {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--highlight-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .channel-img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #ddd;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .channel-info {
+            overflow: hidden;
+        }
+
+        .channel-info h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .channel-info p {
+            margin: 4px 0 0;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        /* Modal (API Key Manager) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--modal-bg);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            width: 90%;
+            max-width: 550px;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .key-list {
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            flex: 1;
+        }
+
+        .key-item {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .key-item:last-child {
+            border-bottom: none;
+        }
+
+        .key-item.active {
+            background: rgba(255, 77, 77, 0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        /* View Mode */
+        .view-mode {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .key-info {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .key-label {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .key-val {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            font-family: monospace;
+        }
+
+        .key-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Edit Mode */
+        .edit-mode {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .edit-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .edit-input {
+            padding: 8px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text-main);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            flex: 1;
+        }
+
+        .sm-btn {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            font-size: 0.75rem;
+            background: var(--surface);
+            color: var(--text-main);
+            white-space: nowrap;
+        }
+
+        .sm-btn:hover {
+            background: var(--highlight-bg);
+        }
+
+        .del-btn {
+            color: #ff4d4d;
+            border-color: #5a2a2a;
+        }
+
+        .edit-btn {
+            color: #4dabf7;
+            border-color: #1c4f75;
+        }
+
+        .save-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+        }
+
+        .save-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .add-key-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+            flex-shrink: 0;
+        }
+
+        .add-key-inputs {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                border-radius: 12px;
+            }
+
+            header {
+                padding: 15px 20px;
+            }
+
+            .global-settings {
+                padding: 15px 20px;
+                gap: 10px;
+            }
+
+            .g-input-group {
+                min-width: 45%;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .result-main {
+                font-size: 1.8rem;
+            }
+
+            .channel-profile {
+                padding: 12px;
+            }
+
+            .split-result {
+                flex-direction: column;
+            }
+
+            .action-btn {
+                width: 100%;
+                margin-top: 10px;
+            }
+
+            .add-key-form {
+                flex-direction: column;
+            }
+
+            .action-btn.modal-add {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Revenue Master <span class="badge">PRO</span></h1>
+            <div class="header-controls">
+                <button class="key-mgr-btn" onclick="openKeyModal()">🔑 키 관리</button>
+                <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☀️ Light</button>
+            </div>
+        </header>
+
+        <!-- Global Settings -->
+        <div class="global-settings">
+            <div class="g-input-group" style="flex: 100%; min-width: 300px;">
+                <div class="active-key-display">
+                    현재 사용 중인 API 키: <span id="activeKeyLabel" class="active-key-badge">없음</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-sub);">
+                    '키 관리' 버튼을 눌러 API 키를 추가/선택하세요.
+                </div>
+            </div>
+            <div class="g-input-group">
+                <label>쇼츠 RPM ($)</label>
+                <input type="number" id="globalRpmShort" value="0.22" step="0.01"
+                    oninput="saveLocalSettings(); recalcAll()">
+            </div>
+            <div class="g-input-group">
+                <label>롱폼 CPM ($)</label>
+                <input type="number" id="globalCpmLong" value="4.50" step="0.1"
+                    oninput="saveLocalSettings(); recalcAll()">
+            </div>
+            <div class="g-input-group">
+                <label>환율 (₩/1$)</label>
+                <input type="number" id="globalExRate" value="1478" oninput="saveLocalSettings(); recalcAll()">
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('basic')">1. 수익 예측</button>
+            <button class="tab-btn" onclick="switchTab('target')">2. 목표 역산</button>
+            <button class="tab-btn" onclick="switchTab('analyzer')">3. 📡 채널 분석</button>
+        </div>
+
+        <div class="content">
+            <!-- Tab 1: Basic -->
+            <div id="basic" class="tab-content active">
+                <div class="form-grid">
+                    <div class="input-wrapper">
+                        <label>하루 업로드 수 (개)</label>
+                        <input type="number" id="b_uploads" value="1" oninput="calcBasic()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>영상 당 평균 조회수</label>
+                        <input type="number" id="b_views" value="50000" step="1000" oninput="calcBasic()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>기간 (일)</label>
+                        <input type="number" id="b_days" value="30" oninput="calcBasic()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>영상 유형</label>
+                        <select id="b_type" onchange="calcBasic()">
+                            <option value="short">쇼츠 (RPM 적용)</option>
+                            <option value="long">롱폼 (CPM 적용)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="result-card">
+                    <div class="result-label">예상 총 수익</div>
+                    <div class="result-main" id="b_result">0 원</div>
+                    <div class="result-sub" id="b_sub_result">총 조회수: 0회</div>
+                </div>
+                <div style="text-align: center; font-size: 0.8rem; color: var(--text-sub);">
+                    * 롱폼 계산 시 CPM × 55% (유튜브 수익배분) 자동 적용
+                </div>
+            </div>
+
+            <!-- Tab 2: Target -->
+            <div id="target" class="tab-content">
+                <div class="form-grid">
+                    <div class="input-wrapper">
+                        <label>목표 월 수익 (원)</label>
+                        <input type="number" id="t_goal" value="5000000" step="100000" oninput="calcTarget()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>하루 업로드 수 (개)</label>
+                        <input type="number" id="t_uploads" value="1" oninput="calcTarget()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>영상 유형</label>
+                        <select id="t_type" onchange="calcTarget()">
+                            <option value="short">쇼츠 (RPM 적용)</option>
+                            <option value="long">롱폼 (CPM 적용)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="result-card" style="border-color: var(--card-border);">
+                    <div class="result-label" style="color:var(--text-sub)">영상 1개당 필요한 조회수</div>
+                    <div class="result-main" id="t_result" style="color:var(--primary)">0 회</div>
+                    <div class="result-sub" id="t_sub_result">일일 총 조회수 합계: 0회 필요</div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Channel Analyzer -->
+            <div id="analyzer" class="tab-content">
+                <div class="form-grid" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                    <div class="input-wrapper" style="flex:1; min-width: 200px;">
+                        <label>채널 핸들 (@Name) 또는 ID</label>
+                        <input type="text" id="a_handle" placeholder="@슈카월드"
+                            onkeydown="if(event.key === 'Enter') analyzeChannel()">
+                        <div class="desc">@를 포함해서 입력해주세요.</div>
+                    </div>
+                    <button class="action-btn" onclick="analyzeChannel()">분석하기</button>
+                </div>
+
+                <div id="a_loading" style="display:none; text-align:center; padding:20px; color:var(--text-sub);">
+                    데이터를 분석 중입니다...
+                </div>
+
+                <div id="a_result_area" style="display:none;">
+                    <div class="channel-profile">
+                        <img id="a_img" src="" class="channel-img" alt="Channel Logo">
+                        <div class="channel-info">
+                            <h3 id="a_title">채널명</h3>
+                            <p>구독자: <span id="a_subs">-</span>명 / 총 영상: <span id="a_total_vids">-</span>개</p>
+                        </div>
+                    </div>
+
+                    <div class="result-card">
+                        <div class="result-label">월 총 예상 수익 (쇼츠 + 롱폼)</div>
+                        <div class="result-main" id="a_revenue_total">0 원</div>
+                        <div class="result-sub">최근 영상 기준 월간 환산 데이터</div>
+                    </div>
+
+                    <div class="split-result">
+                        <div class="split-box">
+                            <div class="split-title">📱 쇼츠 (RPM $<span id="disp_rpm_short"></span>)</div>
+                            <div class="split-val" id="a_short_rev">0원</div>
+                            <div class="split-desc" id="a_short_desc">월 -개 / 평균 -회</div>
+                        </div>
+                        <div class="split-box">
+                            <div class="split-title">🎬 롱폼 (CPM $<span id="disp_cpm_long"></span>)</div>
+                            <div class="split-val" id="a_long_rev">0원</div>
+                            <div class="split-desc" id="a_long_desc">월 -개 / 평균 -회</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Manager Modal -->
+    <div class="modal-overlay" id="keyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>API 키 관리</h2>
+                <button class="close-btn" onclick="closeKeyModal()">×</button>
+            </div>
+
+            <div class="key-list" id="keyList">
+                <div style="padding:20px; text-align:center; color:var(--text-sub);">불러오는 중...</div>
+            </div>
+
+            <div class="add-key-form">
+                <div class="add-key-inputs">
+                    <input type="text" id="newKeyLabel" placeholder="별칭 (예: 내 유튜브용)">
+                    <input type="text" id="newKeyValue" placeholder="API Key (AIzaSy...)">
+                </div>
+                <button class="action-btn modal-add" onclick="addApiKey()">추가</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Init ---
+        const response = await fetch('./firebase-config.json');
+        const firebaseConfig = await response.json();
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = firebaseConfig.appId || 'default-app-id';
+
+        // *** GLOBAL SHARED ID ***
+        const SHARED_UID = 'masteruserID';
+
+        let currentApiKey = null;
+        let isAuthReady = false;
+
+        // --- Auth & Data Loading ---
+        signInAnonymously(auth).catch((error) => console.error("Auth Error:", error));
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                isAuthReady = true;
+                loadApiKeys();
+            }
+        });
+
+
+
+        // --- Firestore Logic ---
+        function loadApiKeys() {
+            if (!isAuthReady) return;
+
+            const q = query(
+                collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys'),
+                orderBy('createdAt', 'desc')
+            );
+
+            onSnapshot(q, (snapshot) => {
+                const listEl = document.getElementById('keyList');
+                listEl.innerHTML = '';
+
+                let hasActive = false;
+
+                if (snapshot.empty) {
+                    listEl.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-sub);">저장된 키가 없습니다.<br>('키 관리'에서 추가해주세요)</div>`;
+                    updateActiveKeyDisplay(null);
+                    return;
+                }
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const isAct = data.isActive === true;
+                    if (isAct) {
+                        currentApiKey = data.key;
+                        updateActiveKeyDisplay(data.label);
+                        hasActive = true;
+                    }
+
+                    const item = document.createElement('div');
+                    item.className = `key-item ${isAct ? 'active' : ''}`;
+
+                    // Render View Mode & Edit Mode (Hidden)
+                    item.innerHTML = `
+                    <div class="view-mode" id="view-${docSnap.id}">
+                        <div class="key-info">
+                            <div class="key-label">${data.label} ${isAct ? '<span style="color:var(--primary); font-size:0.7em;">(사용중)</span>' : ''}</div>
+                            <div class="key-val">${maskKey(data.key)}</div>
+                        </div>
+                        <div class="key-actions">
+                            ${!isAct ? `<button class="sm-btn" onclick="window.activateKey('${docSnap.id}')">선택</button>` : ''}
+                            <button class="sm-btn edit-btn" onclick="window.toggleEdit('${docSnap.id}')">수정</button>
+                            <button class="sm-btn del-btn" onclick="window.deleteKey('${docSnap.id}')">삭제</button>
+                        </div>
+                    </div>
+                    
+                    <div class="edit-mode" id="edit-${docSnap.id}">
+                        <div class="edit-row">
+                            <input type="text" class="edit-input" id="edit-label-${docSnap.id}" value="${data.label}">
+                            <input type="text" class="edit-input" id="edit-key-${docSnap.id}" value="${data.key}">
+                        </div>
+                        <div class="key-actions" style="justify-content: flex-end;">
+                            <button class="sm-btn save-btn" onclick="window.saveKey('${docSnap.id}')">저장</button>
+                            <button class="sm-btn" onclick="window.toggleEdit('${docSnap.id}')">취소</button>
+                        </div>
+                    </div>
+                `;
+                    listEl.appendChild(item);
+                });
+
+                if (!hasActive) {
+                    currentApiKey = null;
+                    updateActiveKeyDisplay(null);
+                }
+            }, (error) => {
+                console.error("Snapshot error:", error);
+                document.getElementById('keyList').innerHTML = `<div style="padding:10px; color:red;">로딩 실패<br><small>권한이 없거나 네트워크 오류입니다.</small></div>`;
+            });
+        }
+
+        // Expose functions to window
+        window.addApiKey = async () => {
+            if (!isAuthReady) { alert("연결 중입니다. 잠시 후 다시 시도해주세요."); return; }
+
+            const label = document.getElementById('newKeyLabel').value.trim();
+            const key = document.getElementById('newKeyValue').value.trim();
+
+            if (!label || !key) {
+                alert("별칭과 키를 모두 입력해주세요.");
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys'), {
+                    label: label,
+                    key: key,
+                    isActive: false,
+                    createdAt: new Date()
+                });
+                document.getElementById('newKeyLabel').value = '';
+                document.getElementById('newKeyValue').value = '';
+            } catch (e) {
+                alert("저장 실패: " + e.message);
+            }
+        };
+
+        window.deleteKey = async (docId) => {
+            if (!isAuthReady || !confirm("정말 삭제하시겠습니까? (다른 기기에서도 삭제됩니다)")) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docId));
+            } catch (e) {
+                alert("삭제 실패: " + e.message);
+            }
+        };
+
+        window.toggleEdit = (docId) => {
+            const viewEl = document.getElementById(`view-${docId}`);
+            const editEl = document.getElementById(`edit-${docId}`);
+
+            if (viewEl.style.display === 'none') {
+                viewEl.style.display = 'flex';
+                editEl.style.display = 'none';
+            } else {
+                viewEl.style.display = 'none';
+                editEl.style.display = 'flex';
+            }
+        };
+
+        window.saveKey = async (docId) => {
+            if (!isAuthReady) return;
+
+            const newLabel = document.getElementById(`edit-label-${docId}`).value.trim();
+            const newKey = document.getElementById(`edit-key-${docId}`).value.trim();
+
+            if (!newLabel || !newKey) {
+                alert("값은 비워둘 수 없습니다.");
+                return;
+            }
+
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docId), {
+                    label: newLabel,
+                    key: newKey
+                });
+                // Snapshot will handle re-render and close edit mode automatically
+            } catch (e) {
+                alert("수정 실패: " + e.message);
+            }
+        };
+
+        // Helper functions
+        function maskKey(key) {
+            if (key.length < 8) return "********";
+            return key.substring(0, 4) + "..." + key.substring(key.length - 4);
+        }
+
+        function updateActiveKeyDisplay(label) {
+            const el = document.getElementById('activeKeyLabel');
+            if (label) {
+                el.textContent = label;
+                el.style.background = 'var(--primary)';
+            } else {
+                el.textContent = '선택되지 않음';
+                el.style.background = '#666';
+            }
+        }
+
+        // --- Core Logic ---
+        window.rpmShort = 0.22;
+        window.cpmLong = 4.50;
+        window.exchange = 1478;
+
+        window.saveLocalSettings = function () {
+            localStorage.setItem('yt_calc_rpmShort', document.getElementById('globalRpmShort').value);
+            localStorage.setItem('yt_calc_cpmLong', document.getElementById('globalCpmLong').value);
+            localStorage.setItem('yt_calc_exRate', document.getElementById('globalExRate').value);
+        };
+
+        window.loadLocalSettings = function () {
+            const savedRpmS = localStorage.getItem('yt_calc_rpmShort');
+            const savedCpmL = localStorage.getItem('yt_calc_cpmLong');
+            const savedEx = localStorage.getItem('yt_calc_exRate');
+            const savedTheme = localStorage.getItem('yt_calc_theme');
+
+            if (savedRpmS) document.getElementById('globalRpmShort').value = savedRpmS;
+            if (savedCpmL) document.getElementById('globalCpmLong').value = savedCpmL;
+            if (savedEx) document.getElementById('globalExRate').value = savedEx;
+
+            if (savedTheme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('themeBtn').innerText = '🌙 Dark';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('themeBtn').innerText = '☀️ Light';
+            }
+
+        };
+
+        window.toggleTheme = function () {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const btn = document.getElementById('themeBtn');
+
+            if (current === 'dark') {
+                html.setAttribute('data-theme', 'light');
+                btn.innerText = '🌙 Dark';
+                localStorage.setItem('yt_calc_theme', 'light');
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                btn.innerText = '☀️ Light';
+                localStorage.setItem('yt_calc_theme', 'dark');
+            }
+        };
+
+        // --- Modal Logic ---
+        window.openKeyModal = () => { document.getElementById('keyModal').style.display = 'flex'; };
+        window.closeKeyModal = () => { document.getElementById('keyModal').style.display = 'none'; };
+
+        document.getElementById('keyModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('keyModal')) window.closeKeyModal();
+        });
+
+        // --- Analysis Logic ---
+        function parseDuration(duration) {
+            if (!duration) return 0;
+            let hours = 0, minutes = 0, seconds = 0;
+            const h = duration.match(/(\d+)H/);
+            const m = duration.match(/(\d+)M/);
+            const s = duration.match(/(\d+)S/);
+            if (h) hours = parseInt(h[1]);
+            if (m) minutes = parseInt(m[1]);
+            if (s) seconds = parseInt(s[1]);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        function formatNum(num) { return Math.round(num).toLocaleString(); }
+        function formatKRW(num) { return Math.round(num).toLocaleString() + ' 원'; }
+
+        window.analyzeChannel = async function () {
+            if (!currentApiKey) {
+                alert("활성화된 API 키가 없습니다. '키 관리'에서 키를 추가하고 선택해주세요.");
+                window.openKeyModal();
+                return;
+            }
+
+            const inputHandle = document.getElementById('a_handle').value.trim();
+            if (!inputHandle) { alert("채널 핸들을 입력해주세요."); return; }
+
+            document.getElementById('a_loading').style.display = 'block';
+            document.getElementById('a_result_area').style.display = 'none';
+
+            try {
+                // 1. Channel Info
+                let chanUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&forHandle=${inputHandle}&key=${currentApiKey}`;
+                let chanRes = await fetch(chanUrl);
+                let chanData = await chanRes.json();
+
+                if (!chanData.items || chanData.items.length === 0) {
+                    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${inputHandle}&type=channel&maxResults=1&key=${currentApiKey}`;
+                    const searchRes = await fetch(searchUrl);
+                    const searchData = await searchRes.json();
+
+                    if (searchData.items && searchData.items.length > 0) {
+                        const channelId = searchData.items[0].snippet.channelId;
+                        chanUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&id=${channelId}&key=${currentApiKey}`;
+                        chanRes = await fetch(chanUrl);
+                        chanData = await chanRes.json();
+                    } else {
+                        throw new Error("채널을 찾을 수 없습니다.");
+                    }
+                }
+
+                const item = chanData.items[0];
+                const uploadsId = item.contentDetails.relatedPlaylists.uploads;
+
+                document.getElementById('a_img').src = item.snippet.thumbnails.default.url;
+                document.getElementById('a_title').innerText = item.snippet.title;
+                document.getElementById('a_subs').innerText = formatNum(item.statistics.subscriberCount);
+                document.getElementById('a_total_vids').innerText = formatNum(item.statistics.videoCount);
+
+                // 2. Recent Videos
+                const vidUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50&key=${currentApiKey}`;
+                const vidRes = await fetch(vidUrl);
+                const vidData = await vidRes.json();
+
+                if (!vidData.items || vidData.items.length === 0) throw new Error("최근 영상이 없습니다.");
+
+                const videoIds = vidData.items.map(v => v.snippet.resourceId.videoId).join(',');
+                const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${videoIds}&key=${currentApiKey}`;
+                const statsRes = await fetch(statsUrl);
+                const statsData = await statsRes.json();
+
+                let shortStats = { count: 0, views: 0 };
+                let longStats = { count: 0, views: 0 };
+
+                const dates = statsData.items.map(v => new Date(v.snippet.publishedAt));
+                const diffTime = Math.abs(new Date(Math.max(...dates)) - new Date(Math.min(...dates)));
+                let dayDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (dayDiff < 1) dayDiff = 1;
+
+                statsData.items.forEach(v => {
+                    const durationSec = parseDuration(v.contentDetails.duration);
+                    const views = parseInt(v.statistics.viewCount) || 0;
+                    if (durationSec > 0 && durationSec <= 60) {
+                        shortStats.count++;
+                        shortStats.views += views;
+                    } else {
+                        longStats.count++;
+                        longStats.views += views;
+                    }
+                });
+
+                const avgViewShort = shortStats.count > 0 ? shortStats.views / shortStats.count : 0;
+                const avgViewLong = longStats.count > 0 ? longStats.views / longStats.count : 0;
+                const monthlyShorts = (shortStats.count / dayDiff) * 30;
+                const monthlyLongs = (longStats.count / dayDiff) * 30;
+
+                const revShort = (monthlyShorts * avgViewShort / 1000) * window.rpmShort * window.exchange;
+                const revLong = (monthlyLongs * avgViewLong / 1000) * (window.cpmLong * 0.55) * window.exchange;
+
+                document.getElementById('a_revenue_total').innerText = formatKRW(revShort + revLong);
+                document.getElementById('a_short_rev').innerText = formatKRW(revShort);
+                document.getElementById('a_short_desc').innerText = `월 약 ${Math.round(monthlyShorts)}개 / 평 ${formatNum(avgViewShort)}회`;
+                document.getElementById('a_long_rev').innerText = formatKRW(revLong);
+                document.getElementById('a_long_desc').innerText = `월 약 ${Math.round(monthlyLongs)}개 / 평 ${formatNum(avgViewLong)}회`;
+
+                document.getElementById('a_loading').style.display = 'none';
+                document.getElementById('a_result_area').style.display = 'block';
+
+            } catch (e) {
+                alert("분석 오류: " + e.message);
+                document.getElementById('a_loading').style.display = 'none';
+            }
+        };
+
+        window.recalcAll = function () {
+            window.getGlobal();
+            window.calcBasic();
+            window.calcTarget();
+        }
+
+        window.getGlobal = function () {
+            window.rpmShort = parseFloat(document.getElementById('globalRpmShort').value) || 0;
+            window.cpmLong = parseFloat(document.getElementById('globalCpmLong').value) || 0;
+            window.exchange = parseFloat(document.getElementById('globalExRate').value) || 0;
+
+            const sDisp = document.getElementById('disp_rpm_short');
+            const lDisp = document.getElementById('disp_cpm_long');
+            if (sDisp) sDisp.innerText = window.rpmShort;
+            if (lDisp) lDisp.innerText = window.cpmLong;
+        }
+
+        window.calcBasic = function () {
+            window.getGlobal();
+            const uploads = parseFloat(document.getElementById('b_uploads').value) || 0;
+            const views = parseFloat(document.getElementById('b_views').value) || 0;
+            const days = parseFloat(document.getElementById('b_days').value) || 0;
+            const type = document.getElementById('b_type').value;
+
+            let unitRevenue = (type === 'short') ? window.rpmShort : window.cpmLong * 0.55;
+            const totalViews = uploads * days * views;
+            const revenue = (totalViews / 1000) * unitRevenue * window.exchange;
+
+            document.getElementById('b_result').innerText = formatKRW(revenue);
+            document.getElementById('b_sub_result').innerText = `총 영상: ${uploads * days}개 / 누적 조회수: ${formatNum(totalViews)}회`;
+        }
+
+        window.calcTarget = function () {
+            window.getGlobal();
+            const goal = parseFloat(document.getElementById('t_goal').value) || 0;
+            const uploads = parseFloat(document.getElementById('t_uploads').value) || 0;
+            const type = document.getElementById('t_type').value;
+
+            let unitRevenue = (type === 'short') ? window.rpmShort : window.cpmLong * 0.55;
+            if (unitRevenue === 0) unitRevenue = 0.0001;
+
+            const goalUSD = goal / window.exchange;
+            const requiredTotalViews = (goalUSD / unitRevenue) * 1000;
+            const viewsPerVideo = requiredTotalViews / (uploads * 30);
+
+            document.getElementById('t_result').innerText = formatNum(viewsPerVideo) + ' 회';
+            document.getElementById('t_sub_result').innerText = `월 필요 총 조회수: ${formatNum(requiredTotalViews)}회`;
+        }
+
+        window.switchTab = function (tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        window.loadLocalSettings();
+        window.recalcAll();
+
+        window.activateKey = async (targetId) => {
+            if (!isAuthReady) return;
+
+            const batch = writeBatch(db);
+            const colRef = collection(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys');
+            const snapshot = await getDocs(colRef);
+
+            snapshot.forEach((docSnap) => {
+                const isTarget = docSnap.id === targetId;
+                batch.update(doc(db, 'artifacts', appId, 'users', SHARED_UID, 'api_keys', docSnap.id), {
+                    isActive: isTarget
+                });
+            });
+
+            await batch.commit();
+        };
+    </script>
+
+</body>
+
+</html>

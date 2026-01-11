@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 다국어 키워드 검색기</title>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://template-3530f.firebaseio.com" crossorigin>
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --accent-red: #ff3b3b;
+            --accent-red-hover: #ff5252;
+            --border-color: #333333;
+            --table-header-bg: #2d2d2d;
+            --table-row-even: #1e1e1e;
+            --table-row-odd: #181818;
+            --link-blue: #4dabf7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--accent-red);
+        }
+
+        h1 .red-dot {
+            font-size: 1.2rem;
+            color: var(--accent-red);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .top-nav {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .api-btn-container {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sync-indicator {
+            font-size: 0.8rem;
+            color: #4dabf7;
+            opacity: 0;
+            transition: opacity 0.5s;
+            font-weight: 600;
+        }
+
+        #api-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #api-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+            transform: translateY(-2px);
+        }
+
+        .btn-add {
+            background: linear-gradient(135deg, #ff3b3b, #ff6b6b);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(255, 59, 59, 0.3);
+        }
+
+        .btn-add:hover {
+            background: linear-gradient(135deg, #ff5252, #ff8787);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 59, 59, 0.5);
+        }
+
+        .btn-add:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .input-dark {
+            width: 100%;
+            padding: 12px 15px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+            font-size: 0.95rem;
+        }
+
+        .input-dark:focus {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 0 2px rgba(255, 59, 59, 0.2);
+        }
+
+        /* Top Scrollbar Helper */
+        #top-scroll-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 5px;
+        }
+
+        #top-scroll-content {
+            height: 1px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .categories-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title .icon {
+            color: var(--accent-red);
+        }
+
+        .categories-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .category-pill {
+            background-color: #333;
+            color: #ccc;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .category-pill:hover {
+            background-color: #444;
+            color: white;
+        }
+
+        .category-pill.active {
+            background-color: #4a4a4a;
+            color: white;
+            border-color: #666;
+            font-weight: bold;
+        }
+
+        .category-indicator-bar {
+            height: 4px;
+            background-color: #333;
+            border-radius: 2px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .indicator-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, var(--accent-red), transparent);
+        }
+
+        .search-box {
+            display: flex;
+            border: 2px solid var(--accent-red);
+            border-radius: 5px;
+            overflow: hidden;
+            width: 600px;
+            max-width: 100%;
+        }
+
+        .search-section {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+
+        #keyword-input {
+            flex: 1;
+            background-color: transparent;
+            border: none;
+            padding: 15px 20px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        #search-btn {
+            background-color: var(--accent-red);
+            border: none;
+            color: white;
+            padding: 0 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #search-btn:hover {
+            background-color: var(--accent-red-hover);
+        }
+
+        .results-section {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        .status-message {
+            text-align: right;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--table-header-bg);
+            color: var(--text-secondary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        td:nth-child(n+3) {
+            color: var(--link-blue);
+        }
+
+        td:nth-child(1) {
+            color: var(--text-secondary);
+            width: 50px;
+            text-align: center;
+        }
+
+        th:nth-child(1) {
+            text-align: center;
+        }
+
+        tbody tr:hover {
+            background-color: #252525;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-content {
+            background-color: #1e1e1e;
+            margin: 3% auto;
+            padding: 25px;
+            border: 1px solid #333;
+            width: 95%;
+            max-width: 650px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            cursor: pointer;
+            color: #aaa;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+
+        .key-list-container {
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            background: #181818;
+            border-radius: 8px;
+            padding: 5px;
+        }
+
+        .key-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2a2a2a;
+            padding: 12px;
+            margin: 5px;
+            border-radius: 6px;
+        }
+
+        .key-item:hover {
+            background: #333;
+        }
+
+        .key-info {
+            flex: 1;
+            overflow: hidden;
+            margin-right: 10px;
+        }
+
+        .key-value {
+            font-family: monospace;
+            color: #4dabf7;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 4px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #444;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: #ff3b3b;
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        .btn-delete {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .btn-delete:hover {
+            background: #ff4444;
+            color: white;
+        }
+
+        #debug-log {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+            height: 60px;
+            overflow-y: scroll;
+            border: 1px solid #333;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
+        .diag-panel {
+            background: #1a1a1a;
+            padding: 10px;
+            border: 1px solid #333;
+            font-size: 0.8rem;
+            margin-top: 20px;
+            color: #888;
+            border-radius: 5px;
+        }
+
+        .diag-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            border-bottom: 1px solid #222;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .search-box {
+                flex-direction: column;
+                width: 100%;
+                border: none;
+            }
+
+            #keyword-input {
+                border: 2px solid var(--accent-red);
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+
+            #search-btn {
+                width: 100%;
+                border-radius: 5px;
+                padding: 12px;
+            }
+
+            .top-nav {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .api-btn-container {
+                position: static;
+                transform: none;
+                margin-top: 10px;
+            }
+
+            .key-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .key-actions {
+                width: 100%;
+                justify-content: flex-end;
+                margin-top: 10px;
+                border-top: 1px solid #444;
+                padding-top: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <header>
+            <div class="top-nav">
+                <h1><span class="red-dot">●</span> YouTube 다국어 키워드 검색기</h1>
+                <div class="api-btn-container">
+                    <span id="sync-icon" class="sync-indicator">☁️</span>
+                    <button id="api-btn" onclick="openModal()">🔑 API 관리</button>
+                    <div id="debug-status"
+                        style="font-size:10px; color:#555; position:absolute; bottom:-15px; right:0;"></div>
+                </div>
+            </div>
+            <p class="subtitle">카테고리 선택 시 100개의 세부 주제 및 키워드를 7개 언어로 번역합니다.</p>
+        </header>
+
+        <section class="categories-section">
+            <div class="section-title"><span class="icon">◎</span> 카테고리 선택</div>
+            <div class="categories-list" id="categories-list"></div>
+            <div class="category-indicator-bar">
+                <div class="indicator-progress"></div>
+            </div>
+        </section>
+
+        <section class="search-section" style="flex-direction:column; align-items:center; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center;">
+                <span class="icon" style="color:#aaa">📅 기준일:</span>
+                <input type="date" id="search-date" class="input-dark" style="width:auto; padding:8px;">
+
+                <span class="icon" style="color:#aaa; margin-left:10px;">🌏 국가:</span>
+                <select id="country-select" class="input-dark" style="width:auto; padding:8px;">
+                    <!-- Populated by JS -->
+                </select>
+
+                <span style="font-size:0.75rem; color:#666;">(과거 날짜 조회 시 API 소모량 ↑)</span>
+            </div>
+            <div class="search-box">
+                <input type="text" id="keyword-input" placeholder="키워드 입력 (예: 먹방)">
+                <button id="search-btn">검색</button>
+            </div>
+        </section>
+
+        <section class="results-section">
+            <section class="results-section">
+                <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><span class="icon">●</span> 키워드 결과 (100개)</span>
+                    <button id="csv-btn"
+                        style="background:#2ecc71; font-size:0.8rem; padding:5px 10px; border-radius:4px; display:none;"
+                        onclick="downloadCSV()">💾 CSV 저장</button>
+                </div>
+                <div class="status-message" id="status-message">로딩 중...</div>
+                <div id="top-scroll-container">
+                    <div id="top-scroll-content"></div>
+                </div>
+                <div class="table-container" id="real-table-container">
+                    <table id="results-table">
+                        <thead>
+                            <tr id="table-header-row">
+                                <th onclick="sortTable('rank')">NO <span></span></th>
+                                <th onclick="sortTable('channel')">채널명 <span></span></th>
+                                <th onclick="sortTable('subsRaw')">구독자수 <span></span></th>
+                                <th onclick="sortTable('korean')">🇰🇷 영상제목 (LINK) <span></span></th>
+                                <th onclick="sortTable('views')">조회수 <span></span></th>
+                                <th onclick="sortTable('comments')">댓글수 <span></span></th>
+                                <th onclick="sortTable('likes')">좋아요 <span></span></th>
+                                <th onclick="sortTable('date')">게시일 <span></span></th>
+                                <th>🇺🇸 영어</th>
+                                <th>🇯🇵 일본어</th>
+                                <th>🇨🇳 중국어</th>
+                                <th>🇪🇸 스페인어</th>
+                                <th>🇮🇳 인도어</th>
+                                <th>🇷🇺 러시아어</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+    </div>
+
+    <!-- API Modal -->
+    <div id="api-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>🔑 API 키 관리</h2>
+
+            </div>
+
+            <div class="key-list-container" id="key-list">
+                <div style="text-align:center;color:#666;padding:20px">로딩 중...</div>
+            </div>
+
+            <script>
+                // FAST RENDER
+                try {
+                    const saved = localStorage.getItem('cached_api_keys');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        const list = document.getElementById('key-list');
+                        list.innerHTML = '';
+                        const arr = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+                        if (arr.length) {
+                            arr.forEach(([id, d]) => {
+                                const el = document.createElement('div'); el.className = 'key-item';
+                                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${d.type === 'translate' ? '🌐' : '📺'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
+                                list.appendChild(el);
+                            });
+                        } else { list.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; }
+                    }
+                } catch (e) { }
+            </script>
+
+            <div style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="hidden" id="edit-key-id">
+                    <input type="text" id="new-key-name" class="input-dark" placeholder="키 이름 (예: 구글계정1)"
+                        style="flex:2">
+                    <select id="new-key-type" class="input-dark" style="flex:1">
+                        <option value="youtube">📺 YouTube</option>
+                        <option value="translate">🌐 Translate</option>
+                    </select>
+                </div>
+                <input type="text" id="new-key-value" class="input-dark" placeholder="AIza..."
+                    style="margin-bottom:15px;">
+                <div style="display:flex; gap:10px;">
+                    <button id="cancel-edit-btn" class="btn-add" style="display:none; background:#555; flex:1"
+                        onclick="resetForm()">취소</button>
+                    <button id="save-key-btn" class="btn-add" style="flex:2" onclick="saveApiKey()">저장하기</button>
+                </div>
+
+                <!-- DIAGNOSTIC PANEL -->
+                <div class="diag-panel">
+                    <div class="diag-row"><span>Project ID:</span> <span id="diag-project"
+                            style="color:#4dabf7">Checking...</span></div>
+                    <div class="diag-row"><span>Backend:</span> <span id="diag-backend"
+                            style="color:#ff3b3b; font-weight:bold;">Firestore</span></div>
+                    <div class="diag-row"><span>Collection:</span> <span id="diag-path"
+                            style="color:#4dabf7; font-family:monospace;">global_data/keys</span></div>
+                    <div class="diag-row"><span>Last Snapshot:</span> <span id="diag-last-rx">-</span></div>
+                    <div class="diag-row" style="background:#222; border:none; justify-content:center; gap:10px;">
+                        <button onclick="forceSync()"
+                            style="background:#444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🔄
+                            강제 새로고침</button>
+                        <button onclick="window.toggleHelp()"
+                            style="background:none; border:none; color:#666; text-decoration:underline; cursor:pointer;">Rules?</button>
+                    </div>
+                </div>
+
+                <div id="debug-log">Log Ready.</div>
+            </div>
+
+            <div id="help-box"
+                style="display:none; text-align:left; background:#111; padding:15px; margin-top:10px; border:1px solid #444; border-radius:8px; font-size:0.8rem; color:#ccc;">
+                <p>Firestore 규칙 (복사해서 콘솔에 적용):</p>
+                <textarea
+                    style="width:100%; height:80px; background:#000; color:#0f0; border:1px solid #333; margin-top:5px; padding:5px; font-family:monospace;"
+                    readonly onclick="this.select()">match /global_data/{doc} { allow read, write: if true; }</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts (Compat + Firestore) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- App Logic -->
+    <script>
+        // FIRESTORE CONFIG
+        const FS_COL = 'global_data';
+        const FS_DOC = 'keyword_app_keys';
+
+        // Hardcoded Default
+        let firebaseConfig = { apiKey: "AIzaSyDdk_axp2Q9OANqleknWeYWK9DrxKWKeY4", authDomain: "template-3530f.firebaseapp.com", projectId: "template-3530f", storageBucket: "template-3530f.firebasestorage.app", messagingSenderId: "891098188622", appId: "1:891098188622:web:392c0121a17f1cd4402c1f" };
+
+        const CATS = ["영화/애니메이션", "자동차/교통", "음악", "애완동물/동물", "스포츠", "게임", "코미디", "엔터테인먼트", "뉴스/정치", "노하우/스타일", "교육", "과학/기술", "인물/블로그", "비영리/사회운동", "여행/이벤트"];
+        const CAT_IDS = { "영화/애니메이션": "1", "자동차/교통": "2", "음악": "10", "애완동물/동물": "15", "스포츠": "17", "여행/이벤트": "19", "게임": "20", "인물/블로그": "22", "코미디": "23", "엔터테인먼트": "24", "뉴스/정치": "25", "노하우/스타일": "26", "교육": "27", "과학/기술": "28", "비영리/사회운동": "29" };
+        let db, auth; // db is Firestore instance now
+
+        function getLocalCache() { try { return JSON.parse(localStorage.getItem('cached_api_keys')) || {}; } catch { return {}; } }
+        function saveLocalCache(d) { localStorage.setItem('cached_api_keys', JSON.stringify(d)); renderKeys(d); }
+        function showSync(msg = "☁️") { const el = document.getElementById('sync-icon'); el.innerText = msg; el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 3000); }
+        function log(msg) { console.log(msg); const d = document.getElementById('debug-log'); if (d) { d.innerHTML += `<div>[${new Date().toTimeString().split(' ')[0]}] ${msg}</div>`; d.scrollTop = d.scrollHeight; } }
+        window.toggleHelp = () => { const el = document.getElementById('help-box'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
+
+        // --- AUTH & CONFIG ---
+        async function loadConfig() {
+            try {
+                if (typeof __firebase_config !== 'undefined') {
+                    log("Config: Global");
+                    return JSON.parse(__firebase_config);
+                }
+                const r = await fetch('firebase-config.json');
+                if (r.ok) {
+                    log("Config: JSON");
+                    return await r.json();
+                }
+            } catch (e) { log("Config: Hardcoded"); }
+            return firebaseConfig;
+        }
+
+        async function initApp() {
+            setupUI();
+
+            // 1. Config
+            const config = await loadConfig();
+            firebaseConfig = config;
+            document.getElementById('diag-project').innerText = config.projectId || 'Unknown';
+
+            // 2. Start Firebase (Firestore Mode)
+            if (window.firebase) {
+                try {
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore(); // Use Firestore
+                    auth = firebase.auth();
+
+                    document.getElementById('status-message').innerText = "서버 연결 시도...";
+
+                    auth.signInAnonymously().then((u) => {
+                        const uid = u.user ? u.user.uid : 'anon';
+                        document.getElementById('status-message').innerText = "서버 연결됨";
+                        document.getElementById('status-message').style.color = "#4dabf7";
+                        showSync("☁️ 연결됨");
+                        log("Online (Firestore)");
+
+                        // Listen to Document
+                        const docRef = db.collection(FS_COL).doc(FS_DOC);
+                        docRef.onSnapshot((doc) => {
+                            document.getElementById('diag-last-rx').innerText = new Date().toLocaleTimeString();
+                            if (doc.exists) {
+                                const data = doc.data();
+                                // Data structure: { keys: { id: { ... }, id2: { ... } } }
+                                // Or flat? Let's assume flat for simplicity, or wrapped.
+                                // Let's store directly: doc.data() IS the map of keys.
+                                const keys = data;
+                                log(`Snapshot: ${Object.keys(keys || {}).length} keys`);
+                                saveLocalCache(keys);
+                            } else {
+                                log("No Data (Empty Cloud)");
+                                // Bootstrap if local has keys
+                                const local = getLocalCache();
+                                if (Object.keys(local).length > 0) {
+                                    log("Uploading Local to Cloud...");
+                                    docRef.set(local).then(() => log("Bootstrap Done"));
+                                }
+                            }
+                        }, (err) => {
+                            log("Listen Err: " + err.message);
+                            document.getElementById('status-message').innerText = "연결 끊김";
+                        });
+
+                    }).catch(e => {
+                        log("Auth Fail: " + e.message);
+                        alert("인증 실패: " + e.message);
+                    });
+
+                } catch (e) {
+                    console.error(e);
+                    log("Init Err: " + e.message);
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+
+        // --- FIRESTORE ACTIONS ---
+
+        function saveApiKey() {
+            const n = document.getElementById('new-key-name').value.trim();
+            const v = document.getElementById('new-key-value').value.trim();
+            const t = document.getElementById('new-key-type').value;
+            let i = document.getElementById('edit-key-id').value;
+            if (!n || !v) return alert('입력 확인 필요');
+
+            if (!i) i = 'k_' + Date.now(); // Simple ID
+            const d = { name: n, key: v, type: t, active: true, updatedAt: Date.now() };
+
+            // Local Update (Optimistic)
+            const cache = getLocalCache();
+            d.createdAt = (cache[i] && cache[i].createdAt) ? cache[i].createdAt : Date.now();
+            cache[i] = d;
+            saveLocalCache(cache);
+            window.resetForm();
+
+            if (db) {
+                showSync("☁️ 저장 중...");
+                log(`Saving ${n}...`);
+                // Firestore Update: using dot notation to update specific map field
+                // or just set the whole object if we want simple sync
+                // 'merge: true' with set({ [id]: d }) is best
+                const update = {};
+                update[i] = d;
+
+                db.collection(FS_COL).doc(FS_DOC).set(update, { merge: true })
+                    .then(() => { showSync("☁️ 완료"); log("Save OK"); })
+                    .catch(e => {
+                        log("Save Err: " + e.message);
+                        alert("저장 실패: " + e.message + "\n(Firestore 규칙을 확인하세요)");
+                        showSync("⚠️ 로컬저장");
+                    });
+            }
+        };
+
+        window.prepEdit = (id, n, k, t) => { document.getElementById('new-key-name').value = n; document.getElementById('new-key-value').value = k; document.getElementById('new-key-type').value = t; document.getElementById('edit-key-id').value = id; document.getElementById('save-key-btn').innerText = "수정"; document.getElementById('cancel-edit-btn').style.display = "block"; };
+
+        window.togK = (id, v) => {
+            const c = getLocalCache(); if (c[id]) { c[id].active = v; saveLocalCache(c); }
+            if (db) {
+                const s = {}; s[`${id}.active`] = v;
+                db.collection(FS_COL).doc(FS_DOC).update(s).catch(e => log("Err: " + e.message));
+            }
+        };
+
+        window.delK = (id) => {
+            if (!confirm("삭제?")) return;
+            const c = getLocalCache(); delete c[id]; saveLocalCache(c);
+            if (db) {
+                // Firestore delete field
+                const s = {}; s[id] = firebase.firestore.FieldValue.delete();
+                db.collection(FS_COL).doc(FS_DOC).update(s).catch(e => log("Err: " + e.message));
+            }
+        };
+
+        window.forceSync = () => {
+            if (db) {
+                log("Forcing Read...");
+                db.collection(FS_COL).doc(FS_DOC).get().then(doc => {
+                    if (doc.exists) {
+                        const val = doc.data();
+                        log("Fetched " + Object.keys(val).length + " keys");
+                        saveLocalCache(val);
+                        alert("동기화 완료 (" + Object.keys(val).length + ")");
+                    } else alert("데이터 없음");
+                }).catch(e => alert("Err: " + e.message));
+            }
+        };
+
+        // UI & TOOLS
+        window.openModal = () => { document.getElementById('api-modal').style.display = "block"; window.resetForm(); };
+        window.closeModal = () => document.getElementById('api-modal').style.display = "none";
+        window.resetForm = () => { document.getElementById('new-key-name').value = ""; document.getElementById('new-key-value').value = ""; document.getElementById('edit-key-id').value = ""; document.getElementById('save-key-btn').innerText = "저장하기"; document.getElementById('cancel-edit-btn').style.display = "none"; };
+
+        // Global for CSV & Sorting
+        let currentResults = [];
+        let sortKey = null;
+        let sortAsc = true;
+
+        // App Functions
+        async function getApiKey(t = 'youtube') {
+            try {
+                const c = getLocalCache();
+                const list = Object.values(c).filter(k => (k.type || 'youtube') === t && k.active !== false);
+                if (list.length) return list[Math.floor(Math.random() * list.length)].key;
+            } catch (e) { }
+            return null; // Local First
+        }
+
+        function downloadCSV() {
+            if (!currentResults || !currentResults.length) return alert("저장할 데이터가 없습니다.");
+
+            const BOM = "\uFEFF";
+            let csv = BOM + "Rank,Channel Name,Channel Link,Subscribers,Video Title,Video Link,Views,Comments,Likes,Date,English,Japanese,Chinese,Spanish,Hindi,Russian\n";
+
+            currentResults.forEach(r => {
+                const row = [
+                    r.rank,
+                    `"${(r.channel || '').replace(/"/g, '""')}"`,
+                    `"https://www.youtube.com/channel/${r.channelId}"`,
+                    `"${(r.subsRaw || 0)}"`, // Raw number for CSV might be better, or formatted? Let's use raw for data, or formatted string. Using formatted from UI object generally. Let's use the formatted string r.subs if available, or just recalculate. I'll construct it from scratch to be safe or assuming r has it.
+                    // Actually updateUI uses r.subs. Let's make sure search saves it.
+                    `"${(r.korean || '').replace(/"/g, '""')}"`,
+                    `"https://www.youtube.com/watch?v=${r.id}"`,
+                    `"${(r.views || '').replace(/,/g, '')}"`, // Remove commas for raw number? Or keep as string? Excel prefers raw. Let's send raw numbers if possible or cleaned strings.
+                    `"${(r.comments || '').replace(/,/g, '')}"`,
+                    `"${(r.likes || '').replace(/,/g, '')}"`,
+                    `"${r.date}"`,
+                    `"${(r.english || '').replace(/"/g, '""')}"`,
+                    `"${(r.japanese || '').replace(/"/g, '""')}"`,
+                    `"${(r.chinese || '').replace(/"/g, '""')}"`,
+                    `"${(r.spanish || '').replace(/"/g, '""')}"`,
+                    `"${(r.hindi || '').replace(/"/g, '""')}"`,
+                    `"${(r.russian || '').replace(/"/g, '""')}"`
+                ];
+                csv += row.join(",") + "\n";
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `youtube_results_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+        }
+
+        async function search(q, c) {
+            const msg = document.getElementById('status-message');
+            const k = await getApiKey('youtube');
+            const tk = await getApiKey('translate');
+
+            if (!k) return alert("API 키가 없습니다. ['API 관리' > 키 추가] 먼저 해주세요.");
+            msg.innerText = "요청 중..."; msg.style.color = "#4dabf7";
+
+            // Date & Region Logic
+            const dateEl = document.getElementById('search-date');
+            const selectedDate = dateEl.value;
+            const today = new Date().toISOString().split('T')[0];
+            const isToday = (selectedDate === today);
+
+            const region = document.getElementById('country-select').value || 'KR';
+
+            try {
+                let videoIds = [];
+
+                // --- STRATEGY: SEARCH (Past/Keyword) vs POPULAR (Today & No Keyword) ---
+                if (q || !isToday) {
+                    // Use SEARCH API -> Get IDs
+                    let params = `search?part=id&type=video&maxResults=50&key=${k}&regionCode=${region}`;
+                    if (q) params += `&q=${encodeURIComponent(q)}`;
+
+                    if (!isToday) {
+                        const start = new Date(selectedDate + "T00:00:00Z").toISOString();
+                        const end = new Date(selectedDate + "T23:59:59Z").toISOString();
+                        params += `&publishedAfter=${start}&publishedBefore=${end}&order=viewCount`;
+                    }
+
+                    if (!q && c) {
+                        params += `&videoCategoryId=${CAT_IDS[c]}`;
+                        if (isToday) params += `&order=viewCount`;
+                    }
+
+                    const r1 = await fetchYT(params);
+                    videoIds = r1.items.map(i => i.id.videoId);
+
+                    if (r1.nextPageToken) {
+                        const r2 = await fetchYT(`${params}&pageToken=${r1.nextPageToken}`);
+                        videoIds = [...videoIds, ...r2.items.map(i => i.id.videoId)];
+                    }
+
+                } else {
+                    // Use VIDEOS API (Popular) -> Get IDs (or full data, but let's unify to IDs to be safe/consistent or fetch full directly)
+                    // Optimization: Fetch full data directly here to save 1 call? 
+                    // BUT: we need to handle paging. 
+                    // Let's stick to valid strategy: Get IDs first if we want consistency, or just fetch full.
+                    // fetching full `videos` is better.
+
+                    const cid = CAT_IDS[c];
+                    try {
+                        const r1 = await fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&maxResults=50&key=${k}`);
+                        videoIds = r1.items.map(i => i.id);
+                        if (r1.nextPageToken) {
+                            const r2 = await fetchYT(`videos?part=id&chart=mostPopular&regionCode=${region}&videoCategoryId=${cid}&pageToken=${r1.nextPageToken}&maxResults=50&key=${k}`);
+                            videoIds = [...videoIds, ...r2.items.map(i => i.id)];
+                        }
+                    } catch {
+                        // Fallback
+                        const r1 = await fetchYT(`search?part=id&q=${encodeURIComponent(c)}&type=video&maxResults=50&key=${k}`);
+                        videoIds = r1.items.map(i => i.id.videoId);
+                    }
+                }
+
+                // Deduplicate IDs
+                const uniqueIds = [...new Set(videoIds)].slice(0, 100);
+
+                // Fetch Details (Snippet + Statistics)
+                // Chunking (Max 50 IDs per call)
+                let finalItems = [];
+                for (let i = 0; i < uniqueIds.length; i += 50) {
+                    const chunk = uniqueIds.slice(i, i + 50).join(',');
+                    const r = await fetchYT(`videos?part=snippet,statistics&id=${chunk}&key=${k}`);
+                    finalItems = [...finalItems, ...r.items];
+                }
+
+                // --- NEW: Fetch Channel Stats (Subscribers) ---
+                const channelIds = [...new Set(finalItems.map(i => i.snippet.channelId))];
+                const channelStats = {};
+                for (let i = 0; i < channelIds.length; i += 50) {
+                    const chunk = channelIds.slice(i, i + 50).join(',');
+                    try {
+                        const r = await fetchYT(`channels?part=statistics&id=${chunk}&key=${k}`);
+                        r.items.forEach(ch => {
+                            channelStats[ch.id] = ch.statistics.subscriberCount;
+                        });
+                    } catch (e) { console.error("Channel fetch failed", e); }
+                }
+
+                // Prepare for Translation
+                const titles = finalItems.map(i => i.snippet.title);
+
+                let trans = { en: [], ja: [], 'zh-CN': [], es: [], hi: [], ru: [] };
+                if (tk) {
+                    msg.innerText = "번역 중...";
+                    trans = await doTrans(titles, tk);
+                }
+
+                currentResults = finalItems.map((item, i) => {
+                    const s = item.snippet;
+                    const st = item.statistics || {};
+                    const subCount = channelStats[s.channelId] || 0;
+                    return {
+                        rank: i + 1,
+                        korean: s.title,
+                        id: item.id,
+                        channel: s.channelTitle,
+                        channelId: s.channelId,
+                        subsRaw: subCount,
+                        subs: Number(subCount).toLocaleString(),
+                        views: Number(st.viewCount || 0).toLocaleString(),
+                        comments: Number(st.commentCount || 0).toLocaleString(),
+                        likes: Number(st.likeCount || 0).toLocaleString(),
+                        date: (s.publishedAt || "").split('T')[0],
+                        english: trans.en[i] || '-', japanese: trans.ja[i] || '-',
+                        chinese: trans['zh-CN'][i] || '-', spanish: trans.es[i] || '-',
+                        hindi: trans.hi[i] || '-', russian: trans.ru[i] || '-'
+                    };
+                });
+
+                const st = { query: q || c, selectedCategory: c, results: currentResults, timestamp: Date.now() };
+                updateUI(st);
+                msg.innerText = "완료 (" + finalItems.length + "개)"; msg.style.color = "#888";
+
+            } catch (e) {
+                msg.innerText = "오류: " + e.message; msg.style.color = "#f00";
+                alert("YouTube API 오류: " + e.message);
+            }
+        }
+
+        async function fetchYT(path) {
+            const r = await fetch(`https://www.googleapis.com/youtube/v3/${path}`);
+            if (!r.ok) throw new Error("YouTube API Requests Failed");
+            return r.json();
+        }
+
+        async function doTrans(txs, k) {
+            const out = {};
+            const langs = ['en', 'ja', 'zh-CN', 'es', 'hi', 'ru'];
+            await Promise.all(langs.map(async l => {
+                try {
+                    const r = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${k}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ q: txs, target: l, format: 'text' })
+                    });
+                    const d = await r.json();
+                    out[l] = d.data.translations.map(t => t.translatedText);
+                } catch { out[l] = Array(txs.length).fill('-'); }
+            }));
+            return out;
+        }
+
+        function setupUI() {
+            // Init Date Picker
+            document.getElementById('search-date').valueAsDate = new Date();
+
+            // Init Country Select
+            const COUNTRIES = {
+                'KR': '대한민국', 'US': '미국', 'GB': '영국', 'JP': '일본',
+                'ES': '스페인', 'IN': '인도', 'RU': '러시아',
+                'TW': '대만', 'HK': '홍콩', 'ID': '인도네시아'
+            };
+            const cs = document.getElementById('country-select');
+            cs.innerHTML = '';
+            for (const [code, name] of Object.entries(COUNTRIES)) {
+                const opt = document.createElement('option');
+                opt.value = code; opt.text = name;
+                if (code === 'KR') opt.selected = true;
+                cs.appendChild(opt);
+            }
+
+            const l = document.getElementById('categories-list');
+            l.innerHTML = '';
+            CATS.forEach(c => {
+                const b = document.createElement('div');
+                b.className = 'category-pill'; b.innerText = c;
+                b.onclick = () => search(null, c);
+                l.appendChild(b);
+            });
+            document.getElementById('search-btn').onclick = () => search(document.getElementById('keyword-input').value, getCurrentCat());
+            document.getElementById('keyword-input').onkeydown = (e) => { if (e.key === 'Enter') search(e.target.value, getCurrentCat()); };
+
+            const m = document.getElementById('api-modal');
+            // Removed click outside to close
+            // window.onclick = (e) => { if (e.target == m) m.style.display = "none"; };
+
+            // Sync Scroll
+            const top = document.getElementById('top-scroll-container');
+            const bot = document.getElementById('real-table-container');
+            top.onscroll = () => { bot.scrollLeft = top.scrollLeft; };
+            bot.onscroll = () => { top.scrollLeft = bot.scrollLeft; };
+        }
+
+        function sortTable(key) {
+            if (sortKey === key) {
+                sortAsc = !sortAsc;
+            } else {
+                sortKey = key;
+                sortAsc = true;
+            }
+            // Sort
+            currentResults.sort((a, b) => {
+                let va = a[key], vb = b[key];
+                // Helper for parsed numbers
+                if (['views', 'comments', 'likes', 'subsRaw', 'rank'].includes(key)) {
+                    va = Number(String(va).replace(/,/g, '')) || 0;
+                    vb = Number(String(vb).replace(/,/g, '')) || 0;
+                }
+                if (va < vb) return sortAsc ? -1 : 1;
+                if (va > vb) return sortAsc ? 1 : -1;
+                return 0;
+            });
+            updateUI({ results: currentResults, selectedCategory: getCurrentCat(), noResetInput: true });
+        }
+
+        function updateUI(st) {
+            const inp = document.getElementById('keyword-input');
+            if (st.query && inp.value !== st.query && !st.noResetInput) inp.value = st.query;
+            if (st.selectedCategory) document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.innerText === st.selectedCategory));
+
+            // Show CSV Btn
+            document.getElementById('csv-btn').style.display = (st.results && st.results.length) ? 'inline-block' : 'none';
+
+            const tb = document.querySelector('#results-table tbody'); tb.innerHTML = '';
+            (st.results || []).forEach(r => {
+                const tr = document.createElement('tr');
+                const link = r.id ? `<a href="https://www.youtube.com/watch?v=${r.id}" target="_blank" style="color:#fff;text-decoration:none;cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.korean}</a>` : r.korean;
+                const chLink = r.channelId ? `<a href="https://www.youtube.com/channel/${r.channelId}" target="_blank" style="color:#888;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${r.channel}</a>` : r.channel;
+
+                tr.innerHTML = `<td>${r.rank}</td>
+                                <td>${chLink}</td>
+                                <td>${r.subs}</td>
+                                <td style="color:#fff">${link}</td>
+                                <td>${r.views}</td>
+                                <td>${r.comments}</td>
+                                <td>${r.likes}</td>
+                                <td>${r.date}</td>
+                                <td>${r.english}</td><td>${r.japanese}</td><td>${r.chinese}</td><td>${r.spanish}</td><td>${r.hindi}</td><td>${r.russian}</td>`;
+                tb.appendChild(tr);
+            });
+
+            // Update Sort Icons
+            const ths = document.querySelectorAll('#results-table th');
+            ths.forEach(th => {
+                const sp = th.querySelector('span');
+                if (sp) sp.innerText = '';
+            });
+            if (sortKey) {
+                // Find th with onclick containing sortKey
+                // Simple way: check text content or map index. 
+                // But better: search by onclick attribute or just simple ID mapping if needed.
+                // Let's rely on text content for now or add IDs? 
+                // Adding IDs to TH would be cleaner in future, but for now loop 
+                // to find the clicked one is tricky without IDs.
+                // Re-render means we lose state? No, ths are static.
+
+                // Let's add IDs to THs in the HTML block above? 
+                // Or just iterate and check 'onclick' string.
+                for (let th of ths) {
+                    if (th.getAttribute('onclick')?.includes(`'${sortKey}'`)) {
+                        th.querySelector('span').innerText = sortAsc ? ' ▲' : ' ▼';
+                    }
+                }
+            }
+
+            // Top Scroll Sync Update
+            const tbl = document.getElementById('results-table');
+            document.getElementById('top-scroll-content').style.width = tbl.offsetWidth + 'px';
+        }
+        function renderKeys(obj) {
+            const l = document.getElementById('key-list'); l.innerHTML = '';
+            if (!obj) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
+            const arr = Object.entries(obj).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+            if (!arr.length) { l.innerHTML = '<div style="padding:20px;text-align:center;color:#666">저장된 키 없음</div>'; return; }
+            const typeMap = { 'youtube': '📺 YouTube', 'translate': '🌐 Translate' };
+            arr.forEach(([id, d]) => {
+                const el = document.createElement('div'); el.className = 'key-item';
+                el.innerHTML = `<div class="key-info"><div style="font-weight:bold;color:#fff">${typeMap[d.type] || 'Unknown'} ${d.name}</div><div class="key-value">${(d.key || "").substring(0, 8)}...</div></div><div class="key-actions"><button class="btn-delete" style="color:#4dabf7;border:1px solid #4dabf7" onclick="window.prepEdit('${id}','${d.name}','${d.key}','${d.type}')">✏️</button><label class="toggle-switch"><input type="checkbox" ${d.active !== false ? 'checked' : ''} onchange="window.togK('${id}',this.checked)"><span class="slider"></span></label><button class="btn-delete" onclick="window.delK('${id}')">🗑️</button></div>`;
+                l.appendChild(el);
+            });
+        }
+        function getCurrentCat() { return document.querySelector('.category-pill.active')?.innerText || "엔터테인먼트"; }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> 🤖 슈퍼 챗봇 </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #111827; 
+            color: #E5E7EB; 
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-in { animation: fadeIn 0.2s ease-out forwards; }
+        .custom-checkbox {
+            accent-color: #3b82f6;
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDoc, setDoc, getDocs, query, orderBy, deleteDoc, doc, updateDoc, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // 전역 설정
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.getFirestore = getFirestore;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDoc = getDoc;
+        window.setDoc = setDoc;
+        window.getDocs = getDocs;
+        window.query = query;
+        window.orderBy = orderBy;
+        window.deleteDoc = deleteDoc;
+        window.doc = doc;
+        window.updateDoc = updateDoc;
+        window.where = where; 
+        window.onSnapshot = onSnapshot;
+    </script>
+    <script type="module">
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+        window.GoogleGenerativeAI = GoogleGenerativeAI;
+        console.log("[GEMINI] SDK Loaded.");
+    </script>
+    
+    <script type="module">
+        const { 
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+            getFirestore, collection, addDoc, getDoc, setDoc, getDocs, query, orderBy, deleteDoc, doc, updateDoc, where, onSnapshot 
+        } = window;
+        
+        // [설정 파일 경로]
+        const FIREBASE_CONFIG_URL = "./firebase-config.json"; 
+        
+        // [고정 동기화 ID]
+        const MASTER_SYNC_ID = "my-private-cloud-master-sync";
+
+        const __app_id = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
+        
+        let db = null;
+        let auth = null;
+        let currentAuthUser = null;
+        let isAuthReady = false;
+
+        // 채팅 관련 상태
+        let messages = []; 
+        let currentSessionId = null; 
+        let chatSessions = []; 
+
+        let memos = [];
+        let config = { geminiKey: '' };
+        
+        let loading = false;
+        let showSettings = false;
+        let showSidebar = false; // 모바일 초기값: 닫힘
+        
+        // 업로드 상태
+        let isUploading = false;
+        let uploadSuccessCount = 0;
+        let totalFilesToUpload = 0;
+        let currentUploadingFileName = '';
+        let currentUploadingFileSize = 0; 
+
+        // 삭제 상태
+        let isDeleting = false;
+        let deleteSuccessCount = 0;
+        let totalFilesToDelete = 0;
+
+        let selectedCategory = 'all'; 
+        
+        let showCategoryModal = false; 
+        let showCategoryUploadModal = false; 
+        let showCategoryViewerModal = false; 
+        let categoryView = ''; 
+        let filesToUpload = []; 
+        let selectedMemoIds = new Set(); 
+
+        let renderTimeoutId = null;
+        let CATEGORIES = ['all', '업무', '일기', '아이디어', '학습', '기타']; 
+        const MAX_FILE_SIZE_MB = 1; 
+        const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
+
+        const appElement = document.getElementById('app');
+
+        // --- 유틸리티 ---
+        const formatBytes = (bytes, decimals = 2) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        };
+
+        const getUniqueCategories = () => {
+            const usedCategories = memos.map(m => m.category || '기타').filter(c => c !== 'all');
+            const uniqueUsed = [...new Set(usedCategories)];
+            const combined = [...new Set([...CATEGORIES.filter(c => c !== 'all'), ...uniqueUsed])];
+            
+            if (memos.some(m => m.category === '기타') && !combined.includes('기타')) {
+                combined.push('기타');
+            }
+            return ['all', ...combined.filter(c => c !== 'all').sort()].filter(c => c);
+        };
+
+        // --- Firebase Core ---
+        const getEffectiveUserId = () => MASTER_SYNC_ID;
+
+        const getUserDocPath = () => {
+            const uid = getEffectiveUserId();
+            if (!db || !uid) throw new Error("Firebase not ready.");
+            return `artifacts/${__app_id}/users/${uid}`;
+        };
+
+        const getUserMemoCollectionRef = () => collection(db, `${getUserDocPath()}/memos`);
+        const getUserChatCollectionRef = () => collection(db, `${getUserDocPath()}/chat_sessions`); 
+        const getCategoriesDocRef = () => doc(db, `${getUserDocPath()}/config/categories`);
+
+        const saveCategories = async () => {
+            const catsToSave = CATEGORIES.filter(c => c !== 'all');
+            localStorage.setItem('ai_memo_categories', JSON.stringify(catsToSave));
+            
+            if (db && isAuthReady) {
+                try {
+                    await setDoc(getCategoriesDocRef(), { list: catsToSave, updatedAt: new Date() });
+                } catch (e) { console.error("Category Save Error:", e); }
+            }
+        };
+
+        const renderIcon = (name, size, cls = '') => {
+            if (typeof lucide === 'undefined' || !lucide.icons || !lucide.icons[name]) return '';
+            try {
+                const element = lucide.createElement(lucide.icons[name]);
+                element.setAttribute('width', size);
+                element.setAttribute('height', size);
+                if (cls) {
+                    const existingClass = element.getAttribute('class') || '';
+                    element.setAttribute('class', `${existingClass} ${cls}`.trim());
+                }
+                return element.outerHTML;
+            } catch (e) { console.error(`Icon render error: ${name}`, e); return ''; }
+        };
+
+        const fetchFirebaseConfig = async () => {
+            try {
+                if (FIREBASE_CONFIG_URL.includes("[본인_GITHUB_ID]")) {
+                    alert("⚠️ 설정 오류: 코드 최상단의 'FIREBASE_CONFIG_URL' 변수를 수정해주세요!");
+                    throw new Error("GitHub Raw URL 미설정");
+                }
+                const response = await fetch(FIREBASE_CONFIG_URL);
+                if (!response.ok) throw new Error(`Config Load Failed: ${response.status}`);
+                return await response.json();
+            } catch (e) {
+                console.error("Config Fetch Error:", e);
+                setTimeout(() => alert(`설정 파일 로드 실패:\n${e.message}`), 1000);
+                return null;
+            }
+        };
+
+        const initFirebase = async () => {
+            const fbConfig = await fetchFirebaseConfig();
+            if (!fbConfig) return;
+
+            try {
+                if (!fbConfig.projectId) return alert("설정 오류: projectId 없음");
+                const firebaseApp = initializeApp(fbConfig); 
+                db = getFirestore(firebaseApp);
+                auth = getAuth(firebaseApp);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentAuthUser = user;
+                        isAuthReady = true;
+                        console.log(`[FIREBASE] Ready. Sync ID: ${MASTER_SYNC_ID}`);
+                        
+                        await fetchMemos();
+                        subscribeCategories();
+                        subscribeChatSessions();
+
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    render();
+                });
+            } catch (e) {
+                console.error("Init Error:", e);
+                alert(`연결 오류: ${e.message}`);
+            }
+            render();
+        };
+
+        const subscribeCategories = () => {
+            if (!db || !isAuthReady) return;
+            onSnapshot(getCategoriesDocRef(), (docSnap) => {
+                if (docSnap.exists() && docSnap.data().list) {
+                    const cloudCats = docSnap.data().list;
+                    CATEGORIES = ['all', ...cloudCats].filter(c => c);
+                    localStorage.setItem('ai_memo_categories', JSON.stringify(cloudCats));
+                    render();
+                }
+            });
+        };
+
+        const subscribeChatSessions = () => {
+            if (!db || !isAuthReady) return;
+            const q = query(getUserChatCollectionRef(), orderBy("updatedAt", "desc"));
+            onSnapshot(q, (snapshot) => {
+                chatSessions = [];
+                snapshot.forEach((d) => {
+                    chatSessions.push({ id: d.id, ...d.data() });
+                });
+                render();
+            });
+        };
+
+        const fetchMemos = async () => {
+            if (!db || !isAuthReady) return;
+            try {
+                const q = query(getUserMemoCollectionRef(), orderBy("timestamp", "desc"));
+                const querySnapshot = await getDocs(q);
+                memos = [];
+                querySnapshot.forEach((d) => {
+                    memos.push({ id: d.id, ...d.data(), category: d.data().category || '기타' });
+                });
+            } catch (e) { console.error("Fetch Memo Error:", e); }
+        };
+
+        // --- 3. UI 렌더링 ---
+
+        const renderCategoryViewer = () => {
+            const viewerMemos = memos
+                .filter(m => (m.category || '기타') === categoryView)
+                .sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+            const allSelected = viewerMemos.length > 0 && viewerMemos.every(m => selectedMemoIds.has(m.id));
+            const selectedCount = selectedMemoIds.size;
+
+            return `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-2xl bg-gray-800 rounded-xl shadow-2xl border border-gray-700 flex flex-col max-h-[80vh] animate-in">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 rounded-t-xl">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            ${renderIcon('FolderOpen', 20, 'text-blue-400')}
+                            ${categoryView} <span class="text-sm font-normal text-gray-400">(${viewerMemos.length})</span>
+                        </h2>
+                        <button id="close-viewer-btn" class="text-gray-400 hover:text-white transition-colors">${renderIcon('X', 24)}</button>
+                    </div>
+                    <div class="px-4 py-3 bg-gray-700/30 border-b border-gray-700 flex items-center justify-between">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="select-all-memos" class="custom-checkbox rounded bg-gray-600 border-gray-500" ${allSelected ? 'checked' : ''} ${viewerMemos.length === 0 ? 'disabled' : ''} ${isDeleting ? 'disabled' : ''}>
+                            <span class="text-sm text-gray-300">전체 선택</span>
+                        </label>
+                        
+                        ${isDeleting ? `
+                            <div class="flex items-center gap-3 flex-1 justify-end ml-4 animate-in">
+                                <span class="text-xs text-red-300 animate-pulse font-medium">삭제 중... (${deleteSuccessCount}/${totalFilesToDelete})</span>
+                                <div class="w-32 bg-gray-700 rounded-full h-2 overflow-hidden border border-gray-600">
+                                    <div class="bg-red-500 h-2 rounded-full transition-all duration-300" style="width: ${(deleteSuccessCount / totalFilesToDelete) * 100}%"></div>
+                                </div>
+                            </div>
+                        ` : selectedCount > 0 ? `
+                            <button id="bulk-delete-btn" class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg text-sm font-medium transition-colors animate-in">
+                                ${renderIcon('Trash2', 14)} 선택된 ${selectedCount}개 삭제
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-4 space-y-2 hide-scrollbar">
+                        ${viewerMemos.length === 0 ? `<div class="text-center py-10 text-gray-500">${renderIcon('FileX', 48, 'mx-auto mb-2 opacity-20')}<p>저장된 파일이 없습니다.</p></div>` : viewerMemos.map(m => `
+                            <div class="flex items-center gap-3 p-3 bg-gray-700/50 hover:bg-gray-700 rounded-lg border ${selectedMemoIds.has(m.id) ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'} transition-colors group">
+                                <input type="checkbox" class="memo-item-checkbox custom-checkbox shrink-0" data-id="${m.id}" ${selectedMemoIds.has(m.id) ? 'checked' : ''} ${isDeleting ? 'disabled' : ''}>
+                                <div class="min-w-0 flex-1 pr-2 cursor-pointer view-content-btn" data-id="${m.id}">
+                                    <h4 class="text-sm font-medium text-gray-200 truncate group-hover:text-white">${m.filename}</h4>
+                                    <p class="text-xs text-gray-500 mt-0.5">${new Date(m.timestamp.seconds * 1000).toLocaleString()}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="view-content-btn p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="보기" ${isDeleting ? 'disabled' : ''}>${renderIcon('Eye', 16)}</button>
+                                    <button class="delete-memo-btn p-1.5 text-red-400 hover:bg-red-500/20 rounded-md opacity-0 group-hover:opacity-100" data-id="${m.id}" title="삭제" ${isDeleting ? 'disabled' : ''}>${renderIcon('Trash2', 16)}</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="p-4 border-t border-gray-700 bg-gray-800/50 rounded-b-xl">
+                        <label class="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 cursor-pointer transition-colors bg-gray-700/30 ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}">
+                            ${renderIcon('UploadCloud', 18)} <span class="text-sm font-medium">이 카테고리에 파일 추가하기</span>
+                            <input type="file" id="viewer-upload-input" class="hidden" multiple accept=".txt" ${isDeleting ? 'disabled' : ''}>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            `;
+        };
+
+        const renderCategoryUploadModal = () => `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-md bg-gray-800 rounded-xl p-6 border border-gray-700 animate-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-100 flex items-center gap-2">${renderIcon('UploadCloud', 24, 'text-blue-400')} 업로드 카테고리 선택</h2>
+                        <button id="cancel-upload-select" class="text-gray-400 hover:text-white">${renderIcon('X', 24)}</button>
+                    </div>
+                    <p class="mb-4 text-sm text-gray-300">선택한 ${filesToUpload.length}개의 파일을 저장할 카테고리를 선택하세요:</p>
+                    <div class="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto hide-scrollbar mb-4">
+                        ${CATEGORIES.filter(c => c !== 'all').map(cat => `<button class="select-category-button p-3 rounded-lg text-sm font-medium bg-gray-700 text-blue-400 hover:bg-gray-600 transition-colors capitalize border border-blue-900/30">${cat}</button>`).join('')}
+                    </div>
+                    <div class="flex justify-end pt-4 border-t border-gray-700">
+                        <button id="add-cat-upload-btn" class="text-xs text-blue-400 hover:underline flex items-center gap-1">${renderIcon('Plus', 14)} 새 카테고리 만들기</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const renderCategoryManager = () => `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-md bg-gray-800 rounded-xl shadow-2xl border border-gray-700 animate-in">
+                    <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                        <h2 class="text-lg font-bold text-white">카테고리 관리</h2>
+                        <button id="close-cat-manager-btn" class="text-gray-400 hover:text-white">${renderIcon('X', 24)}</button>
+                    </div>
+                    <div class="p-4 max-h-[60vh] overflow-y-auto space-y-2 hide-scrollbar">
+                        <button id="add-new-cat-btn" class="w-full py-3 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-blue-500 hover:text-blue-400 transition-colors flex items-center justify-center gap-2 mb-4">${renderIcon('Plus', 16)} 새 카테고리 추가</button>
+                        ${CATEGORIES.filter(c => c !== 'all').map(cat => `
+                            <div class="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                                <span class="text-gray-200 font-medium">${cat}</span>
+                                <div class="flex gap-2">
+                                    ${cat !== '기타' ? `<button class="edit-cat-btn p-1.5 text-yellow-400 hover:bg-yellow-400/10 rounded" data-name="${cat}">${renderIcon('Edit', 16)}</button><button class="del-cat-btn p-1.5 text-red-400 hover:bg-red-400/10 rounded" data-name="${cat}">${renderIcon('Trash2', 16)}</button>` : `<span class="text-xs text-gray-500 px-2">기본</span>`}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const renderSettingsModal = () => `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="w-full max-w-lg bg-gray-800 rounded-xl p-6 border border-gray-700 animate-in">
+                    <h2 class="text-xl font-bold mb-4">설정</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Gemini API Key</label>
+                            <input type="password" id="gemini-key" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" value="${config.geminiKey}" placeholder="AI Studio Key (AIza...)">
+                        </div>
+                        <div class="p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+                            <p class="text-xs text-blue-300 flex items-center gap-2">
+                                ${renderIcon('Info', 14)} Firebase 설정은 자동으로 로드됩니다.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-6">
+                        <button id="close-settings" class="px-4 py-2 text-gray-400 hover:text-white">취소</button>
+                        <button id="save-settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg">저장</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const renderApp = () => {
+            const categoryCounts = memos.reduce((acc, m) => {
+                const cat = m.category || '기타';
+                acc[cat] = (acc[cat] || 0) + 1;
+                return acc;
+            }, {});
+            const uid = getEffectiveUserId();
+
+            return `
+            <div class="flex h-[100dvh] bg-gray-900 text-gray-100 font-sans overflow-hidden">
+                <!-- 사이드바 (모바일에서는 오버레이) -->
+                <!-- 백드롭 (모바일 전용) -->
+                <div class="fixed inset-0 bg-black/50 z-40 md:hidden ${showSidebar ? '' : 'hidden'}" id="mobile-backdrop"></div>
+                
+                <div class="
+                    fixed inset-y-0 left-0 z-50 w-72 bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 
+                    ${showSidebar ? 'translate-x-0' : '-translate-x-full'} 
+                    md:static md:translate-x-0
+                ">
+                    <div class="p-5 border-b border-gray-700 flex items-center justify-between">
+                        <div class="flex items-center gap-2">${renderIcon('Database', 24, 'text-blue-400')}<h1 class="font-bold text-xl">🤖 슈퍼 챗봇</h1></div>
+                        <!-- 모바일용 닫기 버튼 -->
+                        <button id="close-sidebar-mobile" class="md:hidden text-gray-400">${renderIcon('X', 20)}</button>
+                    </div>
+                    
+                    <div class="p-4 flex-1 overflow-y-auto hide-scrollbar space-y-6">
+                        
+                        <!-- 새 채팅 버튼 -->
+                        <button id="new-chat-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-all active:scale-95">
+                            ${renderIcon('Plus', 18)} 새 채팅
+                        </button>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-2 px-1"><h3 class="text-xs font-semibold text-gray-500 uppercase">문서함</h3><button id="open-cat-manager" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1" ${isAuthReady ? '' : 'disabled'}>${renderIcon('Settings', 12)} 관리</button></div>
+                            <div class="space-y-1">
+                                ${getUniqueCategories().map(cat => {
+                                    const count = cat === 'all' ? memos.length : (categoryCounts[cat] || 0);
+                                    return `<button class="cat-item-btn w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${selectedCategory === cat ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}" data-name="${cat}" ${isAuthReady ? '' : 'disabled'}>
+                                        <div class="flex items-center gap-2">${renderIcon(cat === 'all' ? 'Layers' : 'Folder', 16)}<span>${cat} <span class="text-xs opacity-60 ml-1">(${count})</span></span></div>
+                                        ${cat !== 'all' ? `<div class="flex items-center" onclick="event.stopPropagation()"><span class="open-viewer-btn text-xs opacity-50 hover:opacity-100 hover:text-blue-300 px-2 cursor-pointer" data-cat="${cat}">보기</span></div>` : ''}
+                                    </button>`;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- 채팅 기록 목록 -->
+                        <div>
+                            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">최근 대화</h3>
+                            <div class="space-y-1">
+                                ${chatSessions.length === 0 ? `<p class="text-xs text-gray-600 px-2 py-1">대화 기록 없음</p>` : chatSessions.map(session => `
+                                    <div class="group flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer transition-colors ${currentSessionId === session.id ? 'bg-gray-700 text-blue-300' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'} chat-session-item" data-id="${session.id}">
+                                        <div class="flex items-center gap-2 truncate">
+                                            ${renderIcon('MessageSquare', 14)}
+                                            <span class="truncate w-32">${session.title || '새로운 대화'}</span>
+                                        </div>
+                                        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button class="edit-session-btn text-gray-500 hover:text-blue-400" data-id="${session.id}" data-title="${session.title}" onclick="event.stopPropagation()">${renderIcon('Edit3', 12)}</button>
+                                            <button class="delete-session-btn text-gray-500 hover:text-red-400" data-id="${session.id}" onclick="event.stopPropagation()">${renderIcon('Trash2', 12)}</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-gray-700">
+                            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">파일 업로드</h3>
+                            <label class="block w-full p-3 border border-dashed ${isAuthReady ? 'border-gray-600 hover:border-blue-500 hover:bg-gray-800/50 cursor-pointer' : 'border-red-600 opacity-50 cursor-not-allowed' } rounded-lg transition-colors text-center group">
+                                <span class="text-xs ${isAuthReady ? 'text-gray-400 group-hover:text-blue-300' : 'text-red-400'} flex items-center justify-center gap-2">${renderIcon('Upload', 14)} 파일 추가</span>
+                                <input type="file" id="main-upload-input" class="hidden" multiple accept=".txt" ${isAuthReady ? '' : 'disabled'}>
+                            </label>
+                            ${isUploading ? `
+                                <div class="mt-3 space-y-2">
+                                    <div class="flex justify-between text-xs text-blue-300">
+                                        <span class="animate-pulse">업로드 진행 중...</span>
+                                        <span>${Math.round((uploadSuccessCount / totalFilesToUpload) * 100)}%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: ${(uploadSuccessCount / totalFilesToUpload) * 100}%"></div>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 text-center truncate px-1">${currentUploadingFileName ? '현재 파일: ' + currentUploadingFileName : '대기 중...'}</p>
+                                    <p class="text-[10px] text-gray-400 text-center">(${uploadSuccessCount} / ${totalFilesToUpload} 완료)</p>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-gray-700 flex justify-between items-center">
+                        <button id="open-settings-btn" class="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors">${renderIcon('Key', 14)} 설정</button>
+                        ${uid ? `<span class="text-[10px] font-mono text-gray-600" title="${uid}">SYNC ON</span>` : ''}
+                    </div>
+                </div>
+                <div class="flex-1 flex flex-col relative w-full">
+                    <header class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50 backdrop-blur-md">
+                        <div class="flex items-center gap-3"><button id="open-sidebar-mobile" class="md:hidden text-gray-400">${renderIcon('Menu', 24)}</button>
+                        <div>
+                            <h2 class="font-bold text-gray-100 flex items-center gap-2">
+                                ${currentSessionId ? (chatSessions.find(s=>s.id===currentSessionId)?.title || '대화 중...') : '새로운 대화'}
+                            </h2>
+                            <p class="text-xs text-blue-400">참고 문서함: ${selectedCategory}</p>
+                        </div>
+                        </div>
+                    </header>
+                    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-6">
+                        ${messages.length === 0 ? `
+                            <div class="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
+                                <div class="p-4 bg-gray-800 rounded-full mb-4">${renderIcon('Bot', 32, 'text-blue-500')}</div>
+                                <p>안녕하세요! 무엇을 도와드릴까요?</p>
+                                <p class="text-sm mt-2">왼쪽에서 문서함을 선택하여 질문 범위를 좁힐 수 있습니다.</p>
+                            </div>
+                        ` : messages.map(msg => `<div class="flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}">${msg.role === 'model' ? `<div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0">${renderIcon('Bot', 16, 'text-white')}</div>` : ''}<div class="max-w-[80%] p-3 rounded-2xl ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-800 text-gray-200 border border-gray-700 rounded-tl-none'}"><div class="whitespace-pre-wrap text-sm leading-relaxed">${msg.text}</div></div></div>`).join('')}
+                        ${loading ? `<div class="flex gap-2 p-4 text-gray-400 text-sm items-center">${renderIcon('Loader2', 16, 'animate-spin')} 답변 생성 중...</div>` : ''}
+                    </div>
+                    <div class="p-4 border-t border-gray-700 bg-gray-800">
+                        <div class="relative"><textarea id="chat-input" rows="1" class="w-full bg-gray-700 border-0 rounded-xl px-4 py-3 pr-12 text-gray-100 focus:ring-2 focus:ring-blue-500 resize-none" placeholder="${isAuthReady ? '메시지를 입력하세요...' : '연결 중...'}" ${isAuthReady ? '' : 'disabled'}></textarea><button id="send-btn" class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-white transition-colors" ${isAuthReady ? '' : 'disabled'}>${renderIcon('Send', 16)}</button></div>
+                    </div>
+                </div>
+                ${showCategoryViewerModal ? renderCategoryViewer() : ''}
+                ${showCategoryModal ? renderCategoryManager() : ''}
+                ${showCategoryUploadModal ? renderCategoryUploadModal() : ''}
+                ${showSettings ? renderSettingsModal() : ''}
+            </div>
+            `;
+        };
+
+        // --- 4. 이벤트 및 액션 ---
+
+        const startNewChat = () => {
+            currentSessionId = null;
+            messages = [];
+            if(window.innerWidth < 768) showSidebar = false; // 모바일이면 사이드바 닫기
+            render();
+        };
+
+        const loadChatSession = (id) => {
+            const session = chatSessions.find(s => s.id === id);
+            if (session) {
+                currentSessionId = id;
+                messages = session.messages || [];
+                if(window.innerWidth < 768) showSidebar = false; // 모바일이면 사이드바 닫기
+                render();
+            }
+        };
+
+        const deleteChatSession = async (id) => {
+            if (confirm("이 대화 기록을 삭제하시겠습니까?")) {
+                try {
+                    await deleteDoc(doc(getUserChatCollectionRef(), id));
+                    if (currentSessionId === id) startNewChat();
+                } catch (e) { alert("삭제 실패: " + e.message); }
+            }
+        };
+
+        // 대화 제목 수정 기능
+        const handleEditSessionTitle = async (id, oldTitle) => {
+            const newTitle = prompt("대화 제목 수정:", oldTitle);
+            if (newTitle && newTitle.trim() !== "") {
+                try {
+                    await updateDoc(doc(getUserChatCollectionRef(), id), { title: newTitle.trim() });
+                } catch (e) { alert("수정 실패: " + e.message); }
+            }
+        };
+
+        const handleSend = async () => {
+            if (!isAuthReady) return alert("인증 대기 중");
+            const inputElement = document.getElementById('chat-input');
+            const userMsg = inputElement.value.trim();
+            if (!userMsg) return;
+            if (!config.geminiKey) return alert("API 키가 없습니다.");
+            
+            inputElement.dataset.value = userMsg; 
+            const filteredMemos = selectedCategory === 'all' ? memos : memos.filter(m => (m.category || '기타') === selectedCategory);
+            
+            messages = [...messages, { role: 'user', text: userMsg }];
+            inputElement.value = ''; 
+            loading = true; 
+            render();
+
+            if (filteredMemos.length === 0) {
+                messages = [...messages, { role: 'model', text: `선택하신 '${selectedCategory}' 문서함에 참고할 메모가 없습니다.` }];
+                await saveCurrentSession(); 
+                loading = false;
+                render(); 
+                return;
+            }
+
+            try {
+                if (!window.GoogleGenerativeAI) {
+                    const module = await import("https://esm.run/@google/generative-ai");
+                    window.GoogleGenerativeAI = module.GoogleGenerativeAI;
+                }
+                let context = `[참고 데이터 (문서함: ${selectedCategory})]:\n`;
+                filteredMemos.forEach(m => { context += `- ${m.filename}: ${m.content.slice(0, 800)}\n`; });
+                context += `\n[질문]: ${userMsg}`;
+
+                const genAI = new window.GoogleGenerativeAI(config.geminiKey);
+                const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+                const result = await model.generateContent(context);
+                const responseText = result.response.text();
+                
+                messages = [...messages, { role: 'model', text: responseText }];
+                
+                if (!currentSessionId && messages.length === 2) {
+                    await createSessionAndGenerateTitle(messages[0].text, responseText);
+                } else {
+                    await saveCurrentSession();
+                }
+
+            } catch (error) {
+                messages = [...messages, { role: 'model', text: `오류: ${error.message}` }];
+            }
+            loading = false; render();
+        };
+
+        const saveCurrentSession = async () => {
+            if (!db || !isAuthReady) return;
+            if (!currentSessionId) {
+                const newDocRef = await addDoc(getUserChatCollectionRef(), {
+                    title: "새로운 대화",
+                    messages: messages,
+                    updatedAt: new Date()
+                });
+                currentSessionId = newDocRef.id;
+            } else {
+                await updateDoc(doc(getUserChatCollectionRef(), currentSessionId), {
+                    messages: messages,
+                    updatedAt: new Date()
+                });
+            }
+        };
+
+        const createSessionAndGenerateTitle = async (firstUserMsg, firstAiMsg) => {
+            try {
+                const newDocRef = await addDoc(getUserChatCollectionRef(), {
+                    title: firstUserMsg.slice(0, 20) + "...",
+                    messages: messages,
+                    updatedAt: new Date()
+                });
+                currentSessionId = newDocRef.id;
+
+                const genAI = new window.GoogleGenerativeAI(config.geminiKey);
+                const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+                const titlePrompt = `다음 대화 내용을 바탕으로 5단어 이내의 짧고 명확한 제목을 지어줘. 따옴표 없이 제목만 출력해.\n\nQ: ${firstUserMsg}\nA: ${firstAiMsg}`;
+                const result = await model.generateContent(titlePrompt);
+                const title = result.response.text().trim();
+
+                await updateDoc(newDocRef, { title: title });
+            } catch (e) { console.error("Title Gen Error:", e); }
+        };
+
+        const handleFileUpload = async (e) => {
+            if (!db) return;
+            filesToUpload = Array.from(e.target.files);
+            if (filesToUpload.length > 0) { e.target.value = ''; showCategoryViewerModal = false; showCategoryUploadModal = true; render(); }
+        };
+
+        const startBulkUpload = async (category) => {
+            if (filesToUpload.length === 0 || !category) return;
+            showCategoryUploadModal = false; isUploading = true; uploadSuccessCount = 0; totalFilesToUpload = filesToUpload.length; render();
+            
+            if (!CATEGORIES.includes(category)) { 
+                CATEGORIES.push(category); await saveCategories(); 
+            }
+
+            for (const file of filesToUpload) {
+                if (file.type !== "text/plain" && !file.name.toLowerCase().endsWith(".txt")) continue;
+                
+                currentUploadingFileName = file.name;
+                currentUploadingFileSize = file.size;
+                render();
+
+                await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                        try { 
+                            await addDoc(getUserMemoCollectionRef(), { 
+                                filename: file.name, 
+                                content: event.target.result, 
+                                timestamp: new Date(), 
+                                category: category 
+                            }); 
+                            uploadSuccessCount++; 
+                        } catch (e) { 
+                            console.error(e); 
+                        }
+                        render();
+                        resolve();
+                    };
+                    reader.readAsText(file, 'utf-8');
+                });
+            }
+            
+            isUploading = false; 
+            filesToUpload = []; 
+            currentUploadingFileName = '';
+            
+            await fetchMemos(); 
+            render();
+            setTimeout(() => alert("업로드가 완료되었습니다."), 100);
+        };
+
+        const handleDeleteMemo = async (id) => {
+            if (confirm("삭제하시겠습니까?")) {
+                try { await deleteDoc(doc(getUserMemoCollectionRef(), id)); await fetchMemos(); } catch (e) { alert(e.message); }
+            }
+        };
+
+        const handleBulkDelete = async () => {
+            if (confirm(`선택한 ${selectedMemoIds.size}개를 삭제하시겠습니까?`)) {
+                isDeleting = true;
+                deleteSuccessCount = 0;
+                totalFilesToDelete = selectedMemoIds.size;
+                render();
+
+                try {
+                    const idsToDelete = Array.from(selectedMemoIds);
+                    const deletePromises = idsToDelete.map(async (id) => {
+                        await deleteDoc(doc(getUserMemoCollectionRef(), id));
+                        deleteSuccessCount++;
+                        render(); 
+                    });
+
+                    await Promise.all(deletePromises);
+                    
+                    selectedMemoIds.clear(); 
+                    await fetchMemos();
+                    
+                    setTimeout(() => {
+                        isDeleting = false;
+                        deleteSuccessCount = 0;
+                        totalFilesToDelete = 0;
+                        render();
+                        alert("삭제가 완료되었습니다.");
+                    }, 500);
+
+                } catch (e) { 
+                    alert("삭제 실패: " + e.message); 
+                    isDeleting = false;
+                    render();
+                }
+            }
+        };
+
+        const handleEditCategory = async (oldName) => {
+            if (!db || !isAuthReady) return alert("연결 확인 필요");
+            const newName = prompt(`[${oldName}]의 새로운 이름:`);
+            if (!newName || !newName.trim()) return;
+            const cleanNew = newName.trim();
+            if (CATEGORIES.includes(cleanNew)) return alert("이미 존재하는 이름입니다.");
+            
+            if (confirm(`'${oldName}' -> '${cleanNew}' 변경?\n모든 메모가 이동됩니다.`)) {
+                loading = true; render();
+                try {
+                    const q = query(getUserMemoCollectionRef(), where("category", "==", oldName));
+                    const snapshot = await getDocs(q);
+                    const updatePromises = snapshot.docs.map(docSnap => 
+                        updateDoc(doc(getUserMemoCollectionRef(), docSnap.id), { category: cleanNew })
+                    );
+                    await Promise.all(updatePromises);
+
+                    const idx = CATEGORIES.indexOf(oldName);
+                    if (idx !== -1) CATEGORIES[idx] = cleanNew;
+                    await saveCategories();
+                    
+                    if (selectedCategory === oldName) selectedCategory = cleanNew;
+                    if (categoryView === oldName) categoryView = cleanNew;
+                    
+                    await fetchMemos(); 
+                    alert("수정 완료");
+                } catch (e) { alert("오류: " + e.message); } finally { loading = false; render(); }
+            }
+        };
+
+        const handleDeleteCategory = async (name) => {
+            if (!db || !isAuthReady) return alert("연결 확인 필요");
+            if (confirm(`'${name}' 카테고리를 삭제하시겠습니까?`)) {
+                const q = query(getUserMemoCollectionRef(), where("category", "==", name));
+                const snapshot = await getDocs(q);
+                
+                if (snapshot.size > 0) {
+                    if (!confirm(`이 카테고리에 ${snapshot.size}개의 메모가 있습니다.\n메모들은 '기타'로 이동됩니다.`)) return;
+                    loading = true; render();
+                    try {
+                        const updatePromises = snapshot.docs.map(docSnap => 
+                            updateDoc(doc(getUserMemoCollectionRef(), docSnap.id), { category: '기타' })
+                        );
+                        await Promise.all(updatePromises);
+                    } catch (e) { loading = false; render(); return alert("이동 실패: " + e.message); }
+                }
+
+                loading = true; render();
+                try {
+                    CATEGORIES = CATEGORIES.filter(c => c !== name);
+                    if (selectedCategory === name) selectedCategory = 'all';
+                    await saveCategories();
+                    await fetchMemos();
+                    alert("삭제 완료");
+                } catch (e) { alert("실패: " + e.message); } finally { loading = false; render(); }
+            }
+        };
+
+        const handleAddCategory = async () => {
+            const newCat = prompt("새 카테고리:");
+            if (newCat && newCat.trim()) {
+                const clean = newCat.trim();
+                if (!CATEGORIES.includes(clean)) { CATEGORIES.push(clean); await saveCategories(); render(); }
+            }
+        };
+
+        const attachEventListeners = () => {
+            document.getElementById('send-btn')?.addEventListener('click', handleSend);
+            const chatInput = document.getElementById('chat-input');
+            if (chatInput) {
+                chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+                chatInput.addEventListener('input', (e) => { e.target.dataset.value = e.target.value; });
+            }
+            
+            // 사이드바 토글 (모바일용)
+            document.getElementById('open-sidebar-mobile')?.addEventListener('click', () => { showSidebar = true; render(); });
+            document.getElementById('close-sidebar-mobile')?.addEventListener('click', () => { showSidebar = false; render(); });
+            document.getElementById('mobile-backdrop')?.addEventListener('click', () => { showSidebar = false; render(); });
+
+            document.getElementById('new-chat-btn')?.addEventListener('click', startNewChat);
+
+            document.querySelectorAll('.chat-session-item').forEach(item => {
+                item.addEventListener('click', () => loadChatSession(item.dataset.id));
+            });
+            document.querySelectorAll('.delete-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteChatSession(btn.dataset.id);
+                });
+            });
+            // 제목 수정 버튼 이벤트
+            document.querySelectorAll('.edit-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleEditSessionTitle(btn.dataset.id, btn.dataset.title);
+                });
+            });
+
+            document.getElementById('main-upload-input')?.addEventListener('change', handleFileUpload);
+            document.querySelectorAll('.select-category-button').forEach(btn => btn.addEventListener('click', (e) => startBulkUpload(e.currentTarget.innerText.trim())));
+            document.getElementById('cancel-upload-select')?.addEventListener('click', () => { showCategoryUploadModal = false; filesToUpload = []; render(); });
+            document.getElementById('add-cat-upload-btn')?.addEventListener('click', handleAddCategory);
+            document.getElementById('open-settings-btn')?.addEventListener('click', () => { showSettings = true; render(); });
+            document.getElementById('close-settings')?.addEventListener('click', () => { showSettings = false; render(); });
+            document.getElementById('save-settings')?.addEventListener('click', () => {
+                config.geminiKey = document.getElementById('gemini-key').value;
+                localStorage.setItem('ai_memo_config', JSON.stringify(config));
+                showSettings = false; 
+                render();
+            });
+            document.querySelectorAll('.cat-item-btn').forEach(btn => btn.addEventListener('click', (e) => { selectedCategory = e.currentTarget.dataset.name; render(); }));
+            document.querySelectorAll('.open-viewer-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); categoryView = e.currentTarget.dataset.cat; selectedMemoIds.clear(); showCategoryViewerModal = true; render(); }));
+            document.getElementById('close-viewer-btn')?.addEventListener('click', () => { showCategoryViewerModal = false; render(); });
+            document.querySelectorAll('.delete-memo-btn').forEach(btn => btn.addEventListener('click', (e) => handleDeleteMemo(e.currentTarget.dataset.id)));
+            document.querySelectorAll('.view-content-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const memo = memos.find(m => m.id === e.currentTarget.dataset.id);
+                if (memo) { const w = window.open("", "_blank", "width=600,height=600"); w.document.write(`<pre>${memo.content}</pre>`); }
+            }));
+            document.getElementById('viewer-upload-input')?.addEventListener('change', async (e) => { filesToUpload = Array.from(e.target.files); if(filesToUpload.length > 0) await startBulkUpload(categoryView); });
+            document.querySelectorAll('.memo-item-checkbox').forEach(chk => chk.addEventListener('change', (e) => { e.target.checked ? selectedMemoIds.add(e.target.dataset.id) : selectedMemoIds.delete(e.target.dataset.id); render(); }));
+            document.getElementById('select-all-memos')?.addEventListener('change', (e) => {
+                const visible = memos.filter(m => (m.category || '기타') === categoryView);
+                e.target.checked ? visible.forEach(m => selectedMemoIds.add(m.id)) : visible.forEach(m => selectedMemoIds.delete(m.id));
+                render();
+            });
+            document.getElementById('bulk-delete-btn')?.addEventListener('click', handleBulkDelete);
+            document.getElementById('open-cat-manager')?.addEventListener('click', () => { showCategoryModal = true; render(); });
+            document.getElementById('close-cat-manager-btn')?.addEventListener('click', () => { showCategoryModal = false; render(); });
+            document.getElementById('add-new-cat-btn')?.addEventListener('click', handleAddCategory);
+            document.querySelectorAll('.edit-cat-btn').forEach(btn => { 
+                const n = btn.dataset.name; 
+                btn.addEventListener('click', () => handleEditCategory(n)); 
+            });
+            document.querySelectorAll('.del-cat-btn').forEach(btn => { 
+                const n = btn.dataset.name; 
+                btn.addEventListener('click', () => handleDeleteCategory(n)); 
+            });
+            
+            const msgContainer = document.getElementById('messages-container');
+            if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
+        };
+
+        const render = () => {
+            appElement.innerHTML = renderApp();
+            if (renderTimeoutId) clearTimeout(renderTimeoutId);
+            renderTimeoutId = setTimeout(() => {
+                try { attachEventListeners(); } catch(e) { console.error(e); }
+                const el = document.getElementById('chat-input'); if(el) el.value = el.dataset.value || '';
+            }, 0);
+        };
+
+        window.onload = () => {
+            const savedConfig = localStorage.getItem('ai_memo_config');
+            if (savedConfig) {
+                try {
+                    const parsed = JSON.parse(savedConfig);
+                    if (parsed.geminiKey) config.geminiKey = parsed.geminiKey;
+                } catch (e) { console.error(e); }
+            }
+            initFirebase(); 
+        };
+    </script>
+</body>
+</html>

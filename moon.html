@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👑 슈퍼 페이지</title>
+    <!-- Tailwind CSS CDN 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter 폰트 사용 설정 -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            /* 다크 모드 배경 */
+            color: #ffffff;
+            /* 다크 모드 텍스트 */
+        }
+
+        .link-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            /* 일반 모드 */
+            background-color: #1e1e1e;
+            /* 다크 모드 카드 배경 */
+            color: #ffffff;
+            border-color: #333;
+        }
+
+        .link-button:hover:not(.selected-for-delete) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+            background-color: #2a2a2a;
+        }
+
+        /* 드래그 가능 아이템 */
+        .link-button.edit-mode-active {
+            cursor: grab;
+            /* 편집 모드 */
+        }
+
+        .link-button.edit-mode-active:active {
+            cursor: grabbing;
+        }
+
+        .link-button.dragging {
+            opacity: 0.5;
+            border: 2px dashed #666;
+        }
+
+        /* 커스텀 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #222;
+        }
+
+        /* 모달 스타일 */
+        .modal {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(3px);
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-content {
+            transform: translateY(20px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            background-color: #1e1e1e;
+            color: white;
+            border: 1px solid #333;
+        }
+
+        .modal-open .modal-content {
+            transform: translateY(0);
+        }
+
+        /* 편집 모드에서 선택된 버튼 스타일 */
+        .selected-for-delete {
+            background-color: #2d1a1a !important;
+            /* Redish Dark */
+            border-color: #ef4444 !important;
+            /* Red-500 */
+        }
+
+        /* 선택 인디케이터 스타일 (이제 Flex에 통합됨) */
+        .selection-indicator {
+            width: 24px;
+            height: 24px;
+            border-radius: 9999px;
+            /* rounded-full */
+            border: 2px solid #666;
+            /* border-gray-400 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .selected-for-delete .selection-indicator {
+            background-color: #ef4444;
+            /* Red-500 */
+            border-color: #ef4444;
+        }
+
+        /* Input Styles for Dark Mode */
+        input[type="text"],
+        input[type="url"] {
+            background-color: #2a2a2a;
+            color: white;
+            border-color: #444;
+        }
+
+        input[type="text"]:focus,
+        input[type="url"]:focus {
+            border-color: #6366f1;
+            /* Indigo-500 */
+            ring-color: #6366f1;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- 로딩 인디케이터 -->
+    <div id="loadingIndicator"
+        class="absolute inset-0 bg-black/80 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+            <p class="mt-4 text-indigo-400 font-medium">데이터 로드 중...</p>
+        </div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="w-full max-w-lg">
+        <header class="text-center mb-6">
+            <!-- 제목 변경 -->
+            <h1 class="text-3xl font-extrabold text-white mb-2">👑 슈퍼 페이지</h1>
+        </header>
+
+        <!-- 편집/삭제 컨트롤 패널 (새 위치) -->
+        <div id="control-panel" class="mb-6 flex justify-end space-x-2">
+            <button id="deleteSelectedBtn"
+                class="px-3 py-1 text-sm font-bold text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 transition duration-150 hidden disabled:opacity-50 disabled:cursor-not-allowed">
+                삭제 (0)
+            </button>
+            <button id="editToggleBtn"
+                class="px-3 py-1 text-sm font-medium text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition duration-150 border border-gray-700">
+                편집
+            </button>
+        </div>
+
+        <!-- 링크 버튼 영역 (Firebase에서 동적으로 로드됨) -->
+        <div id="links-container" class="space-y-4">
+            <!-- 기본 예시 링크 (데이터 로드 전까지 표시) -->
+            <div id="initial-links">
+                <div class="link-button bg-[#1e1e1e] border border-gray-700 py-4 px-6 rounded-xl animate-pulse h-16">
+                </div>
+                <div class="link-button bg-[#1e1e1e] border border-gray-700 py-4 px-6 rounded-xl animate-pulse h-16">
+                </div>
+            </div>
+        </div>
+
+        <!-- 새 링크 추가 버튼 -->
+        <div class="mt-8 pt-4 border-t border-gray-800 text-center">
+            <button id="addLinkBtn"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-200 ease-in-out transform hover:scale-105">
+                + 새 링크 추가
+            </button>
+        </div>
+    </div>
+
+    <!-- 모달: 새 링크 추가/수정 폼 -->
+    <div id="addLinkModal" class="modal fixed inset-0 hidden items-center justify-center p-4 z-50" aria-modal="true"
+        role="dialog">
+        <div class="modal-content w-full max-w-sm p-6 rounded-2xl shadow-2xl">
+            <h2 id="modalTitle" class="text-xl font-bold mb-4 text-white">새 기능 링크 추가</h2>
+            <form id="linkForm">
+                <input type="hidden" id="editLinkId">
+                <div class="mb-4">
+                    <label for="linkName" class="block text-sm font-medium text-gray-300 mb-1">링크 이름 (예: 메모장 앱)</label>
+                    <input type="text" id="linkName" name="linkName" required
+                        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="앱 이름을 입력하세요">
+                </div>
+                <div class="mb-6">
+                    <label for="linkUrl" class="block text-sm font-medium text-gray-300 mb-1">URL (예:
+                        https://example.com/app)</label>
+                    <input type="url" id="linkUrl" name="linkUrl" required
+                        class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="전체 URL을 입력하세요">
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" id="closeModalBtn"
+                        class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition duration-150">취소</button>
+                    <button type="submit" id="saveLinkBtn"
+                        class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition duration-150 shadow-lg">저장</button>
+                </div>
+            </form>
+            <p id="errorMessage" class="text-red-400 text-sm mt-3 hidden"></p>
+        </div>
+    </div>
+
+    <!-- 모달: 삭제 확인 메시지 -->
+    <div id="deleteConfirmModal" class="modal fixed inset-0 hidden items-center justify-center p-4 z-50"
+        aria-modal="true" role="dialog">
+        <div class="modal-content w-full max-w-xs p-6 rounded-2xl shadow-2xl text-center">
+            <h2 class="text-xl font-bold mb-4 text-white">링크 삭제 확인</h2>
+            <p class="text-gray-300 mb-6">선택한 <span id="deleteCountDisplay" class="font-bold text-red-500">0</span>개의
+                링크를 정말 삭제하시겠습니까?</p>
+            <div class="flex justify-center space-x-3">
+                <button type="button" id="cancelDeleteBtn"
+                    class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition duration-150">취소</button>
+                <button type="button" id="confirmDeleteBtn"
+                    class="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition duration-150 shadow-lg">영구
+                    삭제</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Firebase 모듈 임포트
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, deleteDoc, updateDoc, writeBatch, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 전역 변수 및 DOM 요소 설정
+        const linksContainer = document.getElementById('links-container');
+        const addLinkModal = document.getElementById('addLinkModal');
+        const addLinkBtn = document.getElementById('addLinkBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const linkForm = document.getElementById('linkForm');
+        const linkNameInput = document.getElementById('linkName');
+        const linkUrlInput = document.getElementById('linkUrl');
+        const editLinkIdInput = document.getElementById('editLinkId'); // Hidden Input
+        const modalTitle = document.getElementById('modalTitle');
+        const errorMessageDisplay = document.getElementById('errorMessage');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        // 편집 및 삭제 관련 DOM 요소
+        const editToggleBtn = document.getElementById('editToggleBtn');
+        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const deleteCountDisplay = document.getElementById('deleteCountDisplay');
+
+
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+        let isEditMode = false; // 편집 모드 상태
+        let selectedLinkIds = new Set(); // 선택된 링크 ID를 추적 (Set 사용)
+        let cachedLinks = []; // Firestore에서 로드된 링크 데이터를 캐시
+        let dragSrcEl = null; // 드래그 시작 요소
+
+        // Firestore 컬렉션 경로 생성 함수
+        function getLinksCollectionRef(db, userId, appId) {
+            const isCanvasEnvironment = typeof __firebase_config !== 'undefined' && __firebase_config;
+
+            if (isCanvasEnvironment) {
+                return collection(db, `artifacts/${appId}/users/${userId}/links`);
+            } else {
+                return collection(db, `myLinks`);
+            }
+        }
+
+        // 유효성 검사 함수
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // ------------------ UI 관련 함수 ------------------
+
+        // 링크 버튼 생성 함수 (편집 모드 로직 포함)
+        function createLinkElement(link) {
+            const url = link.url.startsWith('http') ? link.url : `https://${link.url}`;
+            const linkId = link.id;
+
+            const a = document.createElement('a');
+            a.id = `link-${linkId}`;
+            a.dataset.id = linkId;
+            a.className = "link-button block hover:bg-[#2a2a2a] border border-gray-700 font-semibold py-4 px-6 rounded-xl text-center text-lg md:text-xl transform transition duration-200 ease-in-out relative";
+
+            // 일반/편집 모드 클래스 설정
+            if (isEditMode) {
+                a.classList.add('edit-mode-active');
+                a.href = "javascript:void(0)";
+                a.target = "_self";
+                a.draggable = true;
+            } else {
+                a.href = url;
+                a.target = "_blank";
+                a.draggable = false;
+                a.classList.remove('edit-mode-active');
+            }
+
+            // 선택 상태 업데이트
+            if (selectedLinkIds.has(linkId)) {
+                a.classList.add('selected-for-delete', 'ring-2', 'ring-red-500');
+            } else {
+                a.classList.remove('selected-for-delete', 'ring-2', 'ring-red-500');
+            }
+
+            // 내부 콘텐츠 구성
+            const contentDiv = document.createElement('div');
+            contentDiv.className = "flex items-center justify-between";
+
+            const span = document.createElement('span');
+            span.textContent = link.name;
+            span.className = "text-gray-100";
+            contentDiv.appendChild(span);
+
+
+            // 오른쪽 아이콘/컨트롤 그룹
+            const rightControls = document.createElement('div');
+            rightControls.className = "flex items-center space-x-3 flex-shrink-0";
+
+            if (isEditMode) {
+                // [NEW] 편집 버튼 (Pencil)
+                const editBtn = document.createElement('button');
+                editBtn.className = "p-1 text-gray-400 hover:text-indigo-400 transition";
+                editBtn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>`;
+                editBtn.onclick = (e) => {
+                    e.stopPropagation(); // 부모 클릭 방지 (선택 토글 방지)
+                    e.preventDefault();
+                    // 편집 모달 열기
+                    openAddLinkModal(link);
+                };
+                rightControls.appendChild(editBtn);
+
+
+                // 1. 체크박스/선택 인디케이터 (삭제용)
+                const isSelected = selectedLinkIds.has(linkId);
+                const selectionIndicator = document.createElement('div');
+                selectionIndicator.className = `selection-indicator ${isSelected ? 'bg-red-500 border-red-500' : 'hover:border-red-500'}`;
+                selectionIndicator.innerHTML = `<svg class="w-4 h-4 text-white ${isSelected ? '' : 'hidden'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
+                rightControls.appendChild(selectionIndicator);
+
+                // 2. 드래그 핸들 아이콘
+                const dragHandleIcon = document.createElement('div');
+                dragHandleIcon.className = "drag-handle w-6 h-6 text-gray-500 hover:text-gray-400 transition duration-150 cursor-grab";
+                dragHandleIcon.innerHTML = `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>`;
+                rightControls.appendChild(dragHandleIcon);
+
+                // 드래그 앤 드롭 이벤트 리스너 추가 (편집 모드에서만)
+                a.addEventListener('dragstart', handleDragStart);
+                a.addEventListener('dragenter', handleDragEnter);
+                a.addEventListener('dragleave', handleDragLeave);
+                a.addEventListener('dragover', handleDragOver);
+                a.addEventListener('drop', handleDrop);
+                a.addEventListener('dragend', handleDragEnd);
+
+            } else {
+                // 일반 모드: 링크 아이콘
+                const linkIcon = `<svg class="w-6 h-6 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>`;
+                rightControls.innerHTML += linkIcon;
+            }
+
+            contentDiv.appendChild(rightControls);
+            a.appendChild(contentDiv);
+
+            // 이벤트 리스너 추가 (편집 모드일 때만 선택 기능을 처리)
+            a.addEventListener('click', (e) => {
+                if (isEditMode) {
+                    e.preventDefault();
+                    toggleLinkSelection(linkId);
+                }
+            });
+
+            return a;
+        }
+
+        // 링크 목록을 렌더링하는 함수
+        function renderLinks(links) {
+            linksContainer.innerHTML = '';
+
+            if (links.length === 0) {
+                linksContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">아직 추가된 링크가 없습니다. 새 링크를 추가하세요!</p>`;
+            } else {
+                links.forEach(link => {
+                    linksContainer.appendChild(createLinkElement(link));
+                });
+            }
+        }
+
+        function updateDeleteButtonState() {
+            const count = selectedLinkIds.size;
+            deleteSelectedBtn.textContent = `삭제 (${count})`;
+            deleteSelectedBtn.disabled = count === 0;
+        }
+
+        function toggleLinkSelection(linkId) {
+            const linkElement = document.getElementById(`link-${linkId}`);
+
+            if (selectedLinkIds.has(linkId)) {
+                selectedLinkIds.delete(linkId);
+                linkElement.classList.remove('selected-for-delete', 'ring-2', 'ring-red-500');
+            } else {
+                selectedLinkIds.add(linkId);
+                linkElement.classList.add('selected-for-delete', 'ring-2', 'ring-red-500');
+            }
+
+            const indicator = linkElement.querySelector('.selection-indicator');
+            const checkmark = indicator.querySelector('svg');
+
+            if (selectedLinkIds.has(linkId)) {
+                indicator.classList.add('bg-red-500', 'border-red-500');
+                indicator.classList.remove('hover:border-red-500');
+                checkmark.classList.remove('hidden');
+            } else {
+                indicator.classList.remove('bg-red-500', 'border-red-500');
+                indicator.classList.add('hover:border-red-500');
+                checkmark.classList.add('hidden');
+            }
+
+            updateDeleteButtonState();
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            selectedLinkIds.clear();
+
+            editToggleBtn.textContent = isEditMode ? '완료' : '편집';
+            editToggleBtn.classList.toggle('bg-gray-800', !isEditMode);
+            editToggleBtn.classList.toggle('border-gray-700', !isEditMode);
+            editToggleBtn.classList.toggle('bg-red-600', isEditMode);
+            editToggleBtn.classList.toggle('text-white', isEditMode);
+            editToggleBtn.classList.toggle('hover:bg-red-700', isEditMode);
+            editToggleBtn.classList.toggle('hover:bg-gray-700', !isEditMode);
+            editToggleBtn.classList.toggle('text-gray-300', !isEditMode);
+
+            deleteSelectedBtn.classList.toggle('hidden', !isEditMode);
+            updateDeleteButtonState();
+            renderLinks(cachedLinks);
+        }
+
+        // 모달 열기 (생성 또는 수정)
+        function openAddLinkModal(editLink = null) {
+            addLinkModal.classList.remove('hidden');
+            addLinkModal.classList.add('flex');
+            setTimeout(() => addLinkModal.classList.add('modal-open'), 10);
+            errorMessageDisplay.classList.add('hidden');
+
+            if (editLink && editLink.id) {
+                // 수정 모드
+                modalTitle.textContent = "링크 수정";
+                linkNameInput.value = editLink.name;
+                linkUrlInput.value = editLink.url;
+                editLinkIdInput.value = editLink.id; // ID 저장
+                document.getElementById('saveLinkBtn').textContent = "수정 완료";
+            } else {
+                // 생성 모드
+                modalTitle.textContent = "새 기능 링크 추가";
+                linkForm.reset();
+                editLinkIdInput.value = ""; // ID 초기화
+                document.getElementById('saveLinkBtn').textContent = "저장";
+            }
+        }
+
+        function closeAddLinkModal() {
+            addLinkModal.classList.remove('modal-open');
+            setTimeout(() => {
+                addLinkModal.classList.remove('flex');
+                addLinkModal.classList.add('hidden');
+                linkForm.reset();
+                editLinkIdInput.value = "";
+            }, 300);
+        }
+
+        function openDeleteConfirmModal() {
+            if (selectedLinkIds.size === 0) return;
+            deleteCountDisplay.textContent = selectedLinkIds.size;
+            deleteConfirmModal.classList.remove('hidden');
+            deleteConfirmModal.classList.add('flex');
+            setTimeout(() => deleteConfirmModal.classList.add('modal-open'), 10);
+        }
+
+        function closeDeleteConfirmModal() {
+            deleteConfirmModal.classList.remove('modal-open');
+            setTimeout(() => {
+                deleteConfirmModal.classList.remove('flex');
+                deleteConfirmModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // ------------------ Drag & Drop 함수 ------------------
+
+        function handleDragStart(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this !== dragSrcEl) {
+                this.classList.add('border-indigo-500', 'border-2');
+            }
+        }
+
+        function handleDragEnter(e) {
+            if (this !== dragSrcEl) {
+                this.classList.add('border-indigo-500', 'border-2');
+            }
+        }
+
+        function handleDragLeave() {
+            this.classList.remove('border-indigo-500', 'border-2');
+        }
+
+        async function handleDrop(e) {
+            e.stopPropagation();
+
+            if (dragSrcEl !== this) {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const sourceId = dragSrcEl.dataset.id;
+                const targetId = this.dataset.id;
+
+                const sourceIndex = cachedLinks.findIndex(link => link.id === sourceId);
+                const targetIndex = cachedLinks.findIndex(link => link.id === targetId);
+
+                const [draggedLink] = cachedLinks.splice(sourceIndex, 1);
+                cachedLinks.splice(targetIndex, 0, draggedLink);
+
+                await persistNewOrder(appId);
+            }
+            this.classList.remove('border-indigo-500', 'border-2');
+        }
+
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.link-button').forEach(item => {
+                item.classList.remove('border-indigo-500', 'border-2');
+            });
+            dragSrcEl = null;
+        }
+
+        async function persistNewOrder(appId) {
+            if (!db || !userId) return;
+
+            const batch = writeBatch(db);
+            const baseTimestamp = Date.now();
+            const linksCount = cachedLinks.length;
+
+            for (let i = 0; i < linksCount; i++) {
+                const link = cachedLinks[i];
+                const docRef = doc(db, getLinksCollectionRef(db, userId, appId).path, link.id);
+                const newTimestamp = baseTimestamp - (i * 1000);
+                batch.update(docRef, { createdAt: newTimestamp });
+            }
+
+            try {
+                await batch.commit();
+            } catch (error) {
+                console.error("순서 저장 오류:", error);
+            }
+        }
+
+
+        // ------------------ Firebase/데이터 관련 함수 ------------------
+
+        function loadLinks() {
+            if (!db || !userId) return;
+
+            const linkRef = getLinksCollectionRef(db, userId, typeof __app_id !== 'undefined' ? __app_id : 'default-app-id');
+            const q = query(linkRef);
+
+            onSnapshot(q, (snapshot) => {
+                const links = [];
+                snapshot.forEach((doc) => {
+                    links.push({ id: doc.id, ...doc.data() });
+                });
+
+                cachedLinks = links.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                renderLinks(cachedLinks);
+
+                loadingIndicator.classList.add('opacity-0');
+                setTimeout(() => loadingIndicator.classList.add('hidden'), 300);
+            }, (error) => {
+                console.error("링크 로드 오류:", error);
+                errorMessageDisplay.textContent = `링크를 불러오는 중 오류 발생: ${error.message}`;
+                errorMessageDisplay.classList.remove('hidden');
+                loadingIndicator.classList.add('hidden');
+            });
+        }
+
+        // 링크 저장/수정 함수
+        async function saveLink(event) {
+            event.preventDefault();
+
+            const name = linkNameInput.value.trim();
+            let url = linkUrlInput.value.trim();
+            const editId = editLinkIdInput.value; // ID 확인 (수정 여부)
+
+            errorMessageDisplay.classList.add('hidden');
+
+            if (!name || !url) {
+                errorMessageDisplay.textContent = '링크 이름과 URL을 모두 입력해주세요.';
+                errorMessageDisplay.classList.remove('hidden');
+                return;
+            }
+
+            if (!url.match(/^(http|https):\/\//)) {
+                url = `https://${url}`;
+            }
+            if (!isValidUrl(url)) {
+                errorMessageDisplay.textContent = '유효한 URL 형식이 아닙니다. 예: https://example.com';
+                errorMessageDisplay.classList.remove('hidden');
+                return;
+            }
+
+            if (!db || !userId) {
+                errorMessageDisplay.textContent = '사용자 인증이 완료되지 않아 링크를 저장할 수 없습니다.';
+                errorMessageDisplay.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const linkRef = getLinksCollectionRef(db, userId, typeof __app_id !== 'undefined' ? __app_id : 'default-app-id');
+
+                if (editId) {
+                    // [UPDATE] 기존 링크 수정
+                    const docToUpdate = doc(linkRef, editId);
+                    await updateDoc(docToUpdate, {
+                        name: name,
+                        url: url
+                        // createdAt은 유지
+                    });
+                } else {
+                    // [CREATE] 새 링크 생성
+                    const newCreatedAt = Date.now();
+                    await addDoc(linkRef, {
+                        name: name,
+                        url: url,
+                        createdAt: newCreatedAt
+                    });
+                }
+
+                closeAddLinkModal();
+
+            } catch (error) {
+                console.error("링크 저장 오류:", error);
+                errorMessageDisplay.textContent = `링크 저장 중 오류 발생: ${error.message}`;
+                errorMessageDisplay.classList.remove('hidden');
+            }
+        }
+
+        async function deleteSelectedLinks() {
+            if (!db || !userId || selectedLinkIds.size === 0) {
+                closeDeleteConfirmModal();
+                return;
+            }
+
+            confirmDeleteBtn.disabled = true;
+            cancelDeleteBtn.disabled = true;
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            try {
+                const deletionPromises = [];
+                for (const linkId of selectedLinkIds) {
+                    const docRef = doc(db, getLinksCollectionRef(db, userId, appId).path, linkId);
+                    deletionPromises.push(deleteDoc(docRef));
+                }
+
+                await Promise.all(deletionPromises);
+
+                selectedLinkIds.clear();
+                toggleEditMode();
+
+            } catch (error) {
+                console.error("선택된 링크 삭제 오류:", error);
+            } finally {
+                confirmDeleteBtn.disabled = false;
+                cancelDeleteBtn.disabled = false;
+                closeDeleteConfirmModal();
+            }
+        }
+
+        async function initFirebase() {
+            setLogLevel('error');
+
+            const isCanvasEnvironment = typeof __firebase_config !== 'undefined' && __firebase_config;
+            let config;
+
+            if (isCanvasEnvironment) {
+                try {
+                    config = JSON.parse(__firebase_config);
+                } catch (e) {
+                    console.error("Canvas Firebase config parsing error:", e);
+                    return;
+                }
+            } else {
+                try {
+                    loadingIndicator.querySelector('p').textContent = '설정 파일 로드 중...';
+                    const response = await fetch('./firebase-config.json');
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to load firebase-config.json. Status: ${response.statusText}`);
+                    }
+                    config = await response.json();
+                } catch (error) {
+                    console.error("Firebase 설정 로드 오류:", error);
+                    loadingIndicator.classList.add('hidden');
+                    linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 'firebase-config.json' 파일을 확인하거나 누락된 경우 생성해 주세요. (오류: ${error.message})</p>`;
+                    return;
+                }
+
+                if (!config || !config.projectId) {
+                    console.error("Firebase 연결을 위한 설정 정보가 누락되었습니다.");
+                    loadingIndicator.classList.add('hidden');
+                    linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결 실패: 'firebase-config.json' 파일에 projectId가 누락되었습니다. 설정을 확인해 주세요.</p>`;
+                    return;
+                }
+            }
+
+
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const app = initializeApp(config);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (isCanvasEnvironment && typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        loadLinks();
+                    } else {
+                        userId = null;
+                        isAuthReady = true;
+                        loadingIndicator.classList.add('hidden');
+                        linksContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">인증 오류로 인해 링크를 로드할 수 없습니다.</p>`;
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase 초기화 또는 인증 오류:", error);
+                loadingIndicator.classList.add('hidden');
+                linksContainer.innerHTML = `<p class="text-center text-red-500 mt-8">Firebase 연결에 실패했습니다: ${error.message}</p>`;
+            }
+        }
+
+        // ------------------ 이벤트 리스너 등록 ------------------
+        addLinkBtn.addEventListener('click', () => openAddLinkModal());
+        closeModalBtn.addEventListener('click', closeAddLinkModal);
+        linkForm.addEventListener('submit', saveLink);
+
+        editToggleBtn.addEventListener('click', toggleEditMode);
+        deleteSelectedBtn.addEventListener('click', openDeleteConfirmModal);
+
+        confirmDeleteBtn.addEventListener('click', deleteSelectedLinks);
+        cancelDeleteBtn.addEventListener('click', closeDeleteConfirmModal);
+
+        window.onload = initFirebase;
+    </script>
+</body>
+
+</html>

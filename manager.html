@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔒 통합 관리자</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☁️</text></svg>">
+    <style>
+        :root {
+            /* 다크 모드 컬러 팔레트 */
+            --primary-color: #3b82f6; /* Blue 500 */
+            --primary-hover: #2563eb; /* Blue 600 */
+            --danger-color: #ef4444; /* Red 500 */
+            --warning-color: #f59e0b; /* Amber 500 */
+            --success-color: #10b981; /* Emerald 500 */
+            
+            --bg-color: #0f172a;      /* Slate 900 */
+            --card-bg: #1e293b;       /* Slate 800 */
+            --input-bg: #334155;      /* Slate 700 */
+            --border-color: #475569;  /* Slate 600 */
+            
+            /* 텍스트 컬러 */
+            --text-main: #ffffff;     /* Pure White */
+            --text-sub: #cbd5e1;      /* Slate 300 */
+            --text-placeholder: #94a3b8;
+            
+            --tab-active-bg: #334155;
+            --tab-active-text: #ffffff;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-main);
+            transition: background-color 0.3s;
+        }
+
+        /* --- 로그인 화면 스타일 --- */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: var(--bg-color);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .login-box {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 300px;
+        }
+        .login-box h2 { margin-bottom: 20px; color: var(--text-main); }
+        .login-box input { margin-bottom: 15px; text-align: center; letter-spacing: 5px; font-size: 18px; }
+        .login-error { color: var(--danger-color); font-size: 14px; margin-top: 10px; display: none; }
+
+        /* 메인 컨테이너 (초기에 숨김) */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            display: none; /* 로그인 전까지 숨김 */
+        }
+
+        h2 { color: #ffffff; font-weight: 700; }
+
+        /* 탭 네비게이션 */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-sub);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover { background-color: var(--input-bg); color: #ffffff; }
+        
+        .tab-btn.active {
+            background-color: var(--tab-active-bg);
+            color: var(--tab-active-text);
+            border: 1px solid var(--border-color);
+        }
+
+        /* 헤더 */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header-left {
+            display: flex; align-items: center;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-box input {
+            padding: 10px 16px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            width: 250px;
+            font-size: 14px;
+            color: var(--text-main);
+        }
+
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 입력 폼 */
+        .input-wrapper {
+            background-color: #0f172a40;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 25px;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        /* 입력 레이블 */
+        .input-label {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-bottom: 4px;
+            margin-left: 4px;
+            display: block;
+        }
+
+        input, select {
+            padding: 12px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            color: var(--text-main);
+        }
+        
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+        
+        input::placeholder { color: var(--text-placeholder); }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        /* 버튼 */
+        button { cursor: pointer; border: none; border-radius: 8px; transition: all 0.2s; font-weight: 600; }
+        
+        .btn-add { background-color: var(--primary-color); color: #ffffff; padding: 12px; width: 100%; }
+        .btn-add:hover { background-color: var(--primary-hover); }
+
+        .btn-copy { background-color: var(--input-bg); color: #ffffff; padding: 4px 8px; font-size: 11px; margin-left: 5px; border-radius: 4px; vertical-align: middle; border: 1px solid var(--border-color);}
+        .btn-copy:hover { background-color: var(--border-color); }
+
+        /* 헤더 버튼용 스타일 추가 */
+        .btn-header {
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            padding: 10px 16px;
+            font-size: 14px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-header:hover {
+            background-color: var(--border-color);
+        }
+
+        .btn-action { padding: 6px 10px; font-size: 14px; margin: 0 2px; color: #ffffff; }
+        .btn-edit { background-color: var(--primary-color); }
+        .btn-delete { background-color: var(--danger-color); } 
+        .btn-save { background-color: var(--success-color); }
+        .btn-cancel { background-color: var(--border-color); color: var(--text-main); }
+        
+        /* 테이블 */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1200px; }
+        
+        th, td { 
+            padding: 14px 10px; 
+            text-align: left; 
+            border-bottom: 1px solid var(--border-color); 
+            vertical-align: middle; 
+            color: var(--text-main);
+        }
+        
+        th { 
+            background-color: var(--input-bg); 
+            color: #ffffff;
+            font-weight: 700; 
+            cursor: pointer; 
+            user-select: none; 
+            white-space: nowrap; 
+        }
+        
+        th:hover { color: var(--primary-color); }
+        tr:hover { background-color: #33415550; }
+
+        /* 배지 */
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; white-space: nowrap;}
+        .bg-green { background: #064e3b; color: #a7f3d0; border: 1px solid #059669; }
+        .bg-yellow { background: #451a03; color: #fde68a; border: 1px solid #d97706; }
+        .bg-red { background: #450a0a; color: #fecaca; border: 1px solid #dc2626; }
+        .bg-blue { background: #172554; color: #bfdbfe; border: 1px solid #2563eb; }
+        .bg-purple { background: #3b0764; color: #e9d5ff; border: 1px solid #7c3aed; }
+        .bg-gray { background: #334155; color: #cbd5e1; border: 1px solid #475569; }
+
+        /* API Key */
+        .key-text { font-family: 'JetBrains Mono', monospace; background: #0f172a; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; color: #f472b6; }
+        .usage-bar-bg { width: 100%; height: 8px; background: var(--input-bg); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+        .usage-bar-fill { height: 100%; transition: width 0.3s; }
+
+        /* 링크 */
+        .yt-link-display { display: flex; align-items: center; gap: 5px; }
+        .link-icon { text-decoration: none; color: var(--danger-color); font-size: 18px; }
+
+        /* 모달 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); display: none;
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background: var(--card-bg); padding: 25px; border-radius: 12px; width: 90%; max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color);
+        }
+        #modalTitle { margin-top:0; color: #ffffff; }
+        #modalMessage { color: var(--text-sub); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn-modal-confirm { background-color: var(--primary-color); color: #ffffff; padding: 8px 16px; }
+        .btn-modal-delete { background-color: var(--danger-color); color: white; padding: 8px 16px; }
+
+        #loading { display: none; color: var(--primary-color); font-weight: bold; margin-right: 10px;}
+    </style>
+</head>
+<body>
+
+<!-- 로그인 오버레이 -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔒 접근 제한</h2>
+        <p style="color:var(--text-sub); margin-bottom:20px; font-size:14px;">비밀번호를 입력하세요.</p>
+        <input type="password" id="app-password" placeholder="Password" onkeyup="if(event.key === 'Enter') checkLogin()">
+        <button class="btn-add" onclick="checkLogin()">로그인</button>
+        <div id="login-error" class="login-error">비밀번호가 올바르지 않습니다.</div>
+    </div>
+</div>
+
+<div class="container">
+    <h2>🔒 통합 관리자</h2>
+    
+    <!-- 탭 네비게이션 -->
+    <nav class="tabs">
+        <button class="tab-btn active" onclick="switchTab('api')">🔑 API Key</button>
+        <button class="tab-btn" onclick="switchTab('youtube')">📺 유튜브 채널</button>
+        <button class="tab-btn" onclick="switchTab('adsense')">💰 애드센스</button>
+        <button class="tab-btn" onclick="switchTab('subscription')">💳 구독 관리</button>
+    </nav>
+
+    <!-- 공통 헤더 -->
+    <div class="section-header">
+        <div class="header-left">
+            <span id="loading">📡 동기화 중...</span>
+            <div id="statsText" style="color: var(--text-sub); font-size: 14px;">데이터 로딩 중...</div>
+        </div>
+        <div class="header-right">
+            <!-- 검색창 -->
+            <div class="search-box">
+                <input type="text" id="searchInput" onkeyup="filterCurrentTable()" placeholder="검색어를 입력하세요...">
+            </div>
+            <!-- 내보내기/가져오기 버튼 -->
+            <button class="btn-header" onclick="exportData()">📤 내보내기</button>
+            <button class="btn-header" onclick="triggerImport()">📥 가져오기</button>
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="processImport(this)">
+        </div>
+    </div>
+
+    <!-- 1. API Key 매니저 (수정됨: 사용량 제거) -->
+    <div id="tab-api" class="tab-content active">
+        <div class="input-wrapper">
+            <div class="input-group">
+                <input type="text" id="api_account" placeholder="구글 계정 (Email)">
+                <input type="text" id="api_key" placeholder="API Key (sk-...)">
+                <input type="text" id="api_usage" placeholder="주 용도">
+                <select id="api_status">
+                    <option value="정상">🟢 정상</option>
+                    <option value="제한됨">🟡 제한됨</option>
+                    <option value="만료">🔴 만료</option>
+                </select>
+            </div>
+            <div class="input-group" style="grid-template-columns: 3fr 1fr;">
+                <input type="text" id="api_note" placeholder="비고">
+                <button class="btn-add" onclick="addData('api')">+ API 키 추가</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="table-api">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('account')">계정 ↕</th>
+                        <th onclick="sortTable('apiKey')">API Key</th>
+                        <th onclick="sortTable('usage')">용도 ↕</th>
+                        <th onclick="sortTable('limitStatus')">상태 ↕</th>
+                        <th onclick="sortTable('note')">비고</th>
+                        <th style="width:100px; text-align:center;">관리</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 2. 유튜브 채널 관리 -->
+    <div id="tab-youtube" class="tab-content">
+        <div class="input-wrapper">
+            <div class="input-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                <input type="text" id="yt_owner" placeholder="주 소유자 계정 (Email)">
+                <input type="text" id="yt_manager" placeholder="주 관리자 계정">
+                <input type="text" id="yt_pw" placeholder="비밀번호">
+            </div>
+            <div class="input-group" style="grid-template-columns: 1fr 2fr 1fr;">
+                <input type="text" id="yt_channel" placeholder="채널명">
+                <input type="text" id="yt_link" placeholder="유튜브 링크 (https://...)">
+                <input type="text" id="yt_adsense_account" placeholder="애드센스 계정">
+            </div>
+            <div class="input-group" style="grid-template-columns: 1fr 1fr 2fr;">
+                <select id="yt_brand">
+                    <option value="N">브랜드 계정: 아니오 (N)</option>
+                    <option value="Y">브랜드 계정: 예 (Y)</option>
+                </select>
+                <select id="yt_type">
+                    <option value="개인">개인</option>
+                    <option value="개인사업자">개인사업자</option>
+                    <option value="법인사업자">법인사업자</option>
+                </select>
+                <input type="text" id="yt_address" placeholder="주소">
+            </div>
+            <div class="input-group">
+                <input type="text" id="yt_note" placeholder="비고">
+                <button class="btn-add" onclick="addData('youtube')">+ 채널 추가</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="table-youtube">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('owner')">주 소유자 ↕</th>
+                        <th onclick="sortTable('manager')">주 관리자</th>
+                        <th onclick="sortTable('channel')">채널 정보 (링크) ↕</th>
+                        <th onclick="sortTable('adsenseAccount')">애드센스 계정 ↕</th>
+                        <th onclick="sortTable('brand')">브랜드</th>
+                        <th onclick="sortTable('type')">형태 ↕</th>
+                        <th onclick="sortTable('address')">주소</th>
+                        <th style="width:100px; text-align:center;">관리</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 3. 애드센스 -->
+    <div id="tab-adsense" class="tab-content">
+        <div class="input-wrapper">
+            <div class="input-group">
+                <input type="text" id="ad_email" placeholder="애드센스 계정 (Email)">
+                <input type="text" id="ad_pubid" placeholder="PUB-ID (pub-xxxxxxxx)">
+                <input type="text" id="ad_site" placeholder="연동 사이트/채널명">
+            </div>
+            <div class="input-group">
+                <input type="text" id="ad_pin" placeholder="PIN 번호 (6자리)">
+                <select id="ad_status">
+                    <option value="승인됨">🟢 승인됨 (Ready)</option>
+                    <option value="검토중">🟡 검토중 (Review)</option>
+                    <option value="준비필요">🔴 준비필요 (Attention)</option>
+                </select>
+            </div>
+            <div class="input-group" style="grid-template-columns: 1fr 2fr 1fr;">
+                <input type="text" id="ad_bank" placeholder="연동 계좌 은행 (예: 카카오뱅크)">
+                <input type="text" id="ad_account_num" placeholder="계좌번호">
+                <input type="text" id="ad_account_holder" placeholder="계좌명의">
+            </div>
+            <div class="input-group">
+                <input type="text" id="ad_note" placeholder="비고 (특이사항 등)">
+                <button class="btn-add" onclick="addData('adsense')">+ 애드센스 추가</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="table-adsense">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('email')">계정 ↕</th>
+                        <th onclick="sortTable('pubId')">PUB-ID</th>
+                        <th onclick="sortTable('site')">사이트/채널 ↕</th>
+                        <th onclick="sortTable('pin')">PIN</th>
+                        <th onclick="sortTable('bank')">정산 계좌 ↕</th>
+                        <th onclick="sortTable('status')">상태 ↕</th>
+                        <th onclick="sortTable('note')">비고</th>
+                        <th style="width:100px; text-align:center;">관리</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 4. 구독 관리 -->
+    <div id="tab-subscription" class="tab-content">
+        <div class="input-wrapper">
+            <!-- Row 1: 서비스 기본 정보 & 주기 -->
+            <div class="input-group" style="grid-template-columns: 1.5fr 1fr 0.8fr 0.8fr;">
+                <input type="text" id="sub_service" placeholder="서비스명 (Netflix, ChatGPT)">
+                <input type="number" id="sub_cost" placeholder="결제 금액">
+                <select id="sub_currency">
+                    <option value="KRW">₩ (KRW)</option>
+                    <option value="USD">$ (USD)</option>
+                </select>
+                <select id="sub_cycle">
+                    <option value="월간">월간</option>
+                    <option value="연간">연간</option>
+                </select>
+            </div>
+            
+            <!-- Row 2: 날짜 & 구매처 -->
+            <div class="input-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">결제일</label>
+                    <input type="date" id="sub_date" placeholder="결제일">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">만료일</label>
+                    <input type="date" id="sub_expire" placeholder="만료일">
+                </div>
+                <div style="display:flex; flex-direction:column;">
+                    <label class="input-label">구매처</label>
+                    <input type="text" id="sub_vendor" placeholder="구매처 (App Store, Web)">
+                </div>
+            </div>
+
+            <!-- Row 3: 계정 정보 -->
+            <div class="input-group">
+                <input type="text" id="sub_account" placeholder="로그인 계정 (ID/Email)">
+                <input type="text" id="sub_pw" placeholder="비밀번호">
+            </div>
+
+            <!-- Row 4: 결제수단 & 상태 -->
+            <div class="input-group">
+                <input type="text" id="sub_method" placeholder="결제 수단 (현대카드, 카카오페이)">
+                <select id="sub_status">
+                    <option value="구독중">🔵 구독중</option>
+                    <option value="해지예정">🟡 해지예정</option>
+                    <option value="종료">⚪ 종료됨</option>
+                </select>
+            </div>
+
+            <!-- Row 5: 비고 & 추가 -->
+            <div class="input-group" style="grid-template-columns: 3fr 1fr;">
+                <input type="text" id="sub_note" placeholder="비고 (특이사항)">
+                <button class="btn-add" onclick="addData('subscription')">+ 구독 추가</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table id="table-subscription">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('service')">서비스명 ↕</th>
+                        <th onclick="sortTable('cost')">금액 ↕</th>
+                        <th onclick="sortTable('cycle')">주기</th>
+                        <th onclick="sortTable('vendor')">구매처</th>
+                        <th onclick="sortTable('date')">결제일 ↕</th>
+                        <th onclick="sortTable('expire')">만료일 ↕</th>
+                        <th onclick="sortTable('account')">계정</th>
+                        <th onclick="sortTable('pw')">비번</th>
+                        <th onclick="sortTable('method')">결제수단</th>
+                        <th onclick="sortTable('status')">상태 ↕</th>
+                        <th onclick="sortTable('note')">비고</th>
+                        <th style="width:100px; text-align:center;">관리</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 통합 모달 창 -->
+<div id="customModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="modalTitle">알림</h3>
+        <p id="modalMessage">내용</p>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal()">취소</button>
+            <button id="modalConfirmBtn" class="btn-modal-confirm" onclick="confirmModal()">확인</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+    // --- 상태 관리 ---
+    let db; 
+    let auth;
+    let userId = null;
+    let appId = 'default-app-id';
+    let currentTab = 'api';
+    let sortState = { col: null, dir: 'asc' };
+    let localData = { api: [], youtube: [], adsense: [], subscription: [] };
+    let pendingModalAction = null;
+    let unsubscribes = {}; 
+    let remotePassword = ""; 
+
+    // --- 로그인 체크 함수 ---
+    window.checkLogin = () => {
+        const inputPw = document.getElementById('app-password').value;
+        const errorMsg = document.getElementById('login-error');
+        
+        if(!remotePassword) {
+            alert("설정 파일을 불러오는 중입니다. 잠시 후 다시 시도해주세요. (설정 로드 실패 시 '1234')");
+            return;
+        }
+
+        if(inputPw === remotePassword) {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.querySelector('.container').style.display = 'block';
+        } else {
+            errorMsg.style.display = 'block';
+            document.getElementById('app-password').value = '';
+            document.getElementById('app-password').focus();
+        }
+    }
+
+    // --- 초기화 ---
+    async function init() {
+        try {
+            // 1. settings.json 로드
+            try {
+                let settingsRes = await fetch('./settings.json');
+                if(!settingsRes.ok) {
+                    console.log("'settings.json' not found, trying 'setting.json'...");
+                    settingsRes = await fetch('./setting.json');
+                }
+
+                if(settingsRes.ok) {
+                    const settings = await settingsRes.json();
+                    remotePassword = settings.appPassword;
+                    console.log("Password loaded successfully.");
+                } else {
+                    console.error("settings.json and setting.json both missing.");
+                    alert("설정 파일(settings.json)을 찾을 수 없습니다. 기본 비밀번호 '1234'를 사용합니다.\n(GitHub Pages 반영에 시간이 걸릴 수 있습니다.)");
+                    remotePassword = "1234"; // Fallback
+                }
+            } catch(e) {
+                console.error("Settings load fail:", e);
+                alert("설정 파일 로드 중 오류가 발생했습니다: " + e.message + "\n기본 비밀번호 '1234'를 사용합니다.");
+                remotePassword = "1234"; // Fallback
+            }
+
+            // 2. Firebase 설정 로드
+            let firebaseConfig;
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            } else {
+                try {
+                    const response = await fetch('./firebase-config.json');
+                    if (!response.ok) throw new Error("firebase-config.json 파일을 찾을 수 없습니다.");
+                    firebaseConfig = await response.json();
+                    if(firebaseConfig.appId) appId = firebaseConfig.appId;
+                } catch (e) {
+                    throw new Error("설정 로드 실패: firebase-config.json 확인 (" + e.message + ")");
+                }
+            }
+
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    setupListeners(); 
+                } else {
+                    console.error("로그인 실패");
+                }
+            });
+
+        } catch (error) {
+            console.error("Initialization Error:", error);
+            alert("초기화 오류: " + error.message);
+        }
+    }
+
+    // --- Firestore 리스너 (Public Path로 수정됨) ---
+    function setupListeners() {
+        const collections = ['api', 'youtube', 'adsense', 'subscription'];
+        
+        collections.forEach(colName => {
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', colName));
+            
+            if (unsubscribes[colName]) unsubscribes[colName]();
+
+            document.getElementById('loading').style.display = 'inline';
+
+            unsubscribes[colName] = onSnapshot(q, (snapshot) => {
+                localData[colName] = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    isEditing: false 
+                }));
+                if (currentTab === colName) renderCurrentTable();
+                document.getElementById('loading').style.display = 'none';
+            }, (error) => {
+                console.error(`Error reading ${colName}:`, error);
+                document.getElementById('loading').style.display = 'none';
+            });
+        });
+    }
+
+    // --- 탭 전환 ---
+    window.switchTab = (tabName) => {
+        currentTab = tabName;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        const tabMap = { 'api': 0, 'youtube': 1, 'adsense': 2, 'subscription': 3 };
+        const btns = document.querySelectorAll('.tab-btn');
+        if(btns[tabMap[tabName]]) btns[tabMap[tabName]].classList.add('active');
+
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+
+        document.getElementById('searchInput').value = '';
+        renderCurrentTable();
+    }
+
+    // --- 데이터 내보내기/가져오기 (Modified) ---
+    window.exportData = () => {
+        try {
+            // Check if there is data to export
+            let hasData = false;
+            for(const key in localData) {
+                if (localData[key].length > 0) hasData = true;
+            }
+
+            if (!hasData) {
+                alert("내보낼 데이터가 없습니다.");
+                return;
+            }
+
+            if (!confirm("현재 저장된 모든 데이터를 JSON 파일로 다운로드하시겠습니까?")) return;
+            
+            // 데이터 클론 및 UI 속성 제거
+            const exportObj = JSON.parse(JSON.stringify(localData));
+            for(const key in exportObj) {
+                exportObj[key].forEach(item => {
+                    delete item.isEditing;
+                });
+            }
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "backup_" + new Date().toISOString().slice(0,10) + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        } catch (e) {
+            alert("내보내기 중 오류 발생: " + e.message);
+        }
+    }
+
+    window.triggerImport = () => document.getElementById('importFile').click();
+
+    window.processImport = async (input) => {
+        const file = input.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if(!confirm("⚠️ 경고: 현재 데이터를 덮어쓰거나 새로 추가하시겠습니까?\n(기존 ID가 같으면 수정되고, 없으면 추가됩니다.)")) return;
+                
+                showModal('alert', '데이터 가져오기', '데이터를 업로드 중입니다...', null); 
+                
+                const batchPromises = [];
+                const collections = ['api', 'youtube', 'adsense', 'subscription'];
+                
+                for (const key of collections) {
+                    if (importedData[key] && Array.isArray(importedData[key])) {
+                        for (const item of importedData[key]) {
+                            const { id, isEditing, ...data } = item;
+                            
+                            if(id) {
+                                // ID가 있으면 해당 ID로 저장 (덮어쓰기/수정 효과)
+                                batchPromises.push(setDoc(doc(db, 'artifacts', appId, 'public', 'data', key, id), data));
+                            } else {
+                                // ID가 없으면 새로 생성
+                                batchPromises.push(addDoc(collection(db, 'artifacts', appId, 'public', 'data', key), data));
+                            }
+                        }
+                    }
+                }
+                
+                await Promise.all(batchPromises);
+                alert("✅ 데이터 가져오기가 완료되었습니다!");
+                closeModal();
+            } catch (err) {
+                console.error(err);
+                alert("❌ 파일 읽기 또는 업로드 실패: " + err.message);
+                closeModal();
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // 초기화
+    }
+
+    // --- CRUD Operations (Public Path로 수정됨) ---
+
+    window.addData = async (type) => {
+        if (!userId) return alert("데이터베이스 연결 중입니다...");
+        
+        let newData = {};
+
+        if(type === 'api') {
+            const acc = document.getElementById('api_account').value;
+            const key = document.getElementById('api_key').value;
+            if(!acc || !key) return alert('필수 입력 누락');
+            newData = {
+                account: acc, apiKey: key,
+                usage: document.getElementById('api_usage').value,
+                limitStatus: document.getElementById('api_status').value,
+                // 사용량, 할당량 제거됨
+                note: document.getElementById('api_note').value
+            };
+        } 
+        else if(type === 'youtube') {
+            const ch = document.getElementById('yt_channel').value;
+            const owner = document.getElementById('yt_owner').value;
+            if(!ch || !owner) return alert('필수 입력 누락');
+            newData = {
+                owner, channel: ch,
+                manager: document.getElementById('yt_manager').value,
+                pw: document.getElementById('yt_pw').value,
+                link: document.getElementById('yt_link').value,
+                adsenseAccount: document.getElementById('yt_adsense_account').value,
+                brand: document.getElementById('yt_brand').value,
+                type: document.getElementById('yt_type').value,
+                address: document.getElementById('yt_address').value,
+                note: document.getElementById('yt_note').value
+            };
+        }
+        else if(type === 'adsense') {
+            const pub = document.getElementById('ad_pubid').value;
+            if(!pub) return alert('PUB-ID 필수');
+            newData = {
+                email: document.getElementById('ad_email').value,
+                pubId: pub,
+                site: document.getElementById('ad_site').value,
+                pin: document.getElementById('ad_pin').value,
+                bank: document.getElementById('ad_bank').value,
+                accountNum: document.getElementById('ad_account_num').value,
+                accountHolder: document.getElementById('ad_account_holder').value,
+                status: document.getElementById('ad_status').value,
+                note: document.getElementById('ad_note').value
+            };
+        }
+        else if(type === 'subscription') {
+            const svc = document.getElementById('sub_service').value;
+            if(!svc) return alert('서비스명 필수');
+            newData = {
+                service: svc,
+                cost: document.getElementById('sub_cost').value,
+                currency: document.getElementById('sub_currency').value,
+                cycle: document.getElementById('sub_cycle').value, 
+                vendor: document.getElementById('sub_vendor').value,
+                date: document.getElementById('sub_date').value,
+                expire: document.getElementById('sub_expire').value,
+                account: document.getElementById('sub_account').value,
+                pw: document.getElementById('sub_pw').value,
+                method: document.getElementById('sub_method').value,
+                status: document.getElementById('sub_status').value,
+                note: document.getElementById('sub_note').value 
+            };
+        }
+
+        try {
+            // 변경된 부분: artifacts/{appId}/users/{userId} -> artifacts/{appId}/public/data
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', type), newData);
+            clearInputs('tab-' + type);
+        } catch (e) {
+            alert("저장 실패: " + e.message);
+        }
+    }
+
+    function clearInputs(tabId) {
+        document.querySelectorAll(`#${tabId} input`).forEach(i => i.value = '');
+    }
+
+    window.setEditMode = (id, mode) => {
+        const item = localData[currentTab].find(d => d.id === id);
+        if(item) {
+            item.isEditing = mode;
+            renderCurrentTable(); 
+        }
+    }
+
+    window.saveEdit = async (id) => {
+        const item = localData[currentTab].find(d => d.id === id);
+        if(!item) return;
+
+        let updates = {};
+        
+        if(currentTab === 'api') {
+            updates = {
+                account: document.getElementById(`e_acc_${id}`).value,
+                apiKey: document.getElementById(`e_key_${id}`).value,
+                usage: document.getElementById(`e_use_${id}`).value,
+                // 사용량, 할당량 제거됨
+                limitStatus: document.getElementById(`e_stat_${id}`).value,
+                note: document.getElementById(`e_note_${id}`).value
+            };
+        } else if (currentTab === 'youtube') {
+            updates = {
+                owner: document.getElementById(`e_own_${id}`).value,
+                manager: document.getElementById(`e_mgr_${id}`).value,
+                pw: document.getElementById(`e_pw_${id}`).value,
+                channel: document.getElementById(`e_ch_${id}`).value,
+                link: document.getElementById(`e_lnk_${id}`).value,
+                adsenseAccount: document.getElementById(`e_ads_acc_${id}`).value,
+                brand: document.getElementById(`e_br_${id}`).value,
+                type: document.getElementById(`e_typ_${id}`).value,
+                address: document.getElementById(`e_addr_${id}`).value
+            };
+        } else if (currentTab === 'adsense') {
+            updates = {
+                email: document.getElementById(`e_email_${id}`).value,
+                pubId: document.getElementById(`e_pub_${id}`).value,
+                site: document.getElementById(`e_site_${id}`).value,
+                pin: document.getElementById(`e_pin_${id}`).value,
+                bank: document.getElementById(`e_bk_${id}`).value,
+                accountNum: document.getElementById(`e_an_${id}`).value,
+                accountHolder: document.getElementById(`e_ah_${id}`).value,
+                status: document.getElementById(`e_stat_${id}`).value,
+                note: document.getElementById(`e_note_${id}`).value
+            };
+        } else if (currentTab === 'subscription') {
+            updates = {
+                service: document.getElementById(`e_svc_${id}`).value,
+                cost: document.getElementById(`e_cost_${id}`).value,
+                currency: document.getElementById(`e_curr_${id}`).value,
+                cycle: document.getElementById(`e_cycle_${id}`).value,
+                vendor: document.getElementById(`e_vendor_${id}`).value,
+                date: document.getElementById(`e_date_${id}`).value,
+                expire: document.getElementById(`e_exp_${id}`).value,
+                account: document.getElementById(`e_acc_${id}`).value,
+                pw: document.getElementById(`e_pw_${id}`).value,
+                method: document.getElementById(`e_met_${id}`).value,
+                status: document.getElementById(`e_stat_${id}`).value,
+                note: document.getElementById(`e_note_${id}`).value
+            };
+        }
+
+        try {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id), updates);
+        } catch (e) {
+            alert("수정 실패: " + e.message);
+        }
+    }
+
+    window.confirmDelete = (id) => {
+        showModal('delete', '⚠️ 삭제 확인', '정말로 삭제하시겠습니까? 복구할 수 없습니다.', async () => {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', currentTab, id));
+            } catch (e) {
+                alert("삭제 실패: " + e.message);
+            }
+        });
+    }
+
+    // --- 렌더링 로직 ---
+    window.renderCurrentTable = (filterText = '') => {
+        if (!localData[currentTab]) return;
+        
+        const filterVal = filterText || document.getElementById('searchInput').value;
+        const tbody = document.querySelector(`#table-${currentTab} tbody`);
+        tbody.innerHTML = '';
+
+        const filtered = localData[currentTab].filter(item => {
+            const { isEditing, id, ...rest } = item; 
+            const valStr = Object.values(rest).join(' ').toLowerCase();
+            return valStr.includes(filterVal.toLowerCase());
+        });
+
+        if (sortState.col) {
+            filtered.sort((a, b) => {
+                let va = a[sortState.col] || '';
+                let vb = b[sortState.col] || '';
+                
+                if (currentTab === 'subscription' && (sortState.col === 'cost')) {
+                    va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
+                }
+
+                if (va < vb) return sortState.dir === 'asc' ? -1 : 1;
+                if (va > vb) return sortState.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        document.getElementById('statsText').innerText = `총 ${filtered.length}개 항목`;
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px; color:var(--text-sub);">데이터가 없습니다.</td></tr>`;
+            return;
+        }
+        
+        filtered.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = item.isEditing ? getEditRowHTML(item) : getViewRowHTML(item);
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- Row Generators ---
+    
+    function getViewRowHTML(item) {
+        const id = item.id;
+        
+        if (currentTab === 'api') {
+            const statusClass = item.limitStatus === '정상' ? 'bg-green' : (item.limitStatus === '제한됨' ? 'bg-yellow' : 'bg-red');
+
+            return `
+                <td>${item.account}</td>
+                <td><span class="key-text" title="${item.apiKey}">${maskString(item.apiKey, 8)}</span> <button class="btn-copy" onclick="copyText('${item.apiKey}')">Copy</button></td>
+                <td>${item.usage}</td>
+                <td><span class="badge ${statusClass}">${item.limitStatus}</span></td>
+                <td>${item.note}</td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-edit" onclick="setEditMode('${id}', true)">✏️</button>
+                    <button class="btn-action btn-delete" onclick="confirmDelete('${id}')">🗑️</button>
+                </td>
+            `;
+        } else if (currentTab === 'youtube') {
+            const owner = item.owner || item.email || '-';
+            const linkHtml = item.link ? 
+                `<div class="yt-link-display">
+                    <a href="${item.link}" target="_blank" class="link-icon">▶</a>
+                    <button class="btn-copy" onclick="copyText('${item.link}')">Copy</button>
+                 </div>` : '';
+
+            return `
+                <td>
+                    <div style="font-weight:bold;">${owner}</div>
+                    <div style="font-size:12px; color:var(--text-sub); cursor:pointer;" onclick="alert('PW: ${item.pw || '없음'}')">🔒 비밀번호 확인</div>
+                </td>
+                <td>${item.manager || '-'}</td>
+                <td>
+                    <div style="font-weight:bold;">${item.channel}</div>
+                    ${linkHtml}
+                </td>
+                <td>${item.adsenseAccount || '-'}</td>
+                <td><span class="badge ${item.brand === 'Y' ? 'bg-blue' : 'bg-gray'}">${item.brand === 'Y' ? '브랜드' : '일반'}</span></td>
+                <td>${item.type || '-'}</td>
+                <td title="${item.address || ''}">${maskString(item.address || '-', 10)}</td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-edit" onclick="setEditMode('${id}', true)">✏️</button>
+                    <button class="btn-action btn-delete" onclick="confirmDelete('${id}')">🗑️</button>
+                </td>
+            `;
+        } else if (currentTab === 'adsense') {
+            const stClass = item.status === '승인됨' ? 'bg-green' : (item.status === '검토중' ? 'bg-yellow' : 'bg-red');
+            return `
+                <td>${item.email}</td>
+                <td style="font-family:monospace;">${item.pubId}</td>
+                <td style="font-weight:bold;">${item.site}</td>
+                <td style="font-family:monospace; color:var(--text-sub);">${item.pin || '-'}</td>
+                <td>
+                    <div style="font-weight:bold;">${item.bank || '-'}</div>
+                    <div style="font-size:12px;">${item.accountNum || '-'}</div>
+                    <div style="font-size:11px; color:var(--text-sub);">${item.accountHolder || ''}</div>
+                </td>
+                <td><span class="badge ${stClass}">${item.status}</span></td>
+                <td>${item.note}</td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-edit" onclick="setEditMode('${id}', true)">✏️</button>
+                    <button class="btn-action btn-delete" onclick="confirmDelete('${id}')">🗑️</button>
+                </td>
+            `;
+        } else if (currentTab === 'subscription') {
+            const stClass = item.status === '구독중' ? 'bg-blue' : (item.status === '해지예정' ? 'bg-yellow' : 'bg-gray');
+            const currencySymbol = item.currency === 'KRW' ? '₩' : '$';
+            return `
+                <td style="font-weight:bold;">${item.service}</td>
+                <td>${currencySymbol} ${Number(item.cost).toLocaleString()}</td>
+                <td>${item.cycle || '월간'}</td>
+                <td>${item.vendor || '-'}</td>
+                <td>${item.date || '-'}</td>
+                <td style="color:var(--text-sub);">${item.expire || '-'}</td>
+                <td>${item.account || '-'}</td>
+                <td>
+                    <div style="font-size:12px; color:var(--text-sub); cursor:pointer;" onclick="alert('PW: ${item.pw || '없음'}')">🔒 확인</div>
+                </td>
+                <td>${item.method}</td>
+                <td><span class="badge ${stClass}">${item.status}</span></td>
+                <td>${item.note || '-'}</td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-edit" onclick="setEditMode('${id}', true)">✏️</button>
+                    <button class="btn-action btn-delete" onclick="confirmDelete('${id}')">🗑️</button>
+                </td>
+            `;
+        }
+    }
+
+    function getEditRowHTML(item) {
+        const id = item.id;
+        
+        if (currentTab === 'api') {
+            return `
+                <td><input id="e_acc_${id}" value="${item.account}"></td>
+                <td><input id="e_key_${id}" value="${item.apiKey}"></td>
+                <td><input id="e_use_${id}" value="${item.usage}"></td>
+                <td>
+                    <select id="e_stat_${id}">
+                        <option value="정상" ${item.limitStatus==='정상'?'selected':''}>정상</option>
+                        <option value="제한됨" ${item.limitStatus==='제한됨'?'selected':''}>제한됨</option>
+                        <option value="만료" ${item.limitStatus==='만료'?'selected':''}>만료</option>
+                    </select>
+                </td>
+                <td><input id="e_note_${id}" value="${item.note}"></td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-save" onclick="saveEdit('${id}')">💾</button>
+                    <button class="btn-action btn-cancel" onclick="setEditMode('${id}', false)">❌</button>
+                </td>
+            `;
+        } else if (currentTab === 'youtube') {
+             return `
+                <td>
+                    <input id="e_own_${id}" value="${item.owner || item.email || ''}" placeholder="소유자">
+                    <input id="e_pw_${id}" value="${item.pw || ''}" placeholder="비번" style="margin-top:2px;">
+                </td>
+                <td><input id="e_mgr_${id}" value="${item.manager || ''}"></td>
+                <td>
+                    <input id="e_ch_${id}" value="${item.channel}" placeholder="채널명">
+                    <input id="e_lnk_${id}" value="${item.link || ''}" placeholder="URL" style="margin-top:2px;">
+                </td>
+                <td><input id="e_ads_acc_${id}" value="${item.adsenseAccount || ''}" placeholder="애드센스 계정"></td>
+                <td>
+                    <select id="e_br_${id}">
+                        <option value="Y" ${item.brand==='Y'?'selected':''}>Y (브랜드)</option>
+                        <option value="N" ${item.brand==='N'?'selected':''}>N (일반)</option>
+                    </select>
+                </td>
+                <td>
+                    <select id="e_typ_${id}">
+                        <option value="개인" ${item.type==='개인'?'selected':''}>개인</option>
+                        <option value="개인사업자" ${item.type==='개인사업자'?'selected':''}>개인사업자</option>
+                        <option value="법인사업자" ${item.type==='법인사업자'?'selected':''}>법인사업자</option>
+                    </select>
+                </td>
+                <td><input id="e_addr_${id}" value="${item.address || ''}"></td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-save" onclick="saveEdit('${id}')">💾</button>
+                    <button class="btn-action btn-cancel" onclick="setEditMode('${id}', false)">❌</button>
+                </td>
+            `;
+        } else if (currentTab === 'adsense') {
+            return `
+                <td><input id="e_email_${id}" value="${item.email}"></td>
+                <td><input id="e_pub_${id}" value="${item.pubId}"></td>
+                <td><input id="e_site_${id}" value="${item.site}"></td>
+                <td><input id="e_pin_${id}" value="${item.pin || ''}" placeholder="PIN"></td>
+                <td>
+                    <input id="e_bk_${id}" value="${item.bank || ''}" placeholder="은행">
+                    <input id="e_an_${id}" value="${item.accountNum || ''}" placeholder="계좌번호" style="margin-top:2px;">
+                    <input id="e_ah_${id}" value="${item.accountHolder || ''}" placeholder="예금주" style="margin-top:2px;">
+                </td>
+                <td>
+                    <select id="e_stat_${id}">
+                        <option value="승인됨" ${item.status==='승인됨'?'selected':''}>승인됨</option>
+                        <option value="검토중" ${item.status==='검토중'?'selected':''}>검토중</option>
+                        <option value="준비필요" ${item.status==='준비필요'?'selected':''}>준비필요</option>
+                    </select>
+                </td>
+                <td><input id="e_note_${id}" value="${item.note}"></td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-save" onclick="saveEdit('${id}')">💾</button>
+                    <button class="btn-action btn-cancel" onclick="setEditMode('${id}', false)">❌</button>
+                </td>
+            `;
+        } else if (currentTab === 'subscription') {
+            return `
+                <td><input id="e_svc_${id}" value="${item.service}"></td>
+                <td>
+                    <input id="e_cost_${id}" value="${item.cost}" type="number" style="width:60%">
+                    <select id="e_curr_${id}" style="width:35%">
+                        <option value="KRW" ${item.currency==='KRW'?'selected':''}>₩</option>
+                        <option value="USD" ${item.currency==='USD'?'selected':''}>$</option>
+                    </select>
+                </td>
+                <td>
+                    <select id="e_cycle_${id}">
+                        <option value="월간" ${item.cycle==='월간'?'selected':''}>월간</option>
+                        <option value="연간" ${item.cycle==='연간'?'selected':''}>연간</option>
+                    </select>
+                </td>
+                <td><input id="e_vendor_${id}" value="${item.vendor || ''}"></td>
+                <td><input id="e_date_${id}" value="${item.date}" type="date"></td>
+                <td><input id="e_exp_${id}" value="${item.expire || ''}" type="date"></td>
+                <td><input id="e_acc_${id}" value="${item.account || ''}"></td>
+                <td><input id="e_pw_${id}" value="${item.pw || ''}"></td>
+                <td><input id="e_met_${id}" value="${item.method}"></td>
+                <td>
+                    <select id="e_stat_${id}">
+                        <option value="구독중" ${item.status==='구독중'?'selected':''}>구독중</option>
+                        <option value="해지예정" ${item.status==='해지예정'?'selected':''}>해지예정</option>
+                        <option value="종료" ${item.status==='종료'?'selected':''}>종료</option>
+                    </select>
+                </td>
+                <td><input id="e_note_${id}" value="${item.note || ''}"></td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-save" onclick="saveEdit('${id}')">💾</button>
+                    <button class="btn-action btn-cancel" onclick="setEditMode('${id}', false)">❌</button>
+                </td>
+            `;
+        }
+    }
+
+    // --- 유틸리티 (Global expose) ---
+    window.filterCurrentTable = () => renderCurrentTable();
+    
+    window.sortTable = (col) => {
+        if(sortState.col === col) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+        else { sortState.col = col; sortState.dir = 'asc'; }
+        renderCurrentTable();
+    }
+
+    window.maskString = (str, len) => {
+        if(!str) return '';
+        if(str.length <= len) return str;
+        return str.substring(0, len) + '...';
+    }
+
+    window.copyText = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            showModal('alert', '복사 완료', '클립보드에 복사되었습니다.');
+        });
+    }
+
+    window.showModal = (type, title, msg, callback) => {
+        const modal = document.getElementById('customModal');
+        const btnConfirm = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.querySelector('.btn-cancel');
+
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalMessage').innerText = msg;
+        pendingModalAction = callback;
+
+        btnConfirm.style.display = 'block';
+        cancelBtn.style.display = 'block';
+
+        if(type === 'delete') {
+            btnConfirm.className = 'btn-modal-delete';
+            btnConfirm.innerText = '삭제';
+        } else if(type === 'alert') {
+            btnConfirm.className = 'btn-modal-confirm';
+            btnConfirm.innerText = '확인';
+            cancelBtn.style.display = 'none'; 
+        }
+        modal.style.display = 'flex';
+    }
+
+    window.closeModal = () => {
+        document.getElementById('customModal').style.display = 'none';
+        pendingModalAction = null;
+    }
+
+    window.confirmModal = () => {
+        if(pendingModalAction) pendingModalAction();
+        closeModal();
+    }
+
+    // --- 앱 시작 ---
+    init();
+
+</script>
+</body>
+</html>
