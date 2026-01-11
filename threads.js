@@ -1,4 +1,3 @@
-// --- Global State ---
 const state = {
     allPosts: [],
     filteredPosts: [],
@@ -7,8 +6,10 @@ const state = {
     activeSessionId: null,
     sortOrder: 'desc',
     visiblePosts: 20,
-    postCache: new Map(), // sessionId -> posts[] memory cache
+    postCache: new Map(),
 };
+window.state = state; // Global DEBUG Access
+console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V1");
 let searchTimeout;
 
 let db;
@@ -175,9 +176,12 @@ async function switchSession(id) {
     if (state.activeSessionId === id && state.allPosts.length > 0) return;
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
-    if (!session) return;
+    if (!session) {
+        console.error("Session not found:", id);
+        return;
+    }
 
-    // 0. Memory Cache: Absolute zero latency if already loaded
+    // 0. Cache Check
     if (state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
@@ -187,66 +191,59 @@ async function switchSession(id) {
     }
 
     showToast("데이터를 초고속으로 불러오는 중...", 1000);
-    state.allPosts = []; // Clear for instant feedback
+    state.allPosts = [];
     updateUI();
 
     try {
-        console.log(`🚀 Starting Robust Load for: ${session.name}`);
+        console.log(`🚀 Loading Session: ${session.name} (ID: ${id})`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // --- STEP 1: Simple fetch (No orderBy to avoid Index errors) ---
-        // We fetch 100 items and sort them locally for immediate view
+        // Step 1: Rapid 100-post fetch (No index required)
         const firstSnap = await colRef.limit(100).get();
         let initialPosts = firstSnap.docs.map(doc => {
             const data = doc.data();
-            const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
-            return { ...data, _ts: ts };
+            const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+            return { ...data, id: doc.id, _ts: ts };
         });
 
-        // Merge with any legacy posts in the session document
-        if (session.posts && session.posts.length > 0) {
+        // Merge Legacy Posts
+        if (session.posts && Array.isArray(session.posts)) {
             session.posts.forEach(p => {
-                const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
+                const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
                 initialPosts.push({ ...p, _ts: ts });
             });
         }
 
-        // Show what we have INSTANTLY
-        state.allPosts = initialPosts.sort((a, b) => b._ts - a._ts);
+        state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
         updateUI();
 
-        // --- STEP 2: Background Full Sync (All posts) ---
-        console.log("📡 Background Full Sync in progress...");
+        // Step 2: Full Sync in Background
         colRef.get().then(fullSnap => {
+            console.log(`✅ Background Sync Arrived: ${fullSnap.size} posts`);
             const allPostsCombined = fullSnap.docs.map(doc => {
                 const data = doc.data();
-                const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
-                return { ...data, _ts: ts };
+                const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                return { ...data, id: doc.id, _ts: ts };
             });
 
-            // Update only if user is still on the same session
             if (state.activeSessionId === id) {
-                const unifiedMap = new Map();
-                // Merge everything into a Map to prevent duplicates
-                allPostsCombined.forEach(p => unifiedMap.set(p.id, p));
-
-                const finalPosts = Array.from(unifiedMap.values());
-                state.postCache.set(id, finalPosts);
-                state.allPosts = finalPosts;
+                const unified = new Map();
+                allPostsCombined.forEach(p => unified.set(p.id, p));
+                const final = Array.from(unified.values());
+                state.postCache.set(id, final);
+                state.allPosts = final;
                 updateUI();
-                console.log(`✅ Fully Synced: ${finalPosts.length} posts.`);
 
-                // Cleanup legacy data bloat
                 if (session.posts && session.posts.length > 0) {
                     db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
                     session.posts = [];
                 }
             }
-        });
+        }).catch(err => console.warn("Background sync delay/error:", err));
 
     } catch (e) {
         console.error("Critical Load Error:", e);
-        showToast("데이터 연동에 실패했습니다. 다시 시도해 주세요.");
+        showToast("데이터 연동 실패");
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -432,14 +429,16 @@ function updateUI() {
     const end = els.endDateFilter?.value || '';
 
     state.filteredPosts = state.allPosts.filter(p => {
-        const matchesSearch = p.content.toLowerCase().includes(q) || p.date.includes(q);
-        const matchesStart = start ? p.date >= start : true;
-        const matchesEnd = end ? p.date <= end : true;
+        const content = (p.content || '').toLowerCase();
+        const date = (p.date || '');
+        const matchesSearch = content.includes(q) || date.includes(q);
+        const matchesStart = start ? date >= start : true;
+        const matchesEnd = end ? date <= end : true;
         return matchesSearch && matchesStart && matchesEnd;
     });
 
     state.filteredPosts.sort((a, b) => {
-        const diff = state.sortOrder === 'desc' ? b._ts - a._ts : a._ts - b._ts;
+        const diff = state.sortOrder === 'desc' ? (b._ts || 0) - (a._ts || 0) : (a._ts || 0) - (b._ts || 0);
         if (diff !== 0) return diff;
         return (a.index || 0) - (b.index || 0);
     });
