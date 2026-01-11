@@ -177,7 +177,7 @@ async function switchSession(id) {
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    // 0. Instant Cache Access
+    // 0. Memory Cache: Absolute zero latency if already loaded
     if (state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
@@ -186,23 +186,24 @@ async function switchSession(id) {
         return;
     }
 
-    showToast("초고속 데이터 로딩 중...", 1000);
-    state.allPosts = []; // Clear for instant visual feedback
+    showToast("데이터를 초고속으로 불러오는 중...", 1000);
+    state.allPosts = []; // Clear for instant feedback
     updateUI();
 
     try {
-        console.log(`🚀 Instant View Loading: ${session.name}`);
+        console.log(`🚀 Starting Robust Load for: ${session.name}`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // --- STEP 1: Fetch first 50 posts for INSTANT display ---
-        const firstSnap = await colRef.orderBy('date', 'desc').limit(50).get();
+        // --- STEP 1: Simple fetch (No orderBy to avoid Index errors) ---
+        // We fetch 100 items and sort them locally for immediate view
+        const firstSnap = await colRef.limit(100).get();
         let initialPosts = firstSnap.docs.map(doc => {
             const data = doc.data();
             const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
             return { ...data, _ts: ts };
         });
 
-        // Merge with session document data if exists
+        // Merge with any legacy posts in the session document
         if (session.posts && session.posts.length > 0) {
             session.posts.forEach(p => {
                 const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
@@ -210,12 +211,12 @@ async function switchSession(id) {
             });
         }
 
-        // Show immediately!
+        // Show what we have INSTANTLY
         state.allPosts = initialPosts.sort((a, b) => b._ts - a._ts);
         updateUI();
 
-        // --- STEP 2: Fetch FULL data in the background ---
-        console.log("� Background Full Sync started...");
+        // --- STEP 2: Background Full Sync (All posts) ---
+        console.log("📡 Background Full Sync in progress...");
         colRef.get().then(fullSnap => {
             const allPostsCombined = fullSnap.docs.map(doc => {
                 const data = doc.data();
@@ -223,14 +224,19 @@ async function switchSession(id) {
                 return { ...data, _ts: ts };
             });
 
-            // If user is still on this session, update fully
+            // Update only if user is still on the same session
             if (state.activeSessionId === id) {
-                state.postCache.set(id, allPostsCombined);
-                state.allPosts = allPostsCombined;
-                updateUI();
-                console.log(`✅ Background sync complete: ${allPostsCombined.length} posts.`);
+                const unifiedMap = new Map();
+                // Merge everything into a Map to prevent duplicates
+                allPostsCombined.forEach(p => unifiedMap.set(p.id, p));
 
-                // Cleanup legacy data
+                const finalPosts = Array.from(unifiedMap.values());
+                state.postCache.set(id, finalPosts);
+                state.allPosts = finalPosts;
+                updateUI();
+                console.log(`✅ Fully Synced: ${finalPosts.length} posts.`);
+
+                // Cleanup legacy data bloat
                 if (session.posts && session.posts.length > 0) {
                     db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
                     session.posts = [];
@@ -239,8 +245,8 @@ async function switchSession(id) {
         });
 
     } catch (e) {
-        console.error("Load Error:", e);
-        showToast("데이터 로딩 중 문제가 발생했습니다.");
+        console.error("Critical Load Error:", e);
+        showToast("데이터 연동에 실패했습니다. 다시 시도해 주세요.");
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
