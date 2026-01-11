@@ -322,10 +322,14 @@ async function parseAndSyncMarkdown(md, filename) {
         }
     });
 
-    // Strip suffixes like _part1, (1), etc. to treat split files as same session
-    const sessionRefName = filename.replace('.md', '').replace(/(_part\d+|[-_]\d+|\s*\(\d+\))$/, '');
-    // Match by internal refName (the original file name)
-    let session = state.sessions.find(s => (s.refName || s.name) === sessionRefName);
+    // Strip suffixes to group split files together
+    const sessionRefName = filename.replace('.md', '').replace(/_part\d+$/, '').replace(/[-_]\d+$/, '').replace(/\s*\(\d+\)$/, '');
+
+    // Match by refName OR name
+    let session = state.sessions.find(s =>
+        (s.refName === sessionRefName) ||
+        (s.name === sessionRefName)
+    );
 
     if (session) {
         // Cumulative update
