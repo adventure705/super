@@ -916,9 +916,81 @@ body {
 }
 
 .progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent-blue), #8b5cf6);
-    width: 0%;
     transition: width 0.3s ease;
     box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Profile Info Panel in Header */
+.profile-info-panel {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0 16px;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.profile-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 4px 8px 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.pill-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+    opacity: 0.8;
+    text-transform: uppercase;
+}
+
+.pill-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.pill-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pill-link:hover {
+    color: var(--accent-blue);
+    text-decoration: underline;
+}
+
+.btn-copy-mini {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-copy-mini:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--accent-blue);
+}
+
+@media (max-width: 768px) {
+    .profile-info-panel {
+        order: 3;
+        width: 100%;
+        margin: 10px 0 0 0;
+        justify-content: center;
+    }
 }

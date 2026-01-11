@@ -60,6 +60,9 @@ function initElements() {
         progressBar: document.getElementById('progress-bar'),
         progressPercent: document.getElementById('progress-percent'),
         progressLabel: document.getElementById('progress-label'),
+        profilePanel: document.getElementById('profile-info-panel'),
+        displayUsername: document.getElementById('display-username'),
+        displayUrlLink: document.getElementById('display-url-link'),
     };
 }
 
@@ -241,6 +244,8 @@ async function switchSession(id) {
         console.error("Session not found:", id);
         return;
     }
+
+    updateHeaderProfile(session);
 
     // 0. Cache Check
     if (state.postCache.has(id)) {
@@ -634,9 +639,18 @@ async function handleFileUpload(e) {
         try {
             updateProgressBar(10, "데이터 파싱 중...");
             const md = event.target.result;
+
+            // Extract Thread ID from the first line if available
+            // Format: "# Threads Posts: @username"
+            const firstLineNode = md.split('\n')[0];
+            let extractedId = null;
+            if (firstLineNode.startsWith('# Threads Posts: @')) {
+                extractedId = firstLineNode.replace('# Threads Posts: @', '').trim();
+                console.log("Extracted Thread ID:", extractedId);
+            }
+
             const chunks = md.split('---');
             const newPosts = [];
-            const timestamp = Date.now();
 
             const hashString = (s) => {
                 let h = 0;
@@ -645,10 +659,15 @@ async function handleFileUpload(e) {
             };
 
             chunks.forEach((chunk, i) => {
+                // Skip the header chunk if it doesn't contain a date
                 let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
                 let time = '00:00', date = '';
                 if (dateMatch) { date = dateMatch[1]; time = dateMatch[2]; }
-                else { dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/); if (!dateMatch) return; date = dateMatch[1]; }
+                else {
+                    dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/);
+                    if (!dateMatch) return; // Skip chunks without dates (like the header)
+                    date = dateMatch[1];
+                }
 
                 const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
                 let images = [];
@@ -679,7 +698,8 @@ async function handleFileUpload(e) {
                     name: sName,
                     categoryId: state.categories[0]?.id || DEFAULT_CAT_ID,
                     order: minOrder - 1,
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
+                    threadId: extractedId // Save the extracted ID
                 };
                 await db.collection(COLLECTION_NAME).doc(sId).set({
                     ...s,
@@ -687,12 +707,45 @@ async function handleFileUpload(e) {
                 });
                 state.sessions.push(s);
                 renderSidebarContent();
+            } else if (extractedId) {
+                // Update existing session with threadId if missing
+                s.threadId = extractedId;
+                await db.collection(COLLECTION_NAME).doc(sId).update({ threadId: extractedId });
             }
+
+            // --- DUPLICATE CHECK ---
+            let uniquePosts = newPosts;
+            if (s) { // If session exists, check for duplicates
+                updateProgressBar(20, "중복 검사 중...");
+                const existingIds = new Set();
+
+                // Optimized: Check local cache first if available
+                if (state.postCache.has(sId)) {
+                    state.postCache.get(sId).forEach(p => existingIds.add(p.id));
+                    console.log(`Checked ${existingIds.size} posts from cache.`);
+                } else {
+                    // Fallback: Fetch IDs from server (still faster than writing duplicates)
+                    const snapshot = await db.collection(COLLECTION_NAME).doc(sId).collection('posts').select().get(); // Select only IDs
+                    snapshot.docs.forEach(doc => existingIds.add(doc.id));
+                    console.log(`Checked ${existingIds.size} posts from server.`);
+                }
+
+                uniquePosts = newPosts.filter(p => !existingIds.has(p.id));
+                console.log(`Found ${uniquePosts.length} new posts out of ${newPosts.length}.`);
+            }
+
+            if (uniquePosts.length === 0) {
+                updateProgressBar(100, "변경사항 없음");
+                showToast("모든 포스트가 이미 존재합니다.");
+                setTimeout(hideProgressBar, 2000);
+                return;
+            }
+            // -----------------------
 
             const batchSize = 500;
             const batchChunks = [];
-            for (let i = 0; i < newPosts.length; i += batchSize) {
-                batchChunks.push(newPosts.slice(i, i + batchSize));
+            for (let i = 0; i < uniquePosts.length; i += batchSize) { // Use uniquePosts
+                batchChunks.push(uniquePosts.slice(i, i + batchSize));
             }
 
             let savedCount = 0;
@@ -708,7 +761,7 @@ async function handleFileUpload(e) {
                         });
                         await batch.commit();
                         savedCount += chunk.length;
-                        const percent = Math.round((savedCount / newPosts.length) * 100);
+                        const percent = Math.round((savedCount / uniquePosts.length) * 100); // Use uniquePosts length
                         updateProgressBar(percent, "클라우드 저장 중...");
                     } catch (err) {
                         console.error("Batch upload error:", err);
@@ -728,6 +781,12 @@ async function handleFileUpload(e) {
             // Firestore queries are eventually consistent, and immediate re-fetch 
             // might miss the newly created session, causing it to disappear from the UI.
             // We already have the session in state.sessions.
+
+            // Critical: Invalidate cache so we fetch the NEW data we just uploaded
+            state.postCache.delete(sId);
+            if (state.activeSessionId === sId) {
+                state.activeSessionId = null; // Force reload
+            }
 
             await switchSession(sId);
 
@@ -830,12 +889,105 @@ async function addNewCategoryUI(n, id) {
     renderSidebarContent();
 }
 
+window.editCurrentThreadId = async () => {
+    if (!state.activeSessionId) return;
+
+    const session = state.sessions.find(s => s.id === state.activeSessionId);
+    if (!session) return;
+
+    let currentId = els.displayUsername.textContent.replace('@', '');
+    const newId = prompt("수정할 ID를 입력하세요:", currentId);
+
+    if (newId && newId.trim() !== "") {
+        const finalId = newId.trim().replace('@', '');
+
+        // Optimistic Update
+        session.threadId = finalId;
+        localStorage.setItem('threads_sessions', JSON.stringify(state.sessions)); // Immediate Cache Update
+        updateHeaderProfile(session);
+
+        try {
+            await db.collection(COLLECTION_NAME).doc(state.activeSessionId).update({
+                threadId: finalId,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast("ID가 수정되었습니다.");
+        } catch (e) {
+            console.error("ID update error:", e);
+            showToast("ID 수정 실패: 네트워크 오류");
+        }
+    }
+};
+
+window.editCurrentUrl = async () => {
+    if (!state.activeSessionId) return;
+
+    const session = state.sessions.find(s => s.id === state.activeSessionId);
+    if (!session) return;
+
+    let currentUrl = els.displayUrlLink.dataset.fullUrl;
+    const newUrl = prompt("수정할 주소를 입력하세요:", currentUrl);
+
+    if (newUrl && newUrl.trim() !== "") {
+        const finalUrl = newUrl.trim();
+
+        // Optimistic Update
+        session.customUrl = finalUrl;
+        localStorage.setItem('threads_sessions', JSON.stringify(state.sessions)); // Immediate Cache Update
+        updateHeaderProfile(session);
+
+        try {
+            await db.collection(COLLECTION_NAME).doc(state.activeSessionId).update({
+                customUrl: finalUrl,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast("주소가 수정되었습니다.");
+        } catch (e) {
+            console.error("URL update error:", e);
+            showToast("주소 수정 실패: 네트워크 오류");
+        }
+    }
+};
+
 window.copyContent = (id) => {
     const p = state.allPosts.find(x => x.id === id);
     if (p) { navigator.clipboard.writeText(p.content); showToast('복사됨'); }
 };
 
 function autoSelectFirstSession() { if (state.sessions.length > 0) switchSession(state.sessions[0].id); }
+
+function updateHeaderProfile(session) { // Changed to accept session object
+    if (!session || !els.profilePanel) return;
+
+    let displayId = session.threadId; // Prefer explicitly saved ID
+
+    if (!displayId) {
+        // Fallback: Heuristic from name
+        displayId = session.name.replace(/_threads$/i, '').replace(/_part\d+$/i, '').replace(/\.md$/i, '').trim();
+    }
+
+    if (displayId || session.customUrl) {
+        els.profilePanel.style.display = 'flex';
+        els.displayUsername.textContent = displayId ? '@' + displayId : 'Unknown';
+
+        let url = session.customUrl || `https://www.threads.net/@${displayId}`;
+        els.displayUrlLink.textContent = url.replace(/https?:\/\//, '');
+        els.displayUrlLink.href = url;
+        els.displayUrlLink.dataset.fullUrl = url;
+    } else {
+        els.profilePanel.style.display = 'none';
+    }
+}
+
+window.copyHeaderId = () => {
+    const txt = els.displayUsername.textContent.replace('@', '');
+    if (txt) { navigator.clipboard.writeText(txt); showToast('아이디 복사됨'); }
+};
+
+window.copyHeaderUrl = () => {
+    const url = els.displayUrlLink.dataset.fullUrl;
+    if (url) { navigator.clipboard.writeText(url); showToast('주소 복사됨'); }
+};
 
 function updateProgressBar(percent, text) {
     if (!els.progressContainer) return;
