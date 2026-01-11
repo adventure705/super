@@ -460,8 +460,10 @@ async function handleFileUpload(e) {
         let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
 
         if (!s) {
-            s = { id: sId, name: sName, categoryId: state.categories[0]?.id || DEFAULT_CAT_ID, order: state.sessions.length, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-            await db.collection(COLLECTION_NAME).doc(sId).set(s);
+            s = { id: sId, name: sName, categoryId: state.categories[0]?.id || DEFAULT_CAT_ID, order: state.sessions.length, updatedAt: new Date() };
+            await db.collection(COLLECTION_NAME).doc(sId).set({ ...s, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            state.sessions.push(s);
+            renderSidebarContent(); // Immediate UI feedback
         }
 
         const batchSize = 500;
