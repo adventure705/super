@@ -46,6 +46,9 @@ const els = {
     sidebar: document.querySelector('.sidebar'),
     sidebarOverlay: document.getElementById('sidebar-overlay'),
     addCategoryBtn: document.getElementById('add-category-btn'),
+    imageModal: document.getElementById('image-modal'),
+    modalImg: document.getElementById('modal-img'),
+    closeModal: document.querySelector('.close-modal'),
 };
 
 // --- Initialization ---
@@ -70,6 +73,17 @@ async function init() {
     if (state.sessions.length > 0) {
         switchSession(state.sessions[0].id);
     }
+
+    // Modal Events
+    els.closeModal.onclick = closeModal;
+    els.imageModal.onclick = (e) => {
+        if (e.target === els.imageModal) closeModal();
+    };
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && els.imageModal.classList.contains('show')) {
+            closeModal();
+        }
+    });
 }
 
 function toggleSidebar(open) {
@@ -538,11 +552,10 @@ function renderPosts() {
             ${post.images.length > 0 ? `
                 <div class="post-images">
                     ${post.images.map(img => {
-        const escapedImg = img.replace(/'/g, "\\'");
-        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(img)}&default=https://via.placeholder.com/400x300?text=이미지+로드+중...`;
+        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(img)}&w=800&q=80`;
         return `<img src="${proxyUrl}" alt="Post image" loading="lazy" 
-                            onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300?text=이미지+로드+실패+(클릭하여+확인)';"
-                            onclick="window.open('${escapedImg}', '_blank')">`;
+                            onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300?text=이미지+로드+실패';"
+                            onclick="openModal('${proxyUrl}')">`;
     }).join('')}
                 </div>
             ` : ''}
@@ -560,6 +573,31 @@ function highlightText(text, query) {
     if (!query) return text;
     const regex = new RegExp(`(${query})`, 'gi');
     return text.replace(regex, '<mark style="background: rgba(59, 130, 246, 0.4); color: white; border-radius: 2px;">$1</mark>');
+}
+
+// --- Modal Functions ---
+function openModal(proxyUrl) {
+    // Already proxied URL passed for instant view if already loaded in feed
+    els.modalImg.src = proxyUrl;
+
+    // Safety check for image loading
+    els.modalImg.onerror = () => {
+        els.modalImg.src = `https://via.placeholder.com/800x600?text=이미지를+불러올+수+없습니다`;
+    };
+
+    els.imageModal.style.display = 'flex';
+    setTimeout(() => {
+        els.imageModal.classList.add('show');
+    }, 10);
+    document.body.style.overflow = 'hidden'; // Prevent scroll
+}
+
+function closeModal() {
+    els.imageModal.classList.remove('show');
+    setTimeout(() => {
+        els.imageModal.style.display = 'none';
+    }, 300);
+    document.body.style.overflow = 'auto'; // Restore scroll
 }
 
 function showToast(msg) {
