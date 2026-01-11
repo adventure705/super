@@ -106,9 +106,15 @@ async function init() {
             if (user) {
                 updateSyncStatus(true);
                 // Background Sync: Only refresh if we don't have data, or strictly in background
-                if (state.sessions.length === 0) await refreshData();
+                if (state.sessions.length === 0) {
+                    updateProgressBar(20, "클라우드 데이터 동기화 중...");
+                    await refreshData();
+                    updateProgressBar(100, "동기화 완료");
+                    setTimeout(hideProgressBar, 1000);
+                }
                 else refreshData(); // Fire and forget, don't await to block UI
             } else {
+                updateProgressBar(10, "클라우드 접속 중...");
                 await firebase.auth().signInAnonymously();
             }
         });
@@ -248,18 +254,19 @@ async function switchSession(id) {
     updateHeaderProfile(session);
 
     // 0. Cache Check
+    let isCached = false;
     if (state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
         if (window.innerWidth <= 1024) toggleSidebar(false);
         renderSidebarContent();
-        return;
+        isCached = true;
+        // Do NOT return here. Continue to background sync.
+    } else {
+        updateProgressBar(10, "데이터 로딩 시작...");
+        state.allPosts = [];
+        updateUI();
     }
-
-    // showToast("데이터를 초고속으로 불러오는 중...", 1000); // Removed in favor of progress bar
-    updateProgressBar(10, "데이터 로딩 시작...");
-    state.allPosts = [];
-    updateUI();
 
     try {
         state.isSyncing = true;
@@ -267,30 +274,46 @@ async function switchSession(id) {
         console.log(`🚀 Loading Session: ${session.name} (ID: ${id})`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // Step 1: Rapid 200-post fetch (No index required)
-        updateProgressBar(30, "최신 글 불러오는 중...");
-        const firstSnap = await colRef.limit(200).get();
-        let initialPosts = firstSnap.docs.map(doc => {
-            const data = doc.data();
-            const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
-            return { ...data, id: doc.id, _ts: ts };
-        });
+        // Step 1: Rapid 300-post fetch (Only if not cached)
+        if (!isCached) {
+            updateProgressBar(30, "최신 글 불러오는 중...");
+            let firstSnap;
+            try {
+                // Try getting latest posts first
+                firstSnap = await colRef.orderBy('date', 'desc').limit(300).get();
+            } catch (e) {
+                console.warn("Index missing for sort, falling back to unordered fetch", e);
+                firstSnap = await colRef.limit(300).get();
+            }
 
-        // Merge Legacy Posts
-        if (session.posts && Array.isArray(session.posts)) {
-            session.posts.forEach(p => {
-                const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
-                initialPosts.push({ ...p, _ts: ts });
+            let initialPosts = firstSnap.docs.map(doc => {
+                const data = doc.data();
+                const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                return { ...data, id: doc.id, _ts: ts };
             });
+
+            // Merge Legacy Posts
+            if (session.posts && Array.isArray(session.posts)) {
+                session.posts.forEach(p => {
+                    const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
+                    initialPosts.push({ ...p, _ts: ts });
+                });
+            }
+
+            state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+            updateProgressBar(50, `최신 글 ${state.allPosts.length}개 로드... 전체 동기화 시작`);
+            updateUI();
+
+        } else {
+            updateProgressBar(50, "데이터 동기화 확인 중...");
         }
 
-        state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-        updateProgressBar(50, "전체 백그라운드 동기화...");
-        updateUI();
-
-        // Step 2: Full Sync in Background
+        // Step 2: Full Sync in Background (Recursive Batched Fetching if too large?)
+        // For now, standard get() but with better error reporting
         colRef.get().then(fullSnap => {
             console.log(`✅ Background Sync Arrived: ${fullSnap.size} posts`);
+            if (fullSnap.empty) return;
+
             const allPostsCombined = fullSnap.docs.map(doc => {
                 const data = doc.data();
                 const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
@@ -302,34 +325,43 @@ async function switchSession(id) {
                 allPostsCombined.forEach(p => unified.set(p.id, p));
                 const final = Array.from(unified.values());
 
-                // Cache unconditionally so it's ready when we come back
-                state.postCache.set(id, final);
+                // Explicitly sort before display
+                final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
 
+                // Cache unconditionally
+                state.postCache.set(id, final);
                 state.allPosts = final;
+
                 updateUI();
 
+                // Optimization: Clean up legacy array storage if found
                 if (session.posts && session.posts.length > 0) {
                     db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
                     session.posts = [];
                 }
-                saveStateToCache(); // Update Hot-Start Cache
+                saveStateToCache();
+
+                showToast(`전체 데이터 로드 완료! (${final.length}개)`);
             } else {
-                // Even if user switched away, cache the result!
                 const unified = new Map();
                 allPostsCombined.forEach(p => unified.set(p.id, p));
                 const final = Array.from(unified.values());
+                final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                 state.postCache.set(id, final);
                 console.log(`Cached session ${id} in background`);
             }
             state.isSyncing = false;
             updateProgressBar(100, "로딩 완료");
-            hideProgressBar();
+            setTimeout(hideProgressBar, 1000);
             updateUI();
         }).catch(err => {
-            console.warn("Background sync delay/error:", err);
+            console.error("Background sync failed:", err);
+            showToast("전체 데이터 로드 실패: " + err.message);
             state.isSyncing = false;
             updateUI();
         });
+
+
 
     } catch (e) {
         console.error("Critical Load Error:", e);
