@@ -160,13 +160,17 @@ async function loadSessions() {
         const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Sort locally: respect manual 'order' if exists, otherwise use 'updatedAt'
+        // Efficient sorting
         state.sessions.sort((a, b) => {
             if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-            const dateA = a.updatedAt?.seconds || 0;
-            const dateB = b.updatedAt?.seconds || 0;
+            const dateA = a.updatedAt?.seconds || (a.updatedAt instanceof Date ? a.updatedAt.getTime() / 1000 : 0);
+            const dateB = b.updatedAt?.seconds || (b.updatedAt instanceof Date ? b.updatedAt.getTime() / 1000 : 0);
             return dateB - dateA;
         });
+
+        // Background Check: Report on any sessions with legacy bloat
+        const legacyCount = state.sessions.filter(s => s.posts && s.posts.length > 0).length;
+        if (legacyCount > 0) console.log(`Found ${legacyCount} sessions with legacy data bloat. Optimizing on-access.`);
 
         console.log(`Successfully loaded ${state.sessions.length} sessions.`);
         renderSidebarContent();
@@ -183,7 +187,7 @@ async function switchSession(id) {
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    // 1. Use Memory Cache if available for instant loading
+    // 1. Instant Access from Cache
     if (state.postCache.has(id)) {
         console.log("Loading session from memory cache...");
         state.allPosts = state.postCache.get(id);
@@ -193,36 +197,68 @@ async function switchSession(id) {
         return;
     }
 
-    showToast("데이터 동기화 중...", 1000);
+    showToast("초고속 데이터 동기화 중...", 1000);
 
     try {
-        console.log("Fetching session from Firestore...");
-        const snapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
-        const subPosts = snapshot.docs.map(doc => {
+        console.log(`Starting Streaming Load for: ${session.name}`);
+
+        // Step 1: Initial Partial Load (First 100 posts) for immediate feedback
+        const firstSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts')
+            .orderBy('date', 'desc').limit(100).get();
+
+        let initialPosts = firstSnapshot.docs.map(doc => {
             const data = doc.data();
             const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
             return { ...data, _ts: ts };
         });
 
+        // Step 2: Merge with legacy posts (if any) and show instantly
         const legacyPosts = (session.posts || []).map(p => {
             const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
             return { ...p, _ts: ts };
         });
 
-        const allMap = new Map();
-        legacyPosts.forEach(p => allMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
-        subPosts.forEach(p => allMap.set(p.id, p));
+        const initialMap = new Map();
+        legacyPosts.forEach(p => initialMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
+        initialPosts.forEach(p => initialMap.set(p.id, p));
 
-        const combinedPosts = Array.from(allMap.values());
+        state.allPosts = Array.from(initialMap.values());
+        updateUI(); // Visual update within milliseconds!
 
-        // 2. Save to Memory Cache
-        state.postCache.set(id, combinedPosts);
+        // Step 3: Background Full Sync
+        db.collection(COLLECTION_NAME).doc(id).collection('posts').get().then(fullSnapshot => {
+            const allSubPosts = fullSnapshot.docs.map(doc => {
+                const data = doc.data();
+                const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
+                return { ...data, _ts: ts };
+            });
 
-        state.allPosts = combinedPosts;
-        updateUI();
+            const finalMap = new Map();
+            legacyPosts.forEach(p => finalMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
+            allSubPosts.forEach(p => finalMap.set(p.id, p));
+
+            const finalCombined = Array.from(finalMap.values());
+            state.postCache.set(id, finalCombined);
+
+            // If the user hasn't switched away, update the UI with full data
+            if (state.activeSessionId === id) {
+                state.allPosts = finalCombined;
+                updateUI();
+                console.log(`Background sync complete: ${finalCombined.length} posts loaded.`);
+
+                // PERFORMANCE FIX: Migration & Data Diet
+                if (legacyPosts.length > 0) {
+                    console.log("Cleaning up legacy data bloat from session document...");
+                    db.collection(COLLECTION_NAME).doc(id).update({
+                        posts: firebase.firestore.FieldValue.delete()
+                    });
+                    session.posts = []; // Clear local memory representation
+                }
+            }
+        });
     } catch (e) {
-        console.error("Posts fetch error:", e);
-        showToast("데이터 로딩 오류");
+        console.error("Fetch error:", e);
+        showToast("데이터 로딩 중 문제가 발생했습니다.");
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
