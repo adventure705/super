@@ -136,7 +136,7 @@ async function loadCategories() {
 
 async function loadSessions() {
     try {
-        const snapshot = await db.collection(COLLECTION_NAME).orderBy('order', 'asc').get();
+        const snapshot = await db.collection(COLLECTION_NAME).orderBy('updatedAt', 'desc').get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderSidebarContent();
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
@@ -286,7 +286,13 @@ function renderSidebarContent() {
 
     const categoryHtml = state.categories.map(cat => {
         const catSessions = state.sessions.filter(s => s.categoryId === cat.id)
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
+            .sort((a, b) => {
+                if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+                // Fallback to latest first if order is missing
+                const dateA = a.updatedAt?.seconds || 0;
+                const dateB = b.updatedAt?.seconds || 0;
+                return dateB - dateA;
+            });
 
         return `
             <div class="category-section" data-id="${cat.id}">
@@ -489,11 +495,13 @@ async function handleFileUpload(e) {
             let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
 
             if (!s) {
+                // Set order to be at the top (smaller than current minimum)
+                const minOrder = state.sessions.length > 0 ? Math.min(...state.sessions.map(x => x.order || 0)) : 0;
                 s = {
                     id: sId,
                     name: sName,
                     categoryId: state.categories[0]?.id || DEFAULT_CAT_ID,
-                    order: state.sessions.length,
+                    order: minOrder - 1,
                     updatedAt: new Date()
                 };
                 await db.collection(COLLECTION_NAME).doc(sId).set({
