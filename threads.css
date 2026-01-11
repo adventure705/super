@@ -642,7 +642,32 @@ body {
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     transition: transform 0.3s ease;
-    z-index: 1000;
+    z-index: 3000;
+    flex-direction: column;
+    align-items: center;
+    /* Center text and bar */
+    gap: 8px;
+    /* Space between text and bar */
+}
+
+/* Progress Bar Styles */
+.toast-progress-bar {
+    width: 100%;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+    display: none;
+    /* Hidden by default */
+}
+
+.toast-progress-fill {
+    height: 100%;
+    background-color: #4CAF50;
+    /* Green color for progress */
+    width: 0%;
+    transition: width 0.3s ease;
 }
 
 .toast.show {

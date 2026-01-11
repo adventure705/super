@@ -326,108 +326,225 @@ async function handleFileUpload(e) {
         await parseAndSyncMarkdown(content, file.name);
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset to allow re-uploading the same file
 }
 
 async function parseAndSyncMarkdown(md, filename) {
-    const chunks = md.split('---');
-    const newPosts = [];
-
-    chunks.forEach(chunk => {
-        const dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/);
-        if (!dateMatch) return;
-
-        const date = dateMatch[1];
-        const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
-        let images = [];
-        let m;
-        while ((m = imageRegex.exec(chunk)) !== null) {
-            images.push(m[1].trim());
-        }
-
-        let content = chunk
-            .replace(/## \d{4}-\d{2}-\d{2}/, '')
-            .replace(/!\[[\s\S]*?\]\(.*?\)/g, '')
-            .replace(/^\//gm, '')
-            .trim();
-
-        if (content || images.length > 0) {
-            // Generate deterministic ID for deduplication
-            // MORE ROBUST KEY
-            const contentKey = content.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-            const uniqueKey = `${date}_${images.length}_${content.length}_${contentKey}`;
-
-            newPosts.push({
-                // Use deterministic ID for deduplication in subcollection
-                id: uniqueKey,
-                date,
-                content,
-                images
-            });
-        }
-    });
-
-    // Strip suffixes
-    const sessionRefName = filename.replace('.md', '').replace(/_part\d+$/, '').replace(/[-_]\d+$/, '').replace(/\s*\(\d+\)$/, '');
-
-    let session = state.sessions.find(s =>
-        (s.refName === sessionRefName) ||
-        (s.name === sessionRefName)
-    );
-
-    let sessionId;
-    if (session) {
-        sessionId = session.id;
-        showToast(`'${session.name}'에 데이터를 병합합니다...`);
-    } else {
-        sessionId = db.collection(COLLECTION_NAME).doc().id;
-        session = {
-            id: sessionId,
-            name: sessionRefName,
-            refName: sessionRefName,
-            order: state.sessions.length,
-            categoryId: state.categories[0] ? state.categories[0].id : 'default',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        // Save metadata only (no posts array)
-        await db.collection(COLLECTION_NAME).doc(sessionId).set(session);
-        state.sessions.unshift({ ...session, posts: [] });
-    }
-
-    // Batch write posts to subcollection
-    const batchSize = 400;
-    const chunks_posts = [];
-    for (let i = 0; i < newPosts.length; i += batchSize) {
-        chunks_posts.push(newPosts.slice(i, i + batchSize));
-    }
-
-    let savedCount = 0;
     try {
-        const totalToSave = newPosts.length;
-        let batchIndex = 0;
+        // Efficient Parsing
+        showToast("파일 분석 중...", 0, 0);
+        const chunks = md.split('---');
+        const newPosts = [];
 
-        for (const chunk of chunks_posts) {
-            batchIndex++;
-            showToast(`데이터 저장 중... ${Math.round((savedCount / totalToSave) * 100)}% (${batchIndex}/${chunks_posts.length})`);
-            const batch = db.batch();
-            chunk.forEach(post => {
-                const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(post.id);
-                batch.set(ref, post, { merge: true });
-            });
-            await batch.commit();
-            savedCount += chunk.length;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+
+            try {
+                let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
+                let time = '00:00';
+                let date = '';
+
+                if (dateMatch) {
+                    date = dateMatch[1];
+                    time = dateMatch[2];
+                } else {
+                    dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2})/);
+                    if (!dateMatch) continue;
+                    date = dateMatch[1];
+                }
+
+                const imageRegex = /!\[[\s\S]*?\]\((https?:\/\/[^\)]+)\)/g;
+                let images = [];
+                let m;
+                if (chunk.length < 100000) {
+                    while ((m = imageRegex.exec(chunk)) !== null) {
+                        images.push(m[1].trim());
+                    }
+                }
+
+                let content = chunk
+                    .replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '')
+                    .replace(/!\[[\s\S]*?\]\(.*?\)/g, '')
+                    .replace(/^\//gm, '')
+                    .trim();
+
+                if (content || images.length > 0) {
+                    const contentKey = content.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
+                    const uniqueKey = `${date}_${images.length}_${content.length}_${contentKey}`;
+
+                    newPosts.push({
+                        id: uniqueKey,
+                        date,
+                        time,
+                        index: i,
+                        content,
+                        images
+                    });
+                }
+            } catch (chunkErr) {
+                console.warn("Skipping chunk:", chunkErr);
+            }
         }
 
-        // Update timestamp
+        const statsMsg = `분석 완료: 총 ${newPosts.length}개의 포스트를 발견했습니다.`;
+        console.log(statsMsg);
+        showToast(statsMsg, 3000);
+
+        showToast("업로드 준비 중...", 0, 0);
+
+        // Regex to safely identify session name from parts
+        // e.g. "MyThread_part1", "MyThread (2)", "MyThread 1" -> "MyThread"
+        const sessionRefName = filename
+            .replace('.md', '')
+            .replace(/_part\d+$/, '')
+            .replace(/\s*\(\d+\)$/, '')
+            .replace(/\s+\d+$/, ''); // specific handle for "Name 1" pattern if needed
+
+        let session = state.sessions.find(s => (s.refName === sessionRefName) || (s.name === sessionRefName));
+        let sessionId;
+        let isNewSession = false;
+
+        if (session) {
+            sessionId = session.id;
+            showToast(`'${session.name}'에 병합 중...`, 0, 0);
+        } else {
+            sessionId = db.collection(COLLECTION_NAME).doc().id;
+            session = {
+                id: sessionId,
+                name: sessionRefName,
+                refName: sessionRefName,
+                order: state.sessions.length,
+                categoryId: state.categories[0] ? state.categories[0].id : 'default',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // 1. Optimistic UI Update (Instant Feedback)
+            state.sessions.unshift({ ...session, posts: [] });
+            isNewSession = true;
+            renderSidebarContent();
+
+            // 2. IMMEDIATE STRATEGY (User Request: "Upload First")
+            // Replaced Blocking Save with "Include in Batch 1" strategy.
+            // This eliminates the initial wait time.  
+        }
+
+        // --- 4. UPLOAD STRATEGY (Turbo Parallel) ---
+        const batchSize = 500;
+        const chunks_posts = [];
+        for (let i = 0; i < newPosts.length; i += batchSize) {
+            chunks_posts.push(newPosts.slice(i, i + batchSize));
+        }
+
+        let savedCount = 0;
+        const totalToSave = newPosts.length;
+
+        if (totalToSave === 0) {
+            alert("저장할 포스트가 없습니다.");
+            return;
+        }
+
+        // --- SESSION INITIALIZATION ---
+        resetFilters();
+        if (isNewSession) {
+            state.activeSessionId = sessionId;
+            state.allPosts = [];
+            // NEW session? Create it FIRST and wait for success.
+            try {
+                const sessionToSave = {
+                    ...session,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await db.collection(COLLECTION_NAME).doc(sessionId).set(sessionToSave);
+                console.log("Session document created successfully.");
+
+                // Ensure local state.sessions includes this new session (not just the optimistic push)
+                if (!state.sessions.find(s => s.id === sessionId)) {
+                    state.sessions.unshift({ ...session, posts: [] });
+                }
+            } catch (e) {
+                console.error("Session creation failed:", e);
+                showToast("세션 생성 실패!", 3000);
+                throw e; // Stop if session can't be created
+            }
+        } else {
+            // Merging? Load existing posts first
+            if (state.activeSessionId !== sessionId) {
+                await switchSession(sessionId);
+            }
+        }
+
+        renderSidebarContent();
+        renderDateNavigator();
+        updateUI();
+
+        showToast(`업로드 시작... (총 ${totalToSave}개)`, 0, 0);
+
+        // --- PARALLEL UPLOAD ENHANCEMENT ---
+        // We use a concurrency limit of 5 to avoid Firestore rate limits while maintaining high speed.
+        const CONCURRENCY = 8;
+        const uploadBatches = async () => {
+            const groups = [];
+            for (let i = 0; i < chunks_posts.length; i += CONCURRENCY) {
+                groups.push(chunks_posts.slice(i, i + CONCURRENCY));
+            }
+
+            for (const group of groups) {
+                await Promise.all(group.map(async (chunk, groupIdx) => {
+                    const batch = db.batch();
+                    chunk.forEach(post => {
+                        const safeId = post.id.replace(/\//g, '_').replace(/\./g, '_');
+                        const ref = db.collection(COLLECTION_NAME).doc(sessionId).collection('posts').doc(safeId);
+                        batch.set(ref, post, { merge: true });
+                    });
+
+                    let success = false;
+                    for (let attempt = 1; attempt <= 3; attempt++) {
+                        try {
+                            await batch.commit();
+                            success = true;
+                            break;
+                        } catch (e) {
+                            console.warn(`[Batch] Attempt ${attempt} failed:`, e);
+                            await new Promise(r => setTimeout(r, 1000 * attempt));
+                        }
+                    }
+
+                    if (success) {
+                        savedCount += chunk.length;
+                        state.allPosts.push(...chunk);
+                        showToast(`업로드 중... ${Math.round((savedCount / totalToSave) * 100)}% (${savedCount}/${totalToSave})`, 0, Math.round((savedCount / totalToSave) * 100));
+                    } else {
+                        throw new Error("일부 데이터 전송에 실패했습니다.");
+                    }
+                }));
+
+                // UI PERFORMANCE: Periodic refresh to show progress in sidebar/feed
+                renderDateNavigator();
+            }
+        };
+
+        try {
+            await uploadBatches();
+        } catch (err) {
+            alert(`업로드 중 오류 발생: ${err.message}`);
+        }
+
+        // Finalize Session
         await db.collection(COLLECTION_NAME).doc(sessionId).update({
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        showToast(`완료! 총 ${savedCount}개의 포스트가 성공적으로 저장되었습니다.`);
-        await switchSession(sessionId); // Reload to see changes
+        // Ensure consistency by re-fetching all sessions from Firestore
+        await loadSessionsFromFirestore();
+
+        showToast(`업로드 완료! 총 ${savedCount}개의 포스트가 저장되었습니다.`, 5000, 100);
+        await switchSession(sessionId);
         renderSidebarContent();
+
     } catch (e) {
-        console.error("Save Error:", e);
-        showToast(`저장 중 오류 발생: ${e.message}`);
+        console.error("Process Error:", e);
+        showToast("작업 실패!", 0);
+        alert(`처리 중 오류가 발생했습니다: ${e.message}`);
     }
 }
 
@@ -437,7 +554,7 @@ window.switchSession = async (id) => {
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    showToast("데이터를 불러오는 중...");
+    showToast("데이터를 불러오는 중...", 0, 50);
 
     // Load from subcollection
     try {
@@ -450,7 +567,7 @@ window.switchSession = async (id) => {
         // Merge legacy and new posts (new posts take precedence if ID matches)
         const allPostsMap = new Map();
 
-        // Add legacy posts first (using their existing ID or a fallback key)
+        // Add legacy posts first
         legacyPosts.forEach(p => {
             const key = p.id || `${p.date}_${p.content.substring(0, 30)}`;
             allPostsMap.set(key, p);
@@ -462,7 +579,10 @@ window.switchSession = async (id) => {
         });
 
         state.allPosts = Array.from(allPostsMap.values());
-        state.allPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Initial Sort (Default Ascending for File Order usually)
+        state.sortOrder = 'asc'; // Reset to ASC for reading order
+        updateSortUI();
 
         // Mobile UI handle
         if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -476,6 +596,7 @@ window.switchSession = async (id) => {
     renderDateNavigator();
     updateUI();
     renderSidebarContent();
+    showToast("로딩 완료!", 1000);
 };
 
 window.renameSession = async (id) => {
@@ -547,8 +668,15 @@ function updateUI() {
     });
 
     state.filteredPosts.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
+        // Priority 1: File Index (if available)
+        if (a.index !== undefined && b.index !== undefined) {
+            return state.sortOrder === 'desc' ? b.index - a.index : a.index - b.index;
+        }
+
+        // Priority 2: Date & TimeFallback
+        const dateA = new Date(a.date + (a.time ? 'T' + a.time : ''));
+        const dateB = new Date(b.date + (b.time ? 'T' + b.time : ''));
+
         return state.sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
@@ -714,10 +842,39 @@ function closeModal() {
     document.body.style.overflow = 'auto'; // Restore scroll
 }
 
-function showToast(msg) {
-    els.toast.textContent = msg;
+let toastTimeout;
+function showToast(msg, duration = 3000, progress = null) {
+    if (toastTimeout) clearTimeout(toastTimeout);
+
+    // Ensure structure exists
+    let textInfo = els.toast.querySelector('.toast-text');
+    let progressBar = els.toast.querySelector('.toast-progress-bar');
+    let progressFill = els.toast.querySelector('.toast-progress-fill');
+
+    if (!textInfo) {
+        els.toast.innerHTML = '<span class="toast-text"></span><div class="toast-progress-bar"><div class="toast-progress-fill"></div></div>';
+        textInfo = els.toast.querySelector('.toast-text');
+        progressBar = els.toast.querySelector('.toast-progress-bar');
+        progressFill = els.toast.querySelector('.toast-progress-fill');
+    }
+
+    textInfo.textContent = msg;
+
+    if (progress !== null) {
+        progressBar.style.display = 'block';
+        setTimeout(() => {
+            progressFill.style.width = `${progress}%`;
+        }, 10);
+    } else {
+        progressBar.style.display = 'none';
+        progressFill.style.width = '0%';
+    }
+
     els.toast.classList.add('show');
-    setTimeout(() => els.toast.classList.remove('show'), 3000);
+
+    if (duration > 0) {
+        toastTimeout = setTimeout(() => els.toast.classList.remove('show'), duration);
+    }
 }
 
 window.copyContent = (id) => {
