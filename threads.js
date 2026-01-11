@@ -7,6 +7,7 @@ const state = {
     sortOrder: 'desc',
     visiblePosts: 20,
     postCache: new Map(),
+    lastSyncMap: new Map(), // Track last successful sync time per session
     isSyncing: false,
 };
 window.state = state; // Global DEBUG Access
@@ -261,7 +262,16 @@ async function switchSession(id) {
         if (window.innerWidth <= 1024) toggleSidebar(false);
         renderSidebarContent();
         isCached = true;
-        // Do NOT return here. Continue to background sync.
+
+        // Check if we need to sync based on 'updatedAt'
+        const lastSync = state.lastSyncMap.get(id);
+        const serverUpdate = session.updatedAt ? new Date(session.updatedAt.seconds * 1000).getTime() : 0;
+
+        // If we have synced AFTER the last server update, we are good.
+        if (lastSync && lastSync >= serverUpdate) {
+            console.log("Skipping sync - Data is fresh.");
+            return;
+        }
     } else {
         updateProgressBar(10, "데이터 로딩 시작...");
         state.allPosts = [];
@@ -330,6 +340,7 @@ async function switchSession(id) {
 
                 // Cache unconditionally
                 state.postCache.set(id, final);
+                state.lastSyncMap.set(id, Date.now()); // Mark as synced
                 state.allPosts = final;
 
                 updateUI();
@@ -348,6 +359,7 @@ async function switchSession(id) {
                 const final = Array.from(unified.values());
                 final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                 state.postCache.set(id, final);
+                state.lastSyncMap.set(id, Date.now()); // Mark as synced
                 console.log(`Cached session ${id} in background`);
             }
             state.isSyncing = false;
