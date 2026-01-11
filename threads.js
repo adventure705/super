@@ -455,6 +455,12 @@ async function handleFileUpload(e) {
             const newPosts = [];
             const timestamp = Date.now();
 
+            const hashString = (s) => {
+                let h = 0;
+                for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+                return Math.abs(h).toString(36);
+            };
+
             chunks.forEach((chunk, i) => {
                 let dateMatch = chunk.match(/## (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/);
                 let time = '00:00', date = '';
@@ -468,7 +474,7 @@ async function handleFileUpload(e) {
 
                 let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
                 if (content || images.length > 0) {
-                    const postId = `p_${timestamp}_${i}`;
+                    const postId = `p_${date}_${hashString(time + content)}`;
                     newPosts.push({ id: postId, date, time, index: i, content, images });
                 }
             });
