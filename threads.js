@@ -16,9 +16,16 @@ const db = firebase.firestore();
 
 // Enable Persistence
 try {
-    db.enablePersistence({ synchronizeTabs: true });
+    db.enablePersistence({ synchronizeTabs: true })
+        .catch((err) => {
+            if (err.code == 'failed-precondition') {
+                console.warn("Persistence failed: Multiple tabs open");
+            } else if (err.code == 'unimplemented') {
+                console.warn("Persistence failed: Browser not supported");
+            }
+        });
 } catch (err) {
-    console.warn("Persistence failed:", err.code);
+    console.warn("Persistence configuration error:", err);
 }
 
 const COLLECTION_NAME = 'threads_sessions';
@@ -68,11 +75,30 @@ async function init() {
     try {
         const userCredential = await firebase.auth().signInAnonymously();
         console.log("Firebase Authenticated - UserID:", userCredential.user.uid);
+
+        // Show subtle debug info if needed
+        console.info(`Connected to Project: ${firebaseConfig.projectId}`);
+
         showToast("데이터 동기화 활성화됨", 2000);
+        updateSyncStatus(true);
     } catch (e) {
         console.error("Firebase Auth Error:", e);
         showToast("인증 실패: 데이터 연동이 제한될 수 있습니다.");
+        updateSyncStatus(false);
     }
+
+    // Monitor online/offline status
+    db.doc('.info/connected').onSnapshot((snapshot) => {
+        const isConnected = snapshot.data() ? snapshot.data().connected : true; // Fallback for Firestore info path
+        // Note: Firestore doesn't have .info/connected like RTDB, 
+        // using a manual check for snapshot sources instead.
+    });
+
+    // Better way to monitor Firestore connectivity:
+    db.collection(COLLECTION_NAME).limit(1).onSnapshot({ includeMetadataChanges: true }, (snapshot) => {
+        const isFromCache = snapshot.metadata.fromCache;
+        updateSyncStatus(!isFromCache);
+    });
 
     els.uploadBtn.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', handleFileUpload);
@@ -217,24 +243,31 @@ async function loadCategoriesFromFirestore() {
             }));
 
             const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
-            if (state.categories.length === 0 || !hasDefault) {
-                // Only create default if we are certain it's missing (not just loading)
-                if (snapshot.metadata.fromCache === false || snapshot.docs.length > 0 || hasDefault) {
-                    // Safety check to prevent unnecessary writes during initial sync
-                } else {
-                    addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-                }
+
+            // Only create default category if we are 100% sure the server is empty
+            if (state.categories.length === 0 && !snapshot.metadata.fromCache) {
+                addNewCategoryUI('미분류', DEFAULT_CAT_ID);
             }
+
             renderSidebarContent();
             resolve();
         }, (e) => {
             console.error("Categories Sync Error:", e);
             if (e.code === 'permission-denied') {
-                showToast("권한 오류: Firebase 보안 규칙을 확인해주세요.");
+                showToast("권한 오류: Firebase Rules에서 읽기 권한을 확인해주세요.");
             }
             resolve();
         });
     });
+}
+
+function updateSyncStatus(isSynced) {
+    const logoIcon = document.querySelector('.logo-icon');
+    if (logoIcon) {
+        logoIcon.style.boxShadow = isSynced ? '0 0 10px #4caf50' : '0 0 10px #f44336';
+        logoIcon.style.transition = 'box-shadow 0.3s ease';
+        logoIcon.title = isSynced ? '동기화 완료 (서버 연결됨)' : '동기화 대기 중 (오프라인/로컬 캐시)';
+    }
 }
 
 async function addNewCategory() {
