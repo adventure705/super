@@ -22,11 +22,15 @@ body {
     color: var(--text-primary);
     overflow: hidden;
     height: 100vh;
+    /* Fallback */
+    height: 100dvh;
 }
 
 .app-container {
     display: flex;
     height: 100vh;
+    /* Fallback */
+    height: 100dvh;
 }
 
 /* Sidebar Styling */

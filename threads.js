@@ -83,8 +83,26 @@ async function init() {
     await loadCategoriesFromFirestore();
     await loadSessionsFromFirestore();
 
+    // Select the first session based on visual order (Category order -> Session order)
     if (state.sessions.length > 0) {
-        switchSession(state.sessions[0].id);
+        let firstSessionId = null;
+        const sortedCats = state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        for (const cat of sortedCats) {
+            const catSessions = state.sessions
+                .filter(s => s.categoryId === cat.id)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            if (catSessions.length > 0) {
+                firstSessionId = catSessions[0].id;
+                break;
+            }
+        }
+
+        // Fallback to first available if navigation logic fails
+        if (!firstSessionId && state.sessions.length > 0) firstSessionId = state.sessions[0].id;
+
+        if (firstSessionId) switchSession(firstSessionId);
     }
 
     // Infinite Scroll Event
