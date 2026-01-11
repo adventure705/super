@@ -331,10 +331,76 @@ body {
     overflow-y: auto;
 }
 
-.stats-banner {
+.view-header {
     display: flex;
+    justify-content: space-between;
+    align-items: stretch;
     gap: 24px;
     margin-bottom: 32px;
+}
+
+.stats-banner {
+    display: flex;
+    gap: 16px;
+}
+
+.date-navigator {
+    flex: 1;
+    background: var(--card-bg);
+    padding: 16px 24px;
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+    display: flex;
+    gap: 24px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.year-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: fit-content;
+}
+
+.year-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.8;
+}
+
+.month-list {
+    display: flex;
+    gap: 6px;
+}
+
+.month-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.month-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    border-color: var(--accent-blue);
+    transform: translateY(-1px);
+}
+
+.month-btn.active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .stat-item {

@@ -1,3 +1,3 @@
 @echo off
-start index.html
+start threads.html
 exit

@@ -38,6 +38,7 @@ const els = {
     totalPosts: document.getElementById('total-posts'),
     totalImages: document.getElementById('total-images'),
     userList: document.getElementById('user-list'),
+    dateNavigator: document.getElementById('date-navigator'),
     toast: document.getElementById('toast'),
 };
 
@@ -218,6 +219,7 @@ window.switchSession = (id) => {
     const session = state.sessions.find(s => s.id === id);
     if (session) {
         state.allPosts = session.posts;
+        renderDateNavigator();
         updateUI();
         renderSessionList();
     }
@@ -258,6 +260,7 @@ function resetFilters() {
     els.endDateFilter.value = '';
     state.sortOrder = 'desc';
     updateSortUI();
+    renderDateNavigator();
     updateUI();
 }
 
@@ -298,7 +301,75 @@ function updateUI() {
 
     renderPosts();
     updateStats();
+    updateDateNavigatorActive();
 }
+
+function renderDateNavigator() {
+    if (state.allPosts.length === 0) {
+        els.dateNavigator.innerHTML = '';
+        return;
+    }
+
+    const dateMap = {}; // { year: [month1, month2] }
+    state.allPosts.forEach(post => {
+        const [year, month] = post.date.split('-');
+        if (!dateMap[year]) dateMap[year] = new Set();
+        dateMap[year].add(month);
+    });
+
+    const years = Object.keys(dateMap).sort((a, b) => b - a);
+
+    els.dateNavigator.innerHTML = years.map(year => {
+        const months = Array.from(dateMap[year]).sort((a, b) => b - a);
+        return `
+            <div class="year-group">
+                <span class="year-label">${year}</span>
+                <div class="month-list">
+                    ${months.map(month => `
+                        <button class="month-btn" onclick="filterByMonth('${year}', '${month}')" data-date="${year}-${month}">
+                            ${parseInt(month)}월
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateDateNavigatorActive() {
+    const startDate = els.startDateFilter.value;
+    const endDate = els.endDateFilter.value;
+
+    document.querySelectorAll('.month-btn').forEach(btn => {
+        const btnDate = btn.getAttribute('data-date');
+        const [year, month] = btnDate.split('-');
+
+        const firstDay = `${year}-${month}-01`;
+        const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
+
+        if (startDate === firstDay && endDate === lastDay) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
+window.filterByMonth = (year, month) => {
+    const firstDay = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
+
+    // Toggle if already selected
+    if (els.startDateFilter.value === firstDay && els.endDateFilter.value === lastDay) {
+        els.startDateFilter.value = '';
+        els.endDateFilter.value = '';
+    } else {
+        els.startDateFilter.value = firstDay;
+        els.endDateFilter.value = lastDay;
+    }
+
+    updateUI();
+};
 
 function renderPosts() {
     if (state.allPosts.length === 0 && state.sessions.length > 0) {
