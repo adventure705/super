@@ -14,11 +14,13 @@ if (!firebase.apps.length) {
 }
 const db = firebase.firestore();
 const COLLECTION_NAME = 'threads_sessions';
+const CATEGORY_COLLECTION = 'threads_categories';
 
 const state = {
     allPosts: [],
     filteredPosts: [],
     sessions: [],
+    categories: [],
     activeSessionId: null,
     sortOrder: 'desc',
 };
@@ -37,9 +39,13 @@ const els = {
     sortText: document.getElementById('sort-text'),
     totalPosts: document.getElementById('total-posts'),
     totalImages: document.getElementById('total-images'),
-    userList: document.getElementById('user-list'),
+    sidebarContent: document.getElementById('sidebar-content'),
     dateNavigator: document.getElementById('date-navigator'),
     toast: document.getElementById('toast'),
+    mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
+    sidebar: document.querySelector('.sidebar'),
+    sidebarOverlay: document.getElementById('sidebar-overlay'),
+    addCategoryBtn: document.getElementById('add-category-btn'),
 };
 
 // --- Initialization ---
@@ -52,34 +58,145 @@ async function init() {
     els.resetFilters.addEventListener('click', resetFilters);
     els.sortToggle.addEventListener('click', toggleSort);
 
+    // Mobile Menu
+    els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
+    els.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
+    els.addCategoryBtn.addEventListener('click', addNewCategory);
+
     // Initial Load from Firestore
+    await loadCategoriesFromFirestore();
     await loadSessionsFromFirestore();
-    initSortable();
 
     if (state.sessions.length > 0) {
         switchSession(state.sessions[0].id);
     }
 }
 
-function initSortable() {
-    new Sortable(els.userList, {
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        handle: '.drag-handle',
-        onEnd: async (evt) => {
-            const movedItem = state.sessions.splice(evt.oldIndex, 1)[0];
-            state.sessions.splice(evt.newIndex, 0, movedItem);
+function toggleSidebar(open) {
+    if (open) {
+        els.sidebar.classList.add('open');
+        els.sidebarOverlay.classList.add('show');
+    } else {
+        els.sidebar.classList.remove('open');
+        els.sidebarOverlay.classList.remove('show');
+    }
+}
 
-            // Update order in Firestore
+function initSortable() {
+    // Sort Categories
+    new Sortable(els.sidebarContent, {
+        animation: 150,
+        handle: '.category-header',
+        ghostClass: 'sortable-ghost',
+        onEnd: async () => {
+            const categoryOrder = Array.from(els.sidebarContent.querySelectorAll('.category-section'))
+                .map(el => el.dataset.id);
+
             const batch = db.batch();
-            state.sessions.forEach((session, index) => {
-                const ref = db.collection(COLLECTION_NAME).doc(session.id);
+            categoryOrder.forEach((id, index) => {
+                const ref = db.collection(CATEGORY_COLLECTION).doc(id);
                 batch.update(ref, { order: index });
+                // Update local state
+                const cat = state.categories.find(c => c.id === id);
+                if (cat) cat.order = index;
             });
             await batch.commit();
+            state.categories.sort((a, b) => a.order - b.order);
         }
     });
+
+    // Sort Sessions within and across categories
+    document.querySelectorAll('.session-list').forEach(listEl => {
+        new Sortable(listEl, {
+            group: 'sessions',
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: async (evt) => {
+                const sessionId = evt.item.dataset.id;
+                const newCategoryId = evt.to.dataset.categoryId;
+
+                // Get all sessions in the new category to update order
+                const sessionEls = Array.from(evt.to.querySelectorAll('li'));
+                const batch = db.batch();
+
+                sessionEls.forEach((el, index) => {
+                    const sid = el.dataset.id;
+                    const ref = db.collection(COLLECTION_NAME).doc(sid);
+                    const updateData = { order: index };
+                    if (sid === sessionId) {
+                        updateData.categoryId = newCategoryId;
+                        // Update local state
+                        const sess = state.sessions.find(s => s.id === sid);
+                        if (sess) sess.categoryId = newCategoryId;
+                    }
+                    batch.update(ref, updateData);
+                });
+                await batch.commit();
+            }
+        });
+    });
 }
+
+// --- Category Management ---
+async function loadCategoriesFromFirestore() {
+    try {
+        const snapshot = await db.collection(CATEGORY_COLLECTION).orderBy('order', 'asc').get();
+        state.categories = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        if (state.categories.length === 0) {
+            // Create default category
+            await addNewCategoryUI('미분류');
+        }
+    } catch (e) {
+        console.error("Categories Load Error:", e);
+    }
+}
+
+async function addNewCategory() {
+    const name = prompt('새 카테고리 이름을 입력하세요:');
+    if (name && name.trim()) {
+        await addNewCategoryUI(name.trim());
+        renderSidebarContent();
+    }
+}
+
+async function addNewCategoryUI(name) {
+    const newId = db.collection(CATEGORY_COLLECTION).doc().id;
+    const category = {
+        name: name,
+        order: state.categories.length
+    };
+    await db.collection(CATEGORY_COLLECTION).doc(newId).set(category);
+    state.categories.push({ id: newId, ...category });
+}
+
+window.renameCategory = async (id) => {
+    const category = state.categories.find(c => c.id === id);
+    if (!category) return;
+    const newName = prompt('새 이름을 입력하세요:', category.name);
+    if (newName && newName.trim()) {
+        category.name = newName.trim();
+        await db.collection(CATEGORY_COLLECTION).doc(id).update({ name: category.name });
+        renderSidebarContent();
+        showToast('카테고리 이름이 변경되었습니다.');
+    }
+};
+
+window.deleteCategory = async (id) => {
+    const sessCount = state.sessions.filter(s => s.categoryId === id).length;
+    if (sessCount > 0) {
+        alert('이 카테고리에 포함된 세션이 있습니다. 세션을 이동시킨 후 삭제해주세요.');
+        return;
+    }
+    if (!confirm('이 카테고리를 삭제하시겠습니까?')) return;
+    await db.collection(CATEGORY_COLLECTION).doc(id).delete();
+    state.categories = state.categories.filter(c => c.id !== id);
+    renderSidebarContent();
+    showToast('삭제되었습니다.');
+};
 
 // --- Firestore Data Handling ---
 async function loadSessionsFromFirestore() {
@@ -89,7 +206,7 @@ async function loadSessionsFromFirestore() {
             id: doc.id,
             ...doc.data()
         }));
-        renderSessionList();
+        renderSidebarContent();
     } catch (e) {
         console.error("Firestore Load Error:", e);
         showToast("데이터를 불러오는데 실패했습니다.");
@@ -102,6 +219,7 @@ async function saveSessionToFirestore(session) {
         await db.collection(COLLECTION_NAME).doc(id).set({
             ...data,
             refName: data.refName || data.name, // Ensure refName exists
+            categoryId: data.categoryId || (state.categories[0] ? state.categories[0].id : 'default'),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
     } catch (e) {
@@ -110,22 +228,43 @@ async function saveSessionToFirestore(session) {
     }
 }
 
-function renderSessionList() {
-    if (state.sessions.length === 0) {
-        els.userList.innerHTML = `<li class="empty-lib">라이브러리가 비어있습니다</li>`;
+function renderSidebarContent() {
+    if (state.categories.length === 0) {
+        els.sidebarContent.innerHTML = `<div class="empty-lib">라이브러리가 비어있습니다</div>`;
         return;
     }
 
-    els.userList.innerHTML = state.sessions.map((session) => `
-        <li class="${state.activeSessionId === session.id ? 'active' : ''}" onclick="switchSession('${session.id}')">
-            <span class="drag-handle">☰</span>
-            <span class="session-name" title="${session.name}">${session.name}</span>
-            <div class="session-actions" onclick="event.stopPropagation()">
-                <button class="action-btn" onclick="renameSession('${session.id}')" title="이름 변경">✎</button>
-                <button class="action-btn delete" onclick="deleteSession('${session.id}')" title="삭제">✕</button>
+    els.sidebarContent.innerHTML = state.categories.map(category => {
+        const catSessions = state.sessions.filter(s => s.categoryId === category.id)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        return `
+            <div class="category-section" data-id="${category.id}">
+                <div class="category-header">
+                    <span class="category-title">${category.name}</span>
+                    <div class="category-actions" onclick="event.stopPropagation()">
+                        <button class="action-btn" onclick="renameCategory('${category.id}')" title="이름 변경">✎</button>
+                        <button class="action-btn delete" onclick="deleteCategory('${category.id}')" title="삭제">✕</button>
+                    </div>
+                </div>
+                <ul class="session-list" data-category-id="${category.id}">
+                    ${catSessions.map(session => `
+                        <li class="${state.activeSessionId === session.id ? 'active' : ''}" 
+                            data-id="${session.id}"
+                            onclick="switchSession('${session.id}')">
+                            <span class="drag-handle">☰</span>
+                            <span class="session-name" title="${session.name}">${session.name}</span>
+                            <div class="session-actions" onclick="event.stopPropagation()">
+                                <button class="action-btn" onclick="renameSession('${session.id}')" title="이름 변경">✎</button>
+                                <button class="action-btn delete" onclick="deleteSession('${session.id}')" title="삭제">✕</button>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
             </div>
-        </li>
-    `).join('');
+        `;
+    }).join('');
+    initSortable();
 }
 
 // --- File Handling & Parsing ---
@@ -202,7 +341,8 @@ async function parseAndSyncMarkdown(md, filename) {
             name: sessionRefName, // Initial display name
             refName: sessionRefName, // Hidden internal match key
             posts: newPosts.sort((a, b) => new Date(b.date) - new Date(a.date)),
-            order: state.sessions.length
+            order: state.sessions.length,
+            categoryId: state.categories[0] ? state.categories[0].id : 'default'
         };
         state.sessions.unshift(session);
         await saveSessionToFirestore(session);
@@ -210,7 +350,7 @@ async function parseAndSyncMarkdown(md, filename) {
     }
 
     switchSession(session.id);
-    renderSessionList();
+    renderSidebarContent();
 }
 
 // --- App Functions ---
@@ -221,7 +361,12 @@ window.switchSession = (id) => {
         state.allPosts = session.posts;
         renderDateNavigator();
         updateUI();
-        renderSessionList();
+        renderSidebarContent();
+
+        // Close sidebar on mobile after selection
+        if (window.innerWidth <= 1024) {
+            toggleSidebar(false);
+        }
     }
 };
 
@@ -232,7 +377,7 @@ window.renameSession = async (id) => {
     if (newName && newName.trim()) {
         session.name = newName.trim();
         await saveSessionToFirestore(session);
-        renderSessionList();
+        renderSidebarContent();
         showToast('이름이 변경되었습니다.');
     }
 };
@@ -247,7 +392,7 @@ window.deleteSession = async (id) => {
             state.activeSessionId = null;
             updateUI();
         }
-        renderSessionList();
+        renderSidebarContent();
         showToast('삭제되었습니다.');
     } catch (e) {
         showToast("삭제에 실패했습니다.");

@@ -20,17 +20,24 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <span class="logo-icon">T</span>
+                <div class="mobile-controls">
+                    <button id="mobile-menu-toggle" class="btn-icon">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M4 6h16M4 12h16M4 18h16" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                    <span class="logo-icon">T</span>
+                </div>
                 <h1>Threads Analyzer</h1>
             </div>
 
             <nav class="nav-menu">
-                <div class="nav-section">
-                    <h3>내 라이브러리</h3>
-                    <ul id="user-list">
-                        <!-- User sessions will be listed here -->
-                        <li class="active">현재 세션</li>
-                    </ul>
+                <div class="nav-header-actions">
+                    <button id="add-category-btn" class="btn-secondary-sm" title="카테고리 추가">+ 카테고리</button>
+                </div>
+                <div id="sidebar-content">
+                    <!-- Categories and sessions will be rendered here -->
                 </div>
             </nav>
 
@@ -109,6 +116,7 @@
                 </div>
             </section>
         </main>
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
     </div>
 
     <!-- Notification -->
