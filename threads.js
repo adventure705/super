@@ -320,58 +320,96 @@ async function switchSession(id) {
 
         // Step 2: Full Sync in Background (Recursive Batched Fetching if too large?)
         // For now, standard get() but with better error reporting
-        colRef.get().then(fullSnap => {
-            console.log(`✅ Background Sync Arrived: ${fullSnap.size} posts`);
-            if (fullSnap.empty) return;
+        // Step 2: Robust Recursive Batch Sync
+        // Use ID-based paging which requires NO custom index
+        const loadAllBatches = async () => {
+            try {
+                let allDocs = [];
+                let lastSnap = null;
+                let hasMore = true;
+                const BATCH_SIZE = 500;
+                let batchCount = 0;
 
-            const allPostsCombined = fullSnap.docs.map(doc => {
-                const data = doc.data();
-                const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
-                return { ...data, id: doc.id, _ts: ts };
-            });
+                while (hasMore) {
+                    let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
+                    if (lastSnap) {
+                        query = query.startAfter(lastSnap);
+                    }
 
-            if (state.activeSessionId === id) {
-                const unified = new Map();
-                allPostsCombined.forEach(p => unified.set(p.id, p));
-                const final = Array.from(unified.values());
+                    const snapshot = await query.get();
+                    if (snapshot.empty) {
+                        hasMore = false;
+                        break;
+                    }
 
-                // Explicitly sort before display
-                final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                    allDocs = allDocs.concat(snapshot.docs);
+                    lastSnap = snapshot.docs[snapshot.docs.length - 1];
+                    batchCount++;
 
-                // Cache unconditionally
-                state.postCache.set(id, final);
-                state.lastSyncMap.set(id, Date.now()); // Mark as synced
-                state.allPosts = final;
+                    // Visual Feedback
+                    const currentTotal = allDocs.length;
+                    updateProgressBar(50 + (batchCount * 5), `데이터 수신 중... (${currentTotal}개)`);
 
+                    if (snapshot.size < BATCH_SIZE) hasMore = false;
+                }
+
+                console.log(`✅ Recursive Sync Complete: ${allDocs.length} posts`);
+
+                const allPostsCombined = allDocs.map(doc => {
+                    const data = doc.data();
+                    const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                    return { ...data, id: doc.id, _ts: ts };
+                });
+
+                if (state.activeSessionId === id && state.sessions.find(s => s.id === id)) {
+                    // Update Active Session
+                    const unified = new Map();
+                    // Keep existing (Step 1) posts if any overlap, but override with fresh data
+                    state.allPosts.forEach(p => unified.set(p.id, p));
+                    allPostsCombined.forEach(p => unified.set(p.id, p));
+
+                    const final = Array.from(unified.values());
+                    final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+
+                    state.postCache.set(id, final);
+                    state.lastSyncMap.set(id, Date.now());
+                    state.allPosts = final;
+
+                    updateUI();
+
+                    if (session.posts && session.posts.length > 0) {
+                        db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
+                        session.posts = [];
+                    }
+                    saveStateToCache();
+                    showToast(`모든 데이터 로드 완료! (${final.length}개)`);
+                } else {
+                    // Cache Background Session
+                    // We must fetch cache first to merge? No, recursive sync is authoritative.
+                    const unified = new Map();
+                    allPostsCombined.forEach(p => unified.set(p.id, p));
+                    const final = Array.from(unified.values());
+                    final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+
+                    state.postCache.set(id, final);
+                    state.lastSyncMap.set(id, Date.now());
+                }
+
+                state.isSyncing = false;
+                updateProgressBar(100, "동기화 완료");
+                setTimeout(hideProgressBar, 1000);
                 updateUI();
 
-                // Optimization: Clean up legacy array storage if found
-                if (session.posts && session.posts.length > 0) {
-                    db.collection(COLLECTION_NAME).doc(id).update({ posts: firebase.firestore.FieldValue.delete() });
-                    session.posts = [];
-                }
-                saveStateToCache();
-
-                showToast(`전체 데이터 로드 완료! (${final.length}개)`);
-            } else {
-                const unified = new Map();
-                allPostsCombined.forEach(p => unified.set(p.id, p));
-                const final = Array.from(unified.values());
-                final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-                state.postCache.set(id, final);
-                state.lastSyncMap.set(id, Date.now()); // Mark as synced
-                console.log(`Cached session ${id} in background`);
+            } catch (err) {
+                console.error("Batch sync failed:", err);
+                showToast("데이터 로드 중단: " + err.message);
+                state.isSyncing = false;
+                updateUI();
             }
-            state.isSyncing = false;
-            updateProgressBar(100, "로딩 완료");
-            setTimeout(hideProgressBar, 1000);
-            updateUI();
-        }).catch(err => {
-            console.error("Background sync failed:", err);
-            showToast("전체 데이터 로드 실패: " + err.message);
-            state.isSyncing = false;
-            updateUI();
-        });
+        };
+
+        // Execute Step 2
+        loadAllBatches();
 
 
 
