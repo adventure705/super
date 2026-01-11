@@ -7,7 +7,9 @@ const state = {
     activeSessionId: null,
     sortOrder: 'desc',
     visiblePosts: 20,
+    postCache: new Map(), // sessionId -> posts[] memory cache
 };
+let searchTimeout;
 
 let db;
 
@@ -108,9 +110,12 @@ window.refreshSidebar = refreshData;
 function setupEventListeners() {
     if (els.uploadBtn) els.uploadBtn.addEventListener('click', () => els.fileInput.click());
     if (els.fileInput) els.fileInput.addEventListener('change', handleFileUpload);
-    if (els.searchInput) els.searchInput.addEventListener('input', () => updateUI());
-    if (els.startDateFilter) els.startDateFilter.addEventListener('change', updateUI);
-    if (els.endDateFilter) els.endDateFilter.addEventListener('change', updateUI);
+    if (els.searchInput) els.searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => updateUI(), 300); // 0.3s debounce
+    });
+    if (els.startDateFilter) els.startDateFilter.addEventListener('change', () => updateUI());
+    if (els.endDateFilter) els.endDateFilter.addEventListener('change', () => updateUI());
     if (els.resetFilters) els.resetFilters.addEventListener('click', resetFilters);
     if (els.sortToggle) els.sortToggle.addEventListener('click', toggleSort);
     if (els.mobileMenuToggle) els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
@@ -173,22 +178,33 @@ async function loadSessions() {
 }
 
 async function switchSession(id) {
+    if (state.activeSessionId === id && state.allPosts.length > 0) return;
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
     if (!session) return;
 
-    showToast("포스트를 불러오는 중...", 1000);
+    // 1. Use Memory Cache if available for instant loading
+    if (state.postCache.has(id)) {
+        console.log("Loading session from memory cache...");
+        state.allPosts = state.postCache.get(id);
+        updateUI();
+        if (window.innerWidth <= 1024) toggleSidebar(false);
+        renderSidebarContent();
+        return;
+    }
+
+    showToast("데이터 동기화 중...", 1000);
 
     try {
+        console.log("Fetching session from Firestore...");
         const snapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
         const subPosts = snapshot.docs.map(doc => {
             const data = doc.data();
-            // Pre-calculate timestamp for lightning-fast sorting
             const ts = new Date(data.date + (data.time ? 'T' + data.time : '')).getTime();
             return { ...data, _ts: ts };
         });
 
-        let legacyPosts = (session.posts || []).map(p => {
+        const legacyPosts = (session.posts || []).map(p => {
             const ts = new Date(p.date + (p.time ? 'T' + p.time : '')).getTime();
             return { ...p, _ts: ts };
         });
@@ -197,10 +213,16 @@ async function switchSession(id) {
         legacyPosts.forEach(p => allMap.set(p.id || `${p.date}_${p.content.substring(0, 30)}`, p));
         subPosts.forEach(p => allMap.set(p.id, p));
 
-        state.allPosts = Array.from(allMap.values());
+        const combinedPosts = Array.from(allMap.values());
+
+        // 2. Save to Memory Cache
+        state.postCache.set(id, combinedPosts);
+
+        state.allPosts = combinedPosts;
         updateUI();
     } catch (e) {
         console.error("Posts fetch error:", e);
+        showToast("데이터 로딩 오류");
     }
 
     if (window.innerWidth <= 1024) toggleSidebar(false);
