@@ -637,8 +637,8 @@ window.switchSession = async (id) => {
 
         state.allPosts = Array.from(allPostsMap.values());
 
-        // Initial Sort (Default Ascending for File Order usually)
-        state.sortOrder = 'asc'; // Reset to ASC for reading order
+        // Initial Sort (Default Descending for Latest First)
+        state.sortOrder = 'desc';
         updateSortUI();
 
         // Mobile UI handle
