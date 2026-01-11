@@ -520,8 +520,23 @@ function handleScroll() {
 }
 
 function toggleSidebar(o) { els.sidebar.classList.toggle('open', o); els.sidebarOverlay.classList.toggle('show', o); }
-function openModal(u) { if (els.modalImg) els.modalImg.src = u; els.imageModal.style.display = 'flex'; }
-function closeModal() { els.imageModal.classList.remove('show'); setTimeout(() => { els.imageModal.style.display = 'none'; }, 300); }
+
+window.openModal = function (u) {
+    if (els.modalImg) els.modalImg.src = u;
+    els.imageModal.style.display = 'flex';
+    setTimeout(() => {
+        els.imageModal.classList.add('show');
+    }, 10);
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeModal = function () {
+    els.imageModal.classList.remove('show');
+    setTimeout(() => {
+        els.imageModal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }, 300);
+};
 
 async function addNewCategory() {
     const n = prompt('새 카테고리:');
