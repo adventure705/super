@@ -665,6 +665,16 @@ body {
 
     .mobile-controls {
         display: flex;
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 101;
+        /* Above sidebar(10) and content */
+        background: rgba(15, 17, 26, 0.8);
+        backdrop-filter: blur(10px);
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--glass-border);
     }
 
     #mobile-menu-toggle {
@@ -672,7 +682,7 @@ body {
         background: none;
         border: none;
         color: var(--text-primary);
-        padding: 4px;
+        padding: 0;
         cursor: pointer;
     }
 

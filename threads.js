@@ -426,8 +426,24 @@ window.switchSession = async (id) => {
         const postsSnapshot = await db.collection(COLLECTION_NAME).doc(id).collection('posts').get();
         let subcollectionPosts = postsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Trust subcollection data completely
-        state.allPosts = subcollectionPosts;
+        // Restore backward compatibility for old sessions stored in array
+        let legacyPosts = session.posts || [];
+
+        // Merge legacy and new posts (new posts take precedence if ID matches)
+        const allPostsMap = new Map();
+
+        // Add legacy posts first (using their existing ID or a fallback key)
+        legacyPosts.forEach(p => {
+            const key = p.id || `${p.date}_${p.content.substring(0, 30)}`;
+            allPostsMap.set(key, p);
+        });
+
+        // Overwrite/Add subcollection posts
+        subcollectionPosts.forEach(p => {
+            allPostsMap.set(p.id, p);
+        });
+
+        state.allPosts = Array.from(allPostsMap.values());
         state.allPosts.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         // Mobile UI handle
