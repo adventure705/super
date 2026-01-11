@@ -66,9 +66,12 @@ const els = {
 async function init() {
     // Auth for persistent access
     try {
-        await firebase.auth().signInAnonymously();
+        const userCredential = await firebase.auth().signInAnonymously();
+        console.log("Firebase Authenticated - UserID:", userCredential.user.uid);
+        showToast("데이터 동기화 활성화됨", 2000);
     } catch (e) {
-        console.warn("Firebase Auth Error:", e);
+        console.error("Firebase Auth Error:", e);
+        showToast("인증 실패: 데이터 연동이 제한될 수 있습니다.");
     }
 
     els.uploadBtn.addEventListener('click', () => els.fileInput.click());
@@ -95,36 +98,37 @@ async function init() {
         }
     });
 
-    // Initial Load from Firestore (Parallel)
+    // Initial Load from Firestore
     await Promise.all([
         loadCategoriesFromFirestore(),
         loadSessionsFromFirestore()
     ]);
 
-    // Select the first session based on visual order (Category order -> Session order)
-    if (state.sessions.length > 0) {
-        let firstSessionId = null;
-        const sortedCats = state.categories.sort((a, b) => (a.order || 0) - (b.order || 0));
-
-        for (const cat of sortedCats) {
-            const catSessions = state.sessions
-                .filter(s => s.categoryId === cat.id)
-                .sort((a, b) => (a.order || 0) - (b.order || 0));
-
-            if (catSessions.length > 0) {
-                firstSessionId = catSessions[0].id;
-                break;
-            }
-        }
-
-        // Fallback to first available if navigation logic fails
-        if (!firstSessionId && state.sessions.length > 0) firstSessionId = state.sessions[0].id;
-
-        if (firstSessionId) switchSession(firstSessionId);
-    }
+    // Initial session selection is handled within loadSessionsFromFirestore to accommodate real-time sync
 
     // Infinite Scroll Event
     els.contentView.addEventListener('scroll', handleScroll);
+}
+
+function autoSelectFirstSession() {
+    if (state.activeSessionId || state.sessions.length === 0) return;
+
+    let firstSessionId = null;
+    const sortedCats = [...state.categories].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    for (const cat of sortedCats) {
+        const catSessions = state.sessions
+            .filter(s => s.categoryId === cat.id)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        if (catSessions.length > 0) {
+            firstSessionId = catSessions[0].id;
+            break;
+        }
+    }
+
+    if (!firstSessionId && state.sessions.length > 0) firstSessionId = state.sessions[0].id;
+    if (firstSessionId) switchSession(firstSessionId);
 }
 
 function handleScroll() {
@@ -214,12 +218,20 @@ async function loadCategoriesFromFirestore() {
 
             const hasDefault = state.categories.some(c => c.id === DEFAULT_CAT_ID);
             if (state.categories.length === 0 || !hasDefault) {
-                addNewCategoryUI('미분류', DEFAULT_CAT_ID);
+                // Only create default if we are certain it's missing (not just loading)
+                if (snapshot.metadata.fromCache === false || snapshot.docs.length > 0 || hasDefault) {
+                    // Safety check to prevent unnecessary writes during initial sync
+                } else {
+                    addNewCategoryUI('미분류', DEFAULT_CAT_ID);
+                }
             }
             renderSidebarContent();
             resolve();
         }, (e) => {
             console.error("Categories Sync Error:", e);
+            if (e.code === 'permission-denied') {
+                showToast("권한 오류: Firebase 보안 규칙을 확인해주세요.");
+            }
             resolve();
         });
     });
@@ -281,11 +293,22 @@ async function loadSessionsFromFirestore() {
                 ...doc.data()
             }));
             state.sessions.sort((a, b) => (a.order || 0) - (b.order || 0));
+
             renderSidebarContent();
+
+            // Auto-select first session if none active (useful for cross-device loading)
+            if (!state.activeSessionId && state.sessions.length > 0) {
+                autoSelectFirstSession();
+            }
+
             resolve();
         }, (e) => {
             console.error("Sessions Sync Error:", e);
-            showToast("데이터 동기화 실패.");
+            if (e.code === 'permission-denied') {
+                showToast("권한 오류: 타 기기의 데이터를 불러올 권한이 없습니다.");
+            } else {
+                showToast("데이터 동기화 오류.");
+            }
             resolve();
         });
     });
