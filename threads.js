@@ -227,9 +227,13 @@ window.renameCategory = async (id) => {
     if (!category) return;
     const newName = prompt('카테고리 이름 변경:', category.name);
     if (newName && newName.trim()) {
-        await db.collection(CATEGORY_COLLECTION).doc(id).update({ name: newName.trim() });
+        const trimmedName = newName.trim();
+        // Optimistic Update
+        category.name = trimmedName;
+        renderSidebarContent();
+
+        await db.collection(CATEGORY_COLLECTION).doc(id).update({ name: trimmedName });
         showToast("변경되었습니다.");
-        await loadCategories();
     }
 };
 
@@ -237,8 +241,13 @@ window.deleteCategory = async (id) => {
     const sessCount = state.sessions.filter(s => s.categoryId === id).length;
     if (sessCount > 0) return alert('카테고리가 비어있지 않습니다.');
     if (!confirm('삭제하시겠습니까?')) return;
+
+    // Optimistic Update
+    state.categories = state.categories.filter(c => c.id !== id);
+    renderSidebarContent();
+
     await db.collection(CATEGORY_COLLECTION).doc(id).delete();
-    await loadCategories();
+    showToast("삭제되었습니다.");
 };
 
 window.renameSession = async (id) => {
@@ -246,21 +255,30 @@ window.renameSession = async (id) => {
     if (!session) return;
     const newName = prompt('세션 이름 변경:', session.name);
     if (newName && newName.trim()) {
-        await db.collection(COLLECTION_NAME).doc(id).update({ name: newName.trim() });
+        const trimmedName = newName.trim();
+        // Optimistic Update
+        session.name = trimmedName;
+        renderSidebarContent();
+
+        await db.collection(COLLECTION_NAME).doc(id).update({ name: trimmedName });
         showToast("변경되었습니다.");
-        await loadSessions();
     }
 };
 
 window.deleteSession = async (id) => {
     if (!confirm('삭제하시겠습니까?')) return;
-    await db.collection(COLLECTION_NAME).doc(id).delete();
+
+    // Optimistic Update
+    state.sessions = state.sessions.filter(s => s.id !== id);
     if (state.activeSessionId === id) {
         state.allPosts = [];
         state.activeSessionId = null;
         updateUI();
     }
-    await loadSessions();
+    renderSidebarContent();
+
+    await db.collection(COLLECTION_NAME).doc(id).delete();
+    showToast("삭제되었습니다.");
 };
 
 function renderSidebarContent() {
@@ -559,11 +577,25 @@ window.closeModal = function () {
 
 async function addNewCategory() {
     const n = prompt('새 카테고리:');
-    if (n) { await addNewCategoryUI(n.trim()); await loadCategories(); }
+    if (n && n.trim()) {
+        const name = n.trim();
+        const id = db.collection(CATEGORY_COLLECTION).doc().id;
+        const newCat = { id, name, order: state.categories.length };
+
+        // Optimistic Update
+        state.categories.push(newCat);
+        renderSidebarContent();
+
+        await db.collection(CATEGORY_COLLECTION).doc(id).set(newCat, { merge: true });
+    }
 }
+
 async function addNewCategoryUI(n, id) {
     const cid = id || db.collection(CATEGORY_COLLECTION).doc().id;
-    await db.collection(CATEGORY_COLLECTION).doc(cid).set({ name: n, order: state.categories.length }, { merge: true });
+    const newCat = { name: n, order: state.categories.length };
+    await db.collection(CATEGORY_COLLECTION).doc(cid).set(newCat, { merge: true });
+    state.categories.push({ id: cid, ...newCat });
+    renderSidebarContent();
 }
 
 window.copyContent = (id) => {
