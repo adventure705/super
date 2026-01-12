@@ -387,9 +387,13 @@ async function switchSession(id) {
             }
 
             try { // [FIX] Restore missing try block for main logic
+                console.log(`📡 SYNC START for ${session.name}`);
+                updateProgressBar(30, `🚀 [${session.name}] 클라우드 연결 중...`);
+                await new Promise(r => setTimeout(r, 50)); // Force paint
+
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 500; // [STABILITY] Reduced for better live network throughput
+                const BATCH_SIZE = 2000; // [SPEED] Increased for massive sessions
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -402,14 +406,12 @@ async function switchSession(id) {
                     }
 
                     try {
-                        // [CRITICAL FIX] Force SERVER fetch to bypass partial cache
-                        // This ensures we get all 4000+ items, not just the 300 cached ones.
-                        const snapshot = await query.get({ source: 'server' });
+                        // Pre-inform about the fetch attempt
+                        updateProgressBar(35 + (batchCount % 10), `📡 [${session.name}] 데이터 대량 수신 중 (${totalFetched}개+)...`);
 
-                        // [BACKGROUND SYNC] Continued even if switched...
-                        // if (state.activeSessionId !== id) return; // Removed to allow background cache fill
+                        // Default get() is robust.
+                        const snapshot = await query.get();
 
-                        // Reset retry count on success
                         retryCount = 0;
 
                         if (snapshot.empty) {
@@ -441,8 +443,11 @@ async function switchSession(id) {
                             // Optimized deduplication logic handles this efficiently.
                             updateUI();
 
-                            // [UX] Show which session is loading
-                            updateProgressBar(50 + (batchCount % 48), `🚀 [${session.name}] 로딩 중... (${state.allPosts.length}개)`);
+                            // Progress bar text update with estimate
+                            updateProgressBar(40 + Math.min(50, (totalFetched / 4000 * 50)), `🚀 [${session.name}] 로딩 중... (${state.allPosts.length}개)`);
+
+                            // [PERFORMANCE] Yield to main thread so browser can paint the progress bar
+                            await new Promise(r => setTimeout(r, 10));
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
@@ -451,7 +456,7 @@ async function switchSession(id) {
 
                     } catch (batchErr) {
                         console.error(`Batch ${batchCount + 1} failed. Retrying... (${retryCount + 1}/3)`, batchErr);
-                        showToast(`데이터 수신 대기 중... (${retryCount + 1}/3)`);
+                        showToast(`데이터 요청 지연... 재시도 중 (${retryCount + 1}/3)`);
                         retryCount++;
                         if (retryCount >= 3) {
                             showToast("네트워크 불안정으로 일부 데이터를 건너뜁니다.");
