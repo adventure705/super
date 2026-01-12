@@ -14,7 +14,7 @@ window.state = state; // Global DEBUG Access
 
 // [CRITICAL] Cache Invalidation Logic
 // We must clear old corrupted caches (mixed data) to ensure users get fresh data.
-const CURRENT_CACHE_VERSION = '2026-01-12-v5-force-clean';
+const CURRENT_CACHE_VERSION = '2026-01-12-v6-user-req-clean';
 if (localStorage.getItem('threads_cache_version') !== CURRENT_CACHE_VERSION) {
     console.log("🧹 Detected old cache version. purging threads cache...");
     localStorage.removeItem('threads_hot_cache');
