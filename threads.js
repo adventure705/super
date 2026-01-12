@@ -688,7 +688,23 @@ function updateUI() {
     const start = els.startDateFilter?.value || '';
     const end = els.endDateFilter?.value || '';
 
-    state.filteredPosts = state.allPosts.filter(p => {
+    // [CRITICAL FIX] Render-Time Deduplication
+    // Even if DB has duplicates, we strictly hide them from UI.
+    const uniqueSigs = new Set();
+    const uniqueSource = [];
+
+    (state.allPosts || []).forEach(p => {
+        const c = (p.content || '').replace(/\r/g, '').trim();
+        const i = (p.images || []).join(',');
+        const sig = `${p.date}|${p.time}|${c}|${i}`;
+
+        if (!uniqueSigs.has(sig)) {
+            uniqueSigs.add(sig);
+            uniqueSource.push(p);
+        }
+    });
+
+    state.filteredPosts = uniqueSource.filter(p => {
         const content = (p.content || '').toLowerCase();
         const date = (p.date || '');
         const matchesSearch = content.includes(q) || date.includes(q);
