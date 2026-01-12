@@ -310,6 +310,10 @@ async function switchSession(id) {
                 });
             }
 
+            if (initialPosts.length === 0) {
+                showToast("서버에 저장된 데이터가 없습니다. 다시 업로드해주세요.");
+            }
+
             state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
             updateProgressBar(50, `최신 글 ${state.allPosts.length}개 로드... 전체 동기화 시작`);
             updateUI();
@@ -770,6 +774,31 @@ async function handleFileUpload(e) {
 
             const sName = file.name.replace('.md', '').replace(/_part\d+$/, '');
             let s = state.sessions.find(x => x.name === sName);
+
+            // [FIX] Fallback: If renamed, try to match by Thread ID
+            if (!s && extractedId) {
+                const candidates = state.sessions.filter(x => x.threadId === extractedId);
+                if (candidates.length > 0) {
+                    // If the active session matches the ID, prefer it
+                    if (state.activeSessionId && candidates.some(c => c.id === state.activeSessionId)) {
+                        s = state.sessions.find(x => x.id === state.activeSessionId);
+                    } else {
+                        // Otherwise pick the most likely one (first found, usually latest due to sort)
+                        s = candidates[0];
+                    }
+                }
+            }
+
+            // [FIX] Fallback: If still no match, but user is looking at a session, Ask?
+            // User Request: 'New content uploaded to different session' -> Implies they want merge.
+            // Aggressive Fix: If active session exists and we otherwise would create a NEW one, use Active.
+            if (!s && state.activeSessionId) {
+                const active = state.sessions.find(x => x.id === state.activeSessionId);
+                if (active && confirm(`기존 세션 '${active.name}'에 데이터를 합치시겠습니까?\n(취소 시 새 세션 생성)`)) {
+                    s = active;
+                }
+            }
+
             let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
 
             if (!s) {
@@ -807,7 +836,7 @@ async function handleFileUpload(e) {
                     console.log(`Checked ${existingIds.size} posts from cache.`);
                 } else {
                     // Fallback: Fetch IDs from server (still faster than writing duplicates)
-                    const snapshot = await db.collection(COLLECTION_NAME).doc(sId).collection('posts').select().get(); // Select only IDs
+                    const snapshot = await db.collection(COLLECTION_NAME).doc(sId).collection('posts').get();
                     snapshot.docs.forEach(doc => existingIds.add(doc.id));
                     console.log(`Checked ${existingIds.size} posts from server.`);
                 }
