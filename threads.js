@@ -467,6 +467,8 @@ async function switchSession(id) {
                     }
                     saveStateToCache();
                     showToast(`모든 데이터 로드 완료! (${final.length}개)`);
+                } else {
+                    console.log(`🔒 Data for ${id} cached in background. UI not updated (User on ${state.activeSessionId})`);
                 }
 
                 state.isSyncing = false;
