@@ -240,8 +240,9 @@ function setupEventListeners() {
 // --- Data Fetching ---
 async function loadCategories() {
     try {
-        console.log("Loading categories from Firestore...");
-        const snapshot = await db.collection(CATEGORY_COLLECTION).get();
+        console.log("Loading categories from Firestore (SERVER force)...");
+        // [FORCE SERVER] Ensure fresh data on any device
+        const snapshot = await db.collection(CATEGORY_COLLECTION).get({ source: 'server' });
         const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (docs.length > 0) {
@@ -251,31 +252,31 @@ async function loadCategories() {
         } else {
             console.warn("No categories found in cloud. Creating default fallback...");
             await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-            const retry = await db.collection(CATEGORY_COLLECTION).get();
+            const retry = await db.collection(CATEGORY_COLLECTION).get({ source: 'server' });
             state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
             localStorage.setItem('threads_categories', JSON.stringify(state.categories));
         }
         renderSidebarContent();
     } catch (e) {
         console.error("Categories fetch error:", e);
-        showToast("데이터 연동 중 오류가 발생했습니다.");
+        showToast("카테고리 연동 실패 (네트워크 확인)");
     }
 }
 
 
 async function loadSessions() {
     try {
-        console.log("Loading sessions from Firestore...");
-        const snapshot = await db.collection(COLLECTION_NAME).get();
+        console.log("Loading sessions from Firestore (SERVER force)...");
+        // [FORCE SERVER] This ensures 0-count issue on new devices is resolved
+        const snapshot = await db.collection(COLLECTION_NAME).get({ source: 'server' });
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // [DEBUG] Confirm connection and data visibility
-        console.log(`[Master Mode] Fetched ${state.sessions.length} sessions from cloud.`);
+        console.log(`[Cloud Sync] Fetched ${state.sessions.length} sessions.`);
+
         if (state.sessions.length === 0) {
             showToast("클라우드에 저장된 세션이 없습니다.");
         } else {
-            // Optional: meaningful toast to confirm fresh data
-            // showToast(`클라우드 동기화: 세션 ${state.sessions.length}개 로딩됨`);
+            showToast(`클라우드 동기화 완료: ${state.sessions.length}개 세션`);
         }
 
         // Efficient sorting
@@ -286,12 +287,7 @@ async function loadSessions() {
             return dateB - dateA;
         });
 
-        // Background Check: Report on any sessions with legacy bloat
-        const legacyCount = state.sessions.filter(s => s.posts && s.posts.length > 0).length;
-        if (legacyCount > 0) console.log(`Found ${legacyCount} sessions with legacy data bloat. Optimizing on-access.`);
-
         localStorage.setItem('threads_sessions', JSON.stringify(state.sessions));
-        console.log(`Successfully loaded ${state.sessions.length} sessions.`);
         renderSidebarContent();
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
     } catch (e) {
