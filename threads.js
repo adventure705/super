@@ -386,14 +386,35 @@ async function switchSession(id) {
 
         // Step 2: Robust Recursive Batch Sync
         const loadAllBatches = async () => {
+            const unifiedMap = new Map();
+            // [CRITICAL FIX] Isolation Strategy: Seed from the CAPTURED safe snapshot.
+            safeInitialPosts.forEach(p => unifiedMap.set(p.id, p));
+
+            // [SPEED] Phase 0: Try to load from Disk Cache FIRST (Instant)
             try {
-                // progressive merging
-                const unifiedMap = new Map();
+                // Attempt to get everything from local disk immediately
+                const cacheSnap = await colRef.orderBy(firebase.firestore.FieldPath.documentId()).get({ source: 'cache' });
+                if (!cacheSnap.empty) {
+                    console.log(`⚡ Loaded ${cacheSnap.size} posts from Disk Cache`);
+                    cacheSnap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                        unifiedMap.set(doc.id, { ...data, id: doc.id, _ts: ts });
+                    });
+                    // Render immediately!
+                    if (state.activeSessionId === id && unifiedMap.size > 0) {
+                        const partialList = Array.from(unifiedMap.values());
+                        partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                        state.allPosts = partialList;
+                        updateUI(); // Instant show
+                        updateProgressBar(20, `💾 저장된 데이터 표시 중... (${state.allPosts.length}개)`);
+                    }
+                }
+            } catch (e) {
+                // Cache miss is expected on first load
+            }
 
-                // [CRITICAL FIX] Isolation Strategy
-                // Seed from the CAPTURED safe snapshot.
-                safeInitialPosts.forEach(p => unifiedMap.set(p.id, p));
-
+            try { // [FIX] Restore missing try block for main logic
                 let lastSnap = null;
                 let hasMore = true;
                 const BATCH_SIZE = 500; // [FIX] Force 500 for stability on live site
