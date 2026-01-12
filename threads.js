@@ -14,15 +14,11 @@ window.state = state; // Global DEBUG Access
 
 // [CRITICAL] Cache Invalidation Logic
 // We must clear old corrupted caches (mixed data) to ensure users get fresh data.
-const CURRENT_CACHE_VERSION = '2026-01-12-v4';
+const CURRENT_CACHE_VERSION = '2026-01-12-v5-force-clean';
 if (localStorage.getItem('threads_cache_version') !== CURRENT_CACHE_VERSION) {
     console.log("🧹 Detected old cache version. purging threads cache...");
     localStorage.removeItem('threads_hot_cache');
-    localStorage.removeItem('threads_sessions'); // Clear session list too just in case
-    // If we store posts in a large string?
-    // We don't have a global 'threads_post_cache' key visible here but let's clear common suspects.
-    // Assuming postCache is memory-only? If it's in localStorage, clear it.
-    // Based on previous reads, 'threads_hot_cache' is the main one.
+    localStorage.removeItem('threads_sessions');
     localStorage.setItem('threads_cache_version', CURRENT_CACHE_VERSION);
     location.reload(); // Force reload to apply clean state
 }
