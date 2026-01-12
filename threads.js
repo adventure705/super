@@ -9,6 +9,7 @@ const state = {
     postCache: new Map(),
     lastSyncMap: new Map(), // Track last successful sync time per session
     isSyncing: false,
+    syncingSessions: new Set(), // [FIX] Track background syncs to prevent double-loading
 };
 window.state = state; // Global DEBUG Access
 
@@ -328,23 +329,18 @@ async function switchSession(id) {
         isCached = true;
         console.log("Skipping sync - Loaded from cache (Manual Reload available).");
         return; // [USER REQUIREMENT] No auto-reload on tab return. Stops here.
-    } else {
-        updateProgressBar(10, "데이터 로딩 시작...");
-        state.allPosts = [];
-
-        // [CRITICAL FIX] Legacy Block DISABLED to prevent Mixed Data
-        /*
-        if (session.posts && Array.isArray(session.posts) && session.posts.length > 0) {
-            console.log("⚡ Found legacy posts in session doc, using as initial state.");
-            state.allPosts = session.posts.map(p => {
-                 const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
-                 return { ...p, _ts: ts };
-            }).sort((a, b) => (b._ts || 0) - (a._ts || 0));
-        }
-        */
-
-        updateUI();
     }
+
+    // [FIX] If already syncing in background, just resume view
+    if (state.syncingSessions.has(id)) {
+        console.log(`🔄 Re-attaching to ongoing sync for ${id}`);
+        // The background loop checks activeSessionId and will resume updating UI
+        return;
+    }
+
+    updateProgressBar(10, "데이터 로딩 시작...");
+    state.allPosts = [];
+    state.syncingSessions.add(id); // Mark as syncing
 
     try {
         state.isSyncing = true;
@@ -517,6 +513,7 @@ async function switchSession(id) {
                 }
 
                 state.isSyncing = false;
+                state.syncingSessions.delete(id); // [FIX] Cleanup
                 updateProgressBar(100, "동기화 완료");
                 setTimeout(hideProgressBar, 1000);
                 updateUI();
@@ -527,6 +524,7 @@ async function switchSession(id) {
 
                 // Even if failed, keep what we have
                 state.isSyncing = false;
+                state.syncingSessions.delete(id); // [FIX] Cleanup
                 updateUI();
             }
         };
@@ -537,6 +535,7 @@ async function switchSession(id) {
     } catch (e) {
         console.error("Critical Load Error:", e);
         showToast("데이터 연동 실패");
+        state.syncingSessions.delete(id); // [FIX] Cleanup
         updateProgressBar(0, "오류 발생");
         hideProgressBar();
     }
