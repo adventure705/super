@@ -93,10 +93,10 @@ async function init() {
             firebase.initializeApp(firebaseConfig);
         }
 
-        // [MASTER MODE] Persistence Disabled to force "Server Truth"
-        // This ensures new devices see existing data immediately instead of empty cache.
-        // firebase.firestore().enablePersistence({ synchronizeTabs: true })
-        //    .catch(err => console.log("Persistence:", err.code));
+        // [PERFORMANCE] Persistence Re-enabled for speed
+        // This makes subsequent loads instant and reduces network dependency
+        firebase.firestore().enablePersistence({ synchronizeTabs: true })
+            .catch(err => console.log("Persistence:", err.code));
 
         db = firebase.firestore();
 
@@ -396,7 +396,7 @@ async function switchSession(id) {
 
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 500; // [OPTIMIZATION] Smaller batches for more frequent updates
+                const BATCH_SIZE = 2000; // [OPTIMIZATION] Batches of 2000 for efficiency
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -446,9 +446,12 @@ async function switchSession(id) {
                             partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
 
-                            // [OPTIMIZATION] Real-time rendering: Update UI on every batch!
-                            updateUI();
-                            updateProgressBar(50 + (batchCount * 2), `🚀 데이터 초고속 로딩 중... (${state.allPosts.length}개)`);
+                            // [PERFORMANCE] Throttle UI Updates: Only render every 2000 items
+                            // Doing this too often with aggressive dedup freezes the browser.
+                            if (totalFetched % 2000 === 0 || snapshot.size < BATCH_SIZE) {
+                                updateUI();
+                            }
+                            updateProgressBar(50 + (batchCount), `🚀 데이터 초고속 로딩 중... (${state.allPosts.length}개)`);
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
