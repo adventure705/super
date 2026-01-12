@@ -446,12 +446,11 @@ async function switchSession(id) {
                             partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
 
-                            // [PERFORMANCE] Throttle UI Updates: Only render every 2000 items
-                            // Doing this too often with aggressive dedup freezes the browser.
-                            if (totalFetched % 2000 === 0 || snapshot.size < BATCH_SIZE) {
-                                updateUI();
-                            }
-                            updateProgressBar(50 + (batchCount), `🚀 데이터 초고속 로딩 중... (${state.allPosts.length}개)`);
+                            // [UX] Real-time Update: Render every batch (500 items)
+                            // Optimized deduplication logic handles this efficiently.
+                            updateUI();
+
+                            updateProgressBar(50 + (batchCount), `🚀 데이터 로딩 중... (${state.allPosts.length}개)`);
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
