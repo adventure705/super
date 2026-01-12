@@ -240,9 +240,9 @@ function setupEventListeners() {
 // --- Data Fetching ---
 async function loadCategories() {
     try {
-        console.log("Loading categories from Firestore (SERVER force)...");
-        // [FORCE SERVER] Ensure fresh data on any device
-        const snapshot = await db.collection(CATEGORY_COLLECTION).get({ source: 'server' });
+        console.log("Loading categories...");
+        // Use default get() for best performance (Cache + Sync)
+        const snapshot = await db.collection(CATEGORY_COLLECTION).get();
         const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         if (docs.length > 0) {
@@ -252,7 +252,7 @@ async function loadCategories() {
         } else {
             console.warn("No categories found in cloud. Creating default fallback...");
             await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-            const retry = await db.collection(CATEGORY_COLLECTION).get({ source: 'server' });
+            const retry = await db.collection(CATEGORY_COLLECTION).get();
             state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
             localStorage.setItem('threads_categories', JSON.stringify(state.categories));
         }
@@ -266,9 +266,9 @@ async function loadCategories() {
 
 async function loadSessions() {
     try {
-        console.log("Loading sessions from Firestore (SERVER force)...");
-        // [FORCE SERVER] This ensures 0-count issue on new devices is resolved
-        const snapshot = await db.collection(COLLECTION_NAME).get({ source: 'server' });
+        console.log("Loading sessions...");
+        // Use default get() for best performance
+        const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         console.log(`[Cloud Sync] Fetched ${state.sessions.length} sessions.`);
@@ -384,15 +384,35 @@ async function switchSession(id) {
 
             try { // [FIX] Restore missing try block for main logic
                 console.log(`📡 SYNC START for ${session.name}`);
-                updateProgressBar(30, `🚀 [${session.name}] 클라우드 연결 중...`);
-                await new Promise(r => setTimeout(r, 50)); // Force paint
 
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 2000; // [SPEED] Increased for massive sessions
+                const BATCH_SIZE = 1000; // [SPEED] Back to 1000 for better balance
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
+
+                // [PHASE 1] Quick Start - Fetch first batch immediately for instant view
+                try {
+                    const quickSnap = await colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(300).get();
+                    if (!quickSnap.empty) {
+                        quickSnap.docs.forEach(doc => {
+                            const data = doc.data();
+                            const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                            unifiedMap.set(doc.id, { ...data, id: doc.id, _ts: ts });
+                        });
+                        if (state.activeSessionId === id) {
+                            const list = Array.from(unifiedMap.values());
+                            list.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                            state.allPosts = list;
+                            updateUI();
+                            updateProgressBar(35, `🚀 [${session.name}] 데이터 수신 중... (${state.allPosts.length}개)`);
+                        }
+                        lastSnap = quickSnap.docs[quickSnap.docs.length - 1];
+                        totalFetched = quickSnap.size;
+                        if (quickSnap.size < 300) hasMore = false;
+                    }
+                } catch (e) { console.error("Quick Start failed", e); }
 
                 while (hasMore) {
                     // [DOC_ID ORDER] ensures 100% fetching coverage regardless of fields
@@ -402,9 +422,6 @@ async function switchSession(id) {
                     }
 
                     try {
-                        // Pre-inform about the fetch attempt
-                        updateProgressBar(35 + (batchCount % 10), `📡 [${session.name}] 데이터 대량 수신 중 (${totalFetched}개+)...`);
-
                         // Default get() is robust.
                         const snapshot = await query.get();
 
@@ -435,15 +452,11 @@ async function switchSession(id) {
                             // [FIX] Update cache incrementally so resuming switches see partial progress
                             state.postCache.set(id, partialList);
 
-                            // [UX] Real-time Update: Render every batch (500 items)
                             // Optimized deduplication logic handles this efficiently.
                             updateUI();
 
                             // Progress bar text update with estimate
                             updateProgressBar(40 + Math.min(50, (totalFetched / 4000 * 50)), `🚀 [${session.name}] 로딩 중... (${state.allPosts.length}개)`);
-
-                            // [PERFORMANCE] Yield to main thread so browser can paint the progress bar
-                            await new Promise(r => setTimeout(r, 10));
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
