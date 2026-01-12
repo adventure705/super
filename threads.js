@@ -290,8 +290,8 @@ async function switchSession(id) {
         state.postCache.set(id, [...state.allPosts]);
     }
 
-    // [CRITICAL FIX] Disable Read-Cache to prevent mixed-data loading
-    if (false && state.postCache.has(id)) {
+    // [CRITICAL FIX] Enable Read-Cache for performance
+    if (state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
         if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -381,11 +381,13 @@ async function switchSession(id) {
                 let retryCount = 0;
 
                 while (hasMore) {
-                    // [CRITICAL FIX] Abort if user switched session
+                    // [BACKGROUND SYNC] Continued even if switched...
+                    /*
                     if (state.activeSessionId !== id) {
                         console.log(`🛑 Loading aborted for ${id} (Switched to ${state.activeSessionId})`);
                         return;
                     }
+                    */
 
                     let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
                     if (lastSnap) {
@@ -395,8 +397,8 @@ async function switchSession(id) {
                     try {
                         const snapshot = await query.get();
 
-                        // [CRITICAL FIX] Check again after await
-                        if (state.activeSessionId !== id) return;
+                        // [BACKGROUND SYNC] Continued even if switched...
+                        // if (state.activeSessionId !== id) return; // Removed to allow background cache fill
 
                         // Reset retry count on success
                         retryCount = 0;
@@ -448,15 +450,15 @@ async function switchSession(id) {
 
                 console.log(`✅ Recursive Sync Complete: ${totalFetched} new docs merged.`);
 
+                // Final State Update - Always Update Cache because we finished!
+                const final = Array.from(unifiedMap.values());
+                final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+
+                state.postCache.set(id, final);
+                state.lastSyncMap.set(id, Date.now());
+
                 if (state.activeSessionId === id) {
-                    // Final State Update
-                    const final = Array.from(unifiedMap.values());
-                    final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-
-                    state.postCache.set(id, final);
-                    state.lastSyncMap.set(id, Date.now());
                     state.allPosts = final;
-
                     updateUI();
 
                     if (session.posts && session.posts.length > 0) {
