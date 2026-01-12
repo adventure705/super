@@ -93,8 +93,10 @@ async function init() {
             firebase.initializeApp(firebaseConfig);
         }
 
-        firebase.firestore().enablePersistence({ synchronizeTabs: true })
-            .catch(err => console.log("Persistence:", err.code));
+        // [MASTER MODE] Persistence Disabled to force "Server Truth"
+        // This ensures new devices see existing data immediately instead of empty cache.
+        // firebase.firestore().enablePersistence({ synchronizeTabs: true })
+        //    .catch(err => console.log("Persistence:", err.code));
 
         db = firebase.firestore();
 
@@ -128,49 +130,20 @@ async function init() {
                 }
                 else refreshData(); // Fire and forget, don't await to block UI
             } else {
-                updateProgressBar(10, "공용 계정 접속 중...");
-                await loginSharedUser();
+                updateProgressBar(10, "서버 접속 중 (Master Mode)...");
+                try {
+                    // [MASTER MODE] Anonymous Access + No Persistence = Always Fetch Latest
+                    await firebase.auth().signInAnonymously();
+                } catch (e) {
+                    console.error("Auth Error:", e);
+                    showToast(`로그인 실패: ${e.message}`);
+                }
             }
         });
     } catch (e) {
         console.error("Init Error:", e);
     }
 }
-
-// [CRITICAL FEATURE] Unified Shared Account
-// Forces all devices to log in as the SAME user so they see the SAME data.
-async function loginSharedUser() {
-    const email = "public@thread.com"; // Generic shared email
-    const pass = "public1234"; // Generic shared password
-
-    try {
-        await firebase.auth().signInWithEmailAndPassword(email, pass);
-        console.log("🔓 Signed in as Shared User");
-    } catch (e) {
-        if (e.code === 'auth/user-not-found') {
-            try {
-                await firebase.auth().createUserWithEmailAndPassword(email, pass);
-                console.log("✨ Created and Signed in as Shared User");
-            } catch (createErr) {
-                console.error("Create User Failed:", createErr);
-                await fallbackToAnon();
-            }
-        } else {
-            console.warn("Shared Login Failed (Likely 'Email/Pass' provider disabled in Console). Falling back to Anon.", e);
-            await fallbackToAnon();
-        }
-    }
-
-    async function fallbackToAnon() {
-        try {
-            await firebase.auth().signInAnonymously();
-            showToast("⚠️ 이메일 로그인이 비활성화 되어있어 '익명 모드'로 접속합니다. (기기 간 공유 불가)");
-        } catch (e) {
-            showToast("로그인 실패: " + e.message);
-        }
-    }
-}
-
 
 function saveStateToCache() {
     if (!state.activeSessionId) return;
