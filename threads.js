@@ -396,7 +396,7 @@ async function switchSession(id) {
 
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 2000; // [OPTIMIZATION] Batches of 2000 for efficiency
+                const BATCH_SIZE = 500; // [FIX] Force 500 for stability on live site
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -459,6 +459,7 @@ async function switchSession(id) {
 
                     } catch (batchErr) {
                         console.error(`Batch ${batchCount + 1} failed. Retrying... (${retryCount + 1}/3)`, batchErr);
+                        showToast(`데이터 수신 대기 중... (${retryCount + 1}/3)`);
                         retryCount++;
                         if (retryCount >= 3) {
                             showToast("네트워크 불안정으로 일부 데이터를 건너뜁니다.");
