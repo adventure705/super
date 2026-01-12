@@ -268,6 +268,15 @@ async function loadSessions() {
         const snapshot = await db.collection(COLLECTION_NAME).get();
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+        // [DEBUG] Confirm connection and data visibility
+        console.log(`[Master Mode] Fetched ${state.sessions.length} sessions from cloud.`);
+        if (state.sessions.length === 0) {
+            showToast("클라우드에 저장된 세션이 없습니다.");
+        } else {
+            // Optional: meaningful toast to confirm fresh data
+            // showToast(`클라우드 동기화: 세션 ${state.sessions.length}개 로딩됨`);
+        }
+
         // Efficient sorting
         state.sessions.sort((a, b) => {
             if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
