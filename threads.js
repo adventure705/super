@@ -263,13 +263,12 @@ async function loadCategories() {
 
 async function loadSessions() {
     try {
-        console.log("Loading sessions...");
-        // [MASTER SYNC] If no local data, force server fetch to ensure new devices get data immediately
-        const source = state.sessions.length === 0 ? 'server' : 'default';
-        const snapshot = await db.collection(COLLECTION_NAME).get({ source });
+        console.log("Loading sessions (Master Mode Sync)...");
+        // [MASTER MODE] Always try server first for the initial session list to ensure cross-device unity
+        const snapshot = await db.collection(COLLECTION_NAME).get({ source: 'server' });
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        console.log(`[Cloud Sync] Fetched ${state.sessions.length} sessions (Source: ${source}).`);
+        console.log(`[Master Mode] Fetched ${state.sessions.length} sessions from Cloud.`);
 
         if (state.sessions.length === 0) {
             showToast("클라우드에 저장된 세션이 없습니다.");
@@ -316,16 +315,19 @@ async function switchSession(id) {
 
     // [CRITICAL FIX] Enable Read-Cache for performance
     if (state.postCache.has(id)) {
-        state.allPosts = state.postCache.get(id);
+        const cached = state.postCache.get(id);
+        if (cached && cached.length > 0) {
+            state.allPosts = cached;
+            console.log(`Loaded ${state.allPosts.length} posts from memory for ${id}`);
+        }
         updateUI();
         if (window.innerWidth <= 1024) toggleSidebar(false);
         renderSidebarContent();
         isCached = true;
 
-        // If it was already fully synced, just stop. 
-        // If it's CURRENTLY syncing, we fall through to the resume check.
-        if (!state.syncingSessions.has(id)) {
-            console.log("Skipping sync - Loaded from Cache.");
+        // If it was already fully synced and we have data, we can stop.
+        if (!state.syncingSessions.has(id) && state.allPosts.length > 0) {
+            console.log("Stopping: Full cache available.");
             return;
         }
     }
@@ -390,9 +392,10 @@ async function switchSession(id) {
                 let totalFetched = 0;
                 let retryCount = 0;
 
-                // [PHASE 1] Quick Start - Fetch first batch immediately for instant view
+                // [PHASE 1] Quick Start - FORCE SERVER for the first 300 posts
                 try {
-                    const quickSnap = await colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(300).get();
+                    // source: 'server' ensures that new devices see data immediately
+                    const quickSnap = await colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(300).get({ source: 'server' });
                     if (!quickSnap.empty) {
                         quickSnap.docs.forEach(doc => {
                             const data = doc.data();
