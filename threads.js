@@ -1121,7 +1121,14 @@ function toggleSort() {
 }
 
 function updateStats() {
-    els.totalPosts.innerHTML = `${state.filteredPosts.length}${state.isSyncing ? ' <span class="sync-spinner">↻</span>' : ''}`;
+    let statusText = '';
+    // Check if CURRENT active session is syncing
+    if (state.activeSessionId && state.syncingSessions.has(state.activeSessionId)) {
+        // [UX] Show explicitly that THIS session is loading
+        statusText = ' <span style="font-size:0.8em; color:#ffcc00;">(데이터 로딩중...)</span> <span class="sync-spinner">↻</span>';
+    }
+
+    els.totalPosts.innerHTML = `${state.filteredPosts.length}${statusText}`;
     els.totalImages.textContent = state.filteredPosts.reduce((acc, p) => acc + (p.images ? p.images.length : 0), 0);
 }
 
