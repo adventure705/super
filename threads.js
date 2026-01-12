@@ -264,11 +264,12 @@ async function loadCategories() {
 async function loadSessions() {
     try {
         console.log("Loading sessions...");
-        // Use default get() for best performance
-        const snapshot = await db.collection(COLLECTION_NAME).get();
+        // [MASTER SYNC] If no local data, force server fetch to ensure new devices get data immediately
+        const source = state.sessions.length === 0 ? 'server' : 'default';
+        const snapshot = await db.collection(COLLECTION_NAME).get({ source });
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        console.log(`[Cloud Sync] Fetched ${state.sessions.length} sessions.`);
+        console.log(`[Cloud Sync] Fetched ${state.sessions.length} sessions (Source: ${source}).`);
 
         if (state.sessions.length === 0) {
             showToast("클라우드에 저장된 세션이 없습니다.");
@@ -398,9 +399,14 @@ async function switchSession(id) {
                             const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
                             unifiedMap.set(doc.id, { ...data, id: doc.id, _ts: ts });
                         });
+
+                        const list = Array.from(unifiedMap.values());
+                        list.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+
+                        // [CRITICAL] Update cache immediately so re-attaching works on switch-back
+                        state.postCache.set(id, list);
+
                         if (state.activeSessionId === id) {
-                            const list = Array.from(unifiedMap.values());
-                            list.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = list;
                             updateUI();
                             updateProgressBar(35, `🚀 [${session.name}] 데이터 수신 중... (${state.allPosts.length}개)`);
@@ -440,18 +446,15 @@ async function switchSession(id) {
                         batchCount++;
                         totalFetched += snapshot.size;
 
+                        // [CRITICAL] ALWAYS update cache even if in background (session switched)
+                        const partialList = Array.from(unifiedMap.values());
+                        partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                        state.postCache.set(id, partialList);
+
                         // Incremental Update - ONLY if still active
                         if (state.activeSessionId === id) {
-                            const partialList = Array.from(unifiedMap.values());
-                            partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
-
-                            // [FIX] Update cache incrementally so resuming switches see partial progress
-                            state.postCache.set(id, partialList);
-
-                            // Optimized deduplication logic handles this efficiently.
                             updateUI();
-
                             // Progress bar text update with estimate
                             updateProgressBar(40 + Math.min(50, (totalFetched / 4000 * 50)), `🚀 [${session.name}] 로딩 중... (${state.allPosts.length}개)`);
                         }
