@@ -347,10 +347,9 @@ async function switchSession(id) {
                 const unifiedMap = new Map();
 
                 // [CRITICAL FIX] Isolation Strategy
-                // We do NOT seed from state.allPosts to prevent cross-contamination.
-                // We ONLY seed from the secure memory cache for this ID.
-                const safeCache = state.postCache.get(id) || [];
-                safeCache.forEach(p => unifiedMap.set(p.id, p));
+                // We seed ONLY from the current state.allPosts which contains Step 1 (Fresh) data.
+                // We do NOT use state.postCache because it might be contaminated.
+                state.allPosts.forEach(p => unifiedMap.set(p.id, p));
 
                 let lastSnap = null;
                 let hasMore = true;
