@@ -389,22 +389,14 @@ async function switchSession(id) {
             try { // [FIX] Restore missing try block for main logic
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 1000; // [OPTIMIZATION] Increase batch size for faster throughput
+                const BATCH_SIZE = 500; // [STABILITY] Reduced for better live network throughput
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
 
                 while (hasMore) {
-                    // [BACKGROUND SYNC] Continued even if switched...
-                    /*
-                    if (state.activeSessionId !== id) {
-                        console.log(`🛑 Loading aborted for ${id} (Switched to ${state.activeSessionId})`);
-                        return;
-                    }
-                    */
-
-                    // [FIX] Use Date ordering for reliable pagination
-                    let query = colRef.orderBy('date', 'desc').limit(BATCH_SIZE);
+                    // [DOC_ID ORDER] ensures 100% fetching coverage regardless of fields
+                    let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
                     if (lastSnap) {
                         query = query.startAfter(lastSnap);
                     }
@@ -449,7 +441,8 @@ async function switchSession(id) {
                             // Optimized deduplication logic handles this efficiently.
                             updateUI();
 
-                            updateProgressBar(50 + (batchCount), `🚀 데이터 로딩 중... (${state.allPosts.length}개)`);
+                            // [UX] Show which session is loading
+                            updateProgressBar(50 + (batchCount % 48), `🚀 [${session.name}] 로딩 중... (${state.allPosts.length}개)`);
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
@@ -469,7 +462,8 @@ async function switchSession(id) {
                     }
                 }
 
-                console.log(`✅ Recursive Sync Complete: ${totalFetched} new docs merged.`);
+                console.log(`✅ [${session.name}] Sync Complete: ${totalFetched} items fetched.`);
+                showToast(`[${session.name}] 모든 데이터 로딩 완료! (${unifiedMap.size}개)`);
 
                 // Final State Update - Always Update Cache because we finished!
                 const final = Array.from(unifiedMap.values());
