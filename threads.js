@@ -871,14 +871,15 @@ async function handleFileUpload(e) {
             }
 
             // [FIX] Fallback: If still no match, but user is looking at a session, Ask?
-            // User Request: 'New content uploaded to different session' -> Implies they want merge.
-            // Aggressive Fix: If active session exists and we otherwise would create a NEW one, use Active.
+            // [CHANGED] Disabled to prevent accidental data mixing. Always create new session for new files.
+            /*
             if (!s && state.activeSessionId) {
                 const active = state.sessions.find(x => x.id === state.activeSessionId);
                 if (active && confirm(`기존 세션 '${active.name}'에 데이터를 합치시겠습니까?\n(취소 시 새 세션 생성)`)) {
                     s = active;
                 }
             }
+            */
 
             let sId = s ? s.id : db.collection(COLLECTION_NAME).doc().id;
 
