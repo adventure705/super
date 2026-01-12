@@ -929,7 +929,12 @@ async function handleFileUpload(e) {
                 updateProgressBar(20, "중복 검사 중 (내용 기반)...");
                 const existingSignatures = new Set();
 
-                const generateSig = (p) => `${p.date}|${p.time}|${(p.content || '').trim()}`;
+                const generateSig = (p) => {
+                    // Normalize: remove \r, trim. This handles legacy CRLF data from server.
+                    const c = (p.content || '').replace(/\r/g, '').trim();
+                    const i = (p.images || []).join(',');
+                    return `${p.date}|${p.time}|${c}|${i}`;
+                };
 
                 // 1. Check Memory Cache First
                 if (state.postCache.has(sId)) {
