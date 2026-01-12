@@ -413,7 +413,7 @@ async function switchSession(id) {
             try { // [FIX] Restore missing try block for main logic
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 500; // [FIX] Force 500 for stability on live site
+                const BATCH_SIZE = 1000; // [OPTIMIZATION] Increase batch size for faster throughput
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -427,7 +427,8 @@ async function switchSession(id) {
                     }
                     */
 
-                    let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
+                    // [FIX] Use Date ordering for reliable pagination
+                    let query = colRef.orderBy('date', 'desc').limit(BATCH_SIZE);
                     if (lastSnap) {
                         query = query.startAfter(lastSnap);
                     }
