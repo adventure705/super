@@ -697,7 +697,10 @@ function updateUI() {
         const c = (p.content || '').replace(/\s+/g, '');
         // Normalize time: treat missing time as 00:00
         const t = p.time || '00:00';
-        const i = (p.images || []).join(',');
+
+        // Normalize images: strip query params to handle expiring CDN tokens
+        const i = (p.images || []).map(url => (url || '').split('?')[0]).join(',');
+
         const sig = `${p.date}|${t}|${c}|${i}`;
 
         if (!uniqueSigs.has(sig)) {
