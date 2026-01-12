@@ -11,7 +11,7 @@ const state = {
     isSyncing: false,
 };
 window.state = state; // Global DEBUG Access
-console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V2");
+console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V3-Restored");
 let searchTimeout;
 
 let db;
@@ -252,7 +252,9 @@ async function loadSessions() {
 }
 
 async function switchSession(id) {
-    if (state.activeSessionId === id && state.allPosts.length > 0) return;
+    // Prevent reload if clicking the same session
+    if (state.activeSessionId === id) return;
+
     state.activeSessionId = id;
     const session = state.sessions.find(s => s.id === id);
     if (!session) {
@@ -264,6 +266,14 @@ async function switchSession(id) {
 
     // 0. Cache Check
     let isCached = false;
+
+    // [FIX] Instant Hot-Start Preservation
+    // If we have data in 'allPosts' (from Hot Cache) matching this ID, promoting it to memory cache prevents wiping.
+    if (state.activeSessionId === id && state.allPosts.length > 0 && !state.postCache.has(id)) {
+        console.log("🔥 Promoting Hot-Start data to Memory Cache");
+        state.postCache.set(id, [...state.allPosts]);
+    }
+
     if (state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
@@ -283,6 +293,16 @@ async function switchSession(id) {
     } else {
         updateProgressBar(10, "데이터 로딩 시작...");
         state.allPosts = [];
+
+        // [RESTORED] Legacy posts loading enabled again
+        if (session.posts && Array.isArray(session.posts) && session.posts.length > 0) {
+            console.log("⚡ Found legacy posts in session doc, using as initial state.");
+            state.allPosts = session.posts.map(p => {
+                const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
+                return { ...p, _ts: ts };
+            }).sort((a, b) => (b._ts || 0) - (a._ts || 0));
+        }
+
         updateUI();
     }
 
@@ -295,92 +315,117 @@ async function switchSession(id) {
         // Step 1: Rapid 300-post fetch (Only if not cached)
         if (!isCached) {
             updateProgressBar(30, "최신 글 불러오는 중...");
-            let firstSnap;
             try {
                 // Try getting latest posts first
-                firstSnap = await colRef.orderBy('date', 'desc').limit(300).get();
-            } catch (e) {
-                console.warn("Index missing for sort, falling back to unordered fetch", e);
-                firstSnap = await colRef.limit(300).get();
-            }
+                const firstSnap = await colRef.orderBy('date', 'desc').limit(300).get();
 
-            let initialPosts = firstSnap.docs.map(doc => {
-                const data = doc.data();
-                const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
-                return { ...data, id: doc.id, _ts: ts };
-            });
+                // [CRITICAL FIX] Abort if session changed during fast-fetch
+                if (state.activeSessionId !== id) return;
 
-            // Merge Legacy Posts
-            if (session.posts && Array.isArray(session.posts)) {
-                session.posts.forEach(p => {
-                    const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
-                    initialPosts.push({ ...p, _ts: ts });
-                });
-            }
-
-            if (initialPosts.length === 0) {
-                showToast("서버에 저장된 데이터가 없습니다. 다시 업로드해주세요.");
-            }
-
-            state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-            updateProgressBar(50, `최신 글 ${state.allPosts.length}개 로드... 전체 동기화 시작`);
-            updateUI();
-
-        } else {
-            updateProgressBar(50, "데이터 동기화 확인 중...");
-        }
-
-        // Step 2: Full Sync in Background (Recursive Batched Fetching if too large?)
-        // For now, standard get() but with better error reporting
-        // Step 2: Robust Recursive Batch Sync
-        // Use ID-based paging which requires NO custom index
-        const loadAllBatches = async () => {
-            try {
-                let allDocs = [];
-                let lastSnap = null;
-                let hasMore = true;
-                const BATCH_SIZE = 500;
-                let batchCount = 0;
-
-                while (hasMore) {
-                    let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
-                    if (lastSnap) {
-                        query = query.startAfter(lastSnap);
-                    }
-
-                    const snapshot = await query.get();
-                    if (snapshot.empty) {
-                        hasMore = false;
-                        break;
-                    }
-
-                    allDocs = allDocs.concat(snapshot.docs);
-                    lastSnap = snapshot.docs[snapshot.docs.length - 1];
-                    batchCount++;
-
-                    // Visual Feedback
-                    const currentTotal = allDocs.length;
-                    updateProgressBar(50 + (batchCount * 5), `데이터 수신 중... (${currentTotal}개)`);
-
-                    if (snapshot.size < BATCH_SIZE) hasMore = false;
-                }
-
-                console.log(`✅ Recursive Sync Complete: ${allDocs.length} posts`);
-
-                const allPostsCombined = allDocs.map(doc => {
+                const initialPosts = firstSnap.docs.map(doc => {
                     const data = doc.data();
                     const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
                     return { ...data, id: doc.id, _ts: ts };
                 });
 
-                if (state.activeSessionId === id && state.sessions.find(s => s.id === id)) {
-                    // Update Active Session
-                    const unified = new Map();
-                    // Keep existing (Step 1) posts if any overlap, but override with fresh data
-                    state.allPosts.forEach(p => unified.set(p.id, p));
-                    allPostsCombined.forEach(p => unified.set(p.id, p));
+                if (initialPosts.length === 0) {
+                    // Do not show error yet, wait for full sync
+                    console.log("Initial fetch empty, relying on full sync.");
+                } else {
+                    state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                    updateUI();
+                }
+            } catch (e) {
+                console.warn("Fast fetch failed, falling back to full sync", e);
+            }
+        }
 
-                    const final = Array.from(unified.values());
+        // Step 2: Robust Recursive Batch Sync
+        const loadAllBatches = async () => {
+            try {
+                // progressive merging
+                const unifiedMap = new Map();
+
+                // [CRITICAL FIX] Isolation Strategy
+                // We do NOT seed from state.allPosts to prevent cross-contamination.
+                // We ONLY seed from the secure memory cache for this ID.
+                const safeCache = state.postCache.get(id) || [];
+                safeCache.forEach(p => unifiedMap.set(p.id, p));
+
+                let lastSnap = null;
+                let hasMore = true;
+                const BATCH_SIZE = 600; // Optimized for performance
+                let batchCount = 0;
+                let totalFetched = 0;
+                let retryCount = 0;
+
+                while (hasMore) {
+                    // [CRITICAL FIX] Abort if user switched session
+                    if (state.activeSessionId !== id) {
+                        console.log(`🛑 Loading aborted for ${id} (Switched to ${state.activeSessionId})`);
+                        return;
+                    }
+
+                    let query = colRef.orderBy(firebase.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
+                    if (lastSnap) {
+                        query = query.startAfter(lastSnap);
+                    }
+
+                    try {
+                        const snapshot = await query.get();
+
+                        // [CRITICAL FIX] Check again after await
+                        if (state.activeSessionId !== id) return;
+
+                        // Reset retry count on success
+                        retryCount = 0;
+
+                        if (snapshot.empty) {
+                            hasMore = false;
+                            break;
+                        }
+
+                        // Process this batch
+                        snapshot.docs.forEach(doc => {
+                            const data = doc.data();
+                            const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
+                            unifiedMap.set(doc.id, { ...data, id: doc.id, _ts: ts });
+                        });
+
+                        lastSnap = snapshot.docs[snapshot.docs.length - 1];
+                        batchCount++;
+                        totalFetched += snapshot.size;
+
+                        // Incremental Update - ONLY if still active
+                        if (state.activeSessionId === id) {
+                            const partialList = Array.from(unifiedMap.values());
+                            partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+                            state.allPosts = partialList;
+                            updateUI();
+                            updateProgressBar(50 + (batchCount * 2), `동기화 중... (${state.allPosts.length}개)`);
+                        }
+
+                        if (snapshot.size < BATCH_SIZE) hasMore = false;
+
+                        // Small breathing room REMOVED for speed
+
+                    } catch (batchErr) {
+                        console.error(`Batch ${batchCount + 1} failed. Retrying... (${retryCount + 1}/3)`, batchErr);
+                        retryCount++;
+                        if (retryCount >= 3) {
+                            showToast("네트워크 불안정으로 일부 데이터를 건너뜁니다.");
+                            break;
+                        }
+                        await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+                        continue; // Retry same loop iteration
+                    }
+                }
+
+                console.log(`✅ Recursive Sync Complete: ${totalFetched} new docs merged.`);
+
+                if (state.activeSessionId === id) {
+                    // Final State Update
+                    const final = Array.from(unifiedMap.values());
                     final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
 
                     state.postCache.set(id, final);
@@ -395,16 +440,6 @@ async function switchSession(id) {
                     }
                     saveStateToCache();
                     showToast(`모든 데이터 로드 완료! (${final.length}개)`);
-                } else {
-                    // Cache Background Session
-                    // We must fetch cache first to merge? No, recursive sync is authoritative.
-                    const unified = new Map();
-                    allPostsCombined.forEach(p => unified.set(p.id, p));
-                    const final = Array.from(unified.values());
-                    final.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-
-                    state.postCache.set(id, final);
-                    state.lastSyncMap.set(id, Date.now());
                 }
 
                 state.isSyncing = false;
@@ -414,7 +449,9 @@ async function switchSession(id) {
 
             } catch (err) {
                 console.error("Batch sync failed:", err);
-                showToast("데이터 로드 중단: " + err.message);
+                showToast("데이터 로드 일부 실패 (현재까지 로드됨): " + err.message);
+
+                // Even if failed, keep what we have
                 state.isSyncing = false;
                 updateUI();
             }
@@ -422,8 +459,6 @@ async function switchSession(id) {
 
         // Execute Step 2
         loadAllBatches();
-
-
 
     } catch (e) {
         console.error("Critical Load Error:", e);
