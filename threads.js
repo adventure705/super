@@ -688,15 +688,19 @@ function updateUI() {
     const start = els.startDateFilter?.value || '';
     const end = els.endDateFilter?.value || '';
 
-    // [CRITICAL FIX] Render-Time Deduplication
-    // Even if DB has duplicates, we strictly hide them from UI.
+    // [CRITICAL FIX] Render-Time Deduplication (Aggressive)
+    // Removing all whitespace (\s+) ensures that invisible formatting differences don't cause duplicates.
+    // This is a fast operation (milliseconds) and does not slow down the app.
     const uniqueSigs = new Set();
     const uniqueSource = [];
 
     (state.allPosts || []).forEach(p => {
-        const c = (p.content || '').replace(/\r/g, '').trim();
+        // Aggressive: Remove ALL whitespace/newlines to match content purely by text
+        const c = (p.content || '').replace(/\s+/g, '');
+        // Normalize time: treat missing time as 00:00
+        const t = p.time || '00:00';
         const i = (p.images || []).join(',');
-        const sig = `${p.date}|${p.time}|${c}|${i}`;
+        const sig = `${p.date}|${t}|${c}|${i}`;
 
         if (!uniqueSigs.has(sig)) {
             uniqueSigs.add(sig);
@@ -716,6 +720,7 @@ function updateUI() {
     state.filteredPosts.sort((a, b) => {
         const diff = state.sortOrder === 'desc' ? (b._ts || 0) - (a._ts || 0) : (a._ts || 0) - (b._ts || 0);
         if (diff !== 0) return diff;
+        // Secondary sort by index to keep original file order if timestamps match
         return (a.index || 0) - (b.index || 0);
     });
 
