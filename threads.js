@@ -301,10 +301,14 @@ async function loadSessions() {
 }
 
 async function switchSession(id) {
-    // Prevent reload if clicking the same session
     if (state.activeSessionId === id) return;
 
+    // [CRITICAL] 1. Set Active ID and Clear View Immediately
+    // This prevents seeing previous session data (e.g. Makepastedie) in the new session.
     state.activeSessionId = id;
+    state.allPosts = [];
+    updateUI();
+
     const session = state.sessions.find(s => s.id === id);
     if (!session) {
         console.error("Session not found:", id);
@@ -313,12 +317,8 @@ async function switchSession(id) {
 
     updateHeaderProfile(session);
 
-    // 0. Cache Check
+    // 0. Cache / Resilience Check
     let isCached = false;
-
-    // [CRITICAL FIX] Removed dangerous "Hot-Start Promotion" block.
-    // It was causing the previous session's 'allPosts' to be copied into the new session's cache slot
-    // because state.activeSessionId had just been updated to the new ID.
 
     // [CRITICAL FIX] Enable Read-Cache for performance
     if (state.postCache.has(id)) {
@@ -327,19 +327,24 @@ async function switchSession(id) {
         if (window.innerWidth <= 1024) toggleSidebar(false);
         renderSidebarContent();
         isCached = true;
-        console.log("Skipping sync - Loaded from cache (Manual Reload available).");
-        return; // [USER REQUIREMENT] No auto-reload on tab return. Stops here.
+
+        // If it was already fully synced, just stop. 
+        // If it's CURRENTLY syncing, we fall through to the resume check.
+        if (!state.syncingSessions.has(id)) {
+            console.log("Skipping sync - Loaded from Cache.");
+            return;
+        }
     }
 
     // [FIX] If already syncing in background, just resume view
     if (state.syncingSessions.has(id)) {
         console.log(`🔄 Re-attaching to ongoing sync for ${id}`);
-        // The background loop checks activeSessionId and will resume updating UI
+        // We already tried to populate from cache above.
+        // The background loader will continue updating state.allPosts because activeSessionId is set.
         return;
     }
 
     updateProgressBar(10, "데이터 로딩 시작...");
-    state.allPosts = [];
     state.syncingSessions.add(id); // Mark as syncing
 
     try {
@@ -436,6 +441,9 @@ async function switchSession(id) {
                             const partialList = Array.from(unifiedMap.values());
                             partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
+
+                            // [FIX] Update cache incrementally so resuming switches see partial progress
+                            state.postCache.set(id, partialList);
 
                             // [UX] Real-time Update: Render every batch (500 items)
                             // Optimized deduplication logic handles this efficiently.
