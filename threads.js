@@ -263,24 +263,35 @@ async function loadCategories() {
 
 async function loadSessions() {
     try {
-        console.log("Loading sessions (Master Mode Sync)...");
-        // [MASTER MODE] Always try server first for the initial session list to ensure cross-device unity
+        console.log(`📡 [Master Sync] Fetching session list from Cloud (Project: ${firebaseConfig.projectId})...`);
+        // [FORCE SERVER] Always pull newest metadata on every load for Master Mode unity
         const snapshot = await db.collection(COLLECTION_NAME).get({ source: 'server' });
         state.sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        console.log(`[Master Mode] Fetched ${state.sessions.length} sessions from Cloud.`);
+        console.log(`✅ [Master Sync] Database Identity: ${firebaseConfig.projectId}`);
+        console.log(`✅ [Master Sync] Found ${state.sessions.length} sessions on server.`);
 
-        if (state.sessions.length === 0) {
-            showToast("클라우드에 저장된 세션이 없습니다.");
-        } else {
-            showToast(`클라우드 동기화 완료: ${state.sessions.length}개 세션`);
+        if (state.sessions.length > 0) {
+            const names = state.sessions.map(s => s.name).join(', ');
+            console.log("Sessions available on Cloud:", names);
+            // Detailed table for developer check
+            console.table(state.sessions.map(s => ({ id: s.id, name: s.name, categoryId: s.categoryId })));
         }
 
-        // Efficient sorting
+        if (state.sessions.length === 0) {
+            console.warn("No sessions found in the master collection 'threads_sessions'.");
+            showToast("데이터베이스 접속 성공 (데이터 0개)");
+        } else {
+            const catCount = state.sessions.filter(s => s.categoryId && s.categoryId !== DEFAULT_CAT_ID).length;
+            const uncatCount = state.sessions.length - catCount;
+            showToast(`동기화 완료: 총 ${state.sessions.length}개 (분류: ${catCount}, 미분류: ${uncatCount})`);
+        }
+
+        // Robust Sorting
         state.sessions.sort((a, b) => {
             if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-            const dateA = a.updatedAt?.seconds || (a.updatedAt instanceof Date ? a.updatedAt.getTime() / 1000 : 0);
-            const dateB = b.updatedAt?.seconds || (b.updatedAt instanceof Date ? b.updatedAt.getTime() / 1000 : 0);
+            const dateA = a.updatedAt?.seconds || 0;
+            const dateB = b.updatedAt?.seconds || 0;
             return dateB - dateA;
         });
 
