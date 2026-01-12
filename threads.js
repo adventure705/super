@@ -189,6 +189,27 @@ async function refreshData() {
 
 window.refreshSidebar = refreshData;
 
+async function forceReloadSession() {
+    const id = state.activeSessionId;
+    if (!id) return;
+
+    if (state.isSyncing) {
+        showToast("이미 동기화 중입니다.");
+        return;
+    }
+
+    console.log(`🔄 Force Reloading Session: ${id}`);
+    state.postCache.delete(id);
+    state.lastSyncMap.delete(id);
+
+    // Clear current view momentarily
+    state.allPosts = [];
+    updateUI();
+
+    await switchSession(id);
+}
+window.forceReloadSession = forceReloadSession;
+
 function setupEventListeners() {
     if (els.uploadBtn) els.uploadBtn.addEventListener('click', () => els.fileInput.click());
     if (els.fileInput) els.fileInput.addEventListener('change', handleFileUpload);
@@ -297,16 +318,8 @@ async function switchSession(id) {
         if (window.innerWidth <= 1024) toggleSidebar(false);
         renderSidebarContent();
         isCached = true;
-
-        // Check if we need to sync based on 'updatedAt'
-        const lastSync = state.lastSyncMap.get(id);
-        const serverUpdate = session.updatedAt ? new Date(session.updatedAt.seconds * 1000).getTime() : 0;
-
-        // If we have synced AFTER the last server update, we are good.
-        if (lastSync && lastSync >= serverUpdate) {
-            console.log("Skipping sync - Data is fresh.");
-            return;
-        }
+        console.log("Skipping sync - Loaded from cache (Manual Reload available).");
+        return; // [USER REQUIREMENT] No auto-reload on tab return. Stops here.
     } else {
         updateProgressBar(10, "데이터 로딩 시작...");
         state.allPosts = [];
