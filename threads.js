@@ -923,23 +923,37 @@ async function handleFileUpload(e) {
             }
 
             // --- DUPLICATE CHECK ---
+            // --- DUPLICATE CHECK (Content-Based) ---
             let uniquePosts = newPosts;
-            if (s) { // If session exists, check for duplicates
-                updateProgressBar(20, "중복 검사 중...");
-                const existingIds = new Set();
+            if (s) {
+                updateProgressBar(20, "중복 검사 중 (내용 기반)...");
+                const existingSignatures = new Set();
 
-                // Optimized: Check local cache first if available
+                const generateSig = (p) => `${p.date}|${p.time}|${(p.content || '').trim()}`;
+
+                // 1. Check Memory Cache First
                 if (state.postCache.has(sId)) {
-                    state.postCache.get(sId).forEach(p => existingIds.add(p.id));
-                    console.log(`Checked ${existingIds.size} posts from cache.`);
-                } else {
-                    // Fallback: Fetch IDs from server (still faster than writing duplicates)
-                    const snapshot = await db.collection(COLLECTION_NAME).doc(sId).collection('posts').get();
-                    snapshot.docs.forEach(doc => existingIds.add(doc.id));
-                    console.log(`Checked ${existingIds.size} posts from server.`);
+                    state.postCache.get(sId).forEach(p => existingSignatures.add(generateSig(p)));
+                    console.log(`Checked ${existingSignatures.size} posts from cache.`);
                 }
 
-                uniquePosts = newPosts.filter(p => !existingIds.has(p.id));
+                // 2. Fallback: Check Active State (if current session)
+                if (state.activeSessionId === sId && state.allPosts.length > 0) {
+                    state.allPosts.forEach(p => existingSignatures.add(generateSig(p)));
+                }
+
+                // 3. Fallback: Fetch from Server (Only if we have virtually nothing known)
+                if (existingSignatures.size === 0) {
+                    // We fetch simplified data to save bandwidth if possible, but here we need content.
+                    const snapshot = await db.collection(COLLECTION_NAME).doc(sId).collection('posts').get();
+                    snapshot.docs.forEach(doc => {
+                        const d = doc.data();
+                        existingSignatures.add(generateSig(d));
+                    });
+                    console.log(`Checked ${existingSignatures.size} posts from server.`);
+                }
+
+                uniquePosts = newPosts.filter(p => !existingSignatures.has(generateSig(p)));
                 console.log(`Found ${uniquePosts.length} new posts out of ${newPosts.length}.`);
             }
 
