@@ -842,9 +842,12 @@ async function handleFileUpload(e) {
                 let m;
                 while ((m = imageRegex.exec(chunk)) !== null) images.push(m[1].trim());
 
-                let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '').trim();
+                let content = chunk.replace(/## \d{4}-\d{2}-\d{2}( \d{2}:\d{2})?/, '').replace(/!\[[\s\S]*?\]\(.*?\)/g, '');
+                // [FIX] Normalize content to prevent ID mismatch due to whitespace/newlines
+                content = content.replace(/\r\n/g, '\n').trim();
+
                 if (content || images.length > 0) {
-                    const postId = `p_${date}_${hashString(time + content)}`;
+                    const postId = `p_${date}_${hashString(time + content + images.join(''))}`; // Include images in hash for uniqueness
                     newPosts.push({ id: postId, date, time, index: i, content, images });
                 }
             });
