@@ -977,18 +977,29 @@ async function handleFileUpload(e) {
             showToast("업로드 완료!", 2000);
             hideProgressBar();
 
-            // Do NOT call refreshData() here immediately. 
-            // Firestore queries are eventually consistent, and immediate re-fetch 
-            // might miss the newly created session, causing it to disappear from the UI.
-            // We already have the session in state.sessions.
+            // [OPTIMIZATION] Incremental Update
+            // Instead of reloading, directly merge new posts into current view/cache.
+            uniquePosts.forEach(p => {
+                p._ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
+            });
 
-            // Critical: Invalidate cache so we fetch the NEW data we just uploaded
-            state.postCache.delete(sId);
             if (state.activeSessionId === sId) {
-                state.activeSessionId = null; // Force reload
-            }
+                console.log("⚡ Incremental Update: Adding posts directly to current view.");
+                const currentMap = new Map();
+                (state.allPosts || []).forEach(p => currentMap.set(p.id, p));
+                uniquePosts.forEach(p => currentMap.set(p.id, p));
 
-            await switchSession(sId);
+                const merged = Array.from(currentMap.values()).sort((a, b) => (b._ts || 0) - (a._ts || 0));
+
+                state.allPosts = merged;
+                state.postCache.set(sId, merged);
+                state.lastSyncMap.set(sId, Date.now());
+                updateUI();
+            } else {
+                // If switching to a different session, invalidate cache to force fetch of new data
+                state.postCache.delete(sId);
+                await switchSession(sId);
+            }
 
         } catch (error) {
             console.error("Upload Error:", error);
