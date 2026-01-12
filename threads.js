@@ -168,6 +168,10 @@ function restoreStateFromCache() {
         console.log("⚡ Instant Hot-Start: Restoring " + cache.posts.length + " posts");
         state.activeSessionId = cache.sessionId;
         state.allPosts = cache.posts;
+        // [CRITICAL FIX] Safe Cache Population
+        // Register this restored data immediately to the safe memory cache
+        state.postCache.set(cache.sessionId, cache.posts);
+
         updateUI(); // Immediate Render
         if (els.postsFeed) els.postsFeed.style.opacity = '1';
     } catch (e) {
@@ -300,12 +304,9 @@ async function switchSession(id) {
     // 0. Cache Check
     let isCached = false;
 
-    // [FIX] Instant Hot-Start Preservation
-    // If we have data in 'allPosts' (from Hot Cache) matching this ID, promoting it to memory cache prevents wiping.
-    if (state.activeSessionId === id && state.allPosts.length > 0 && !state.postCache.has(id)) {
-        console.log("🔥 Promoting Hot-Start data to Memory Cache");
-        state.postCache.set(id, [...state.allPosts]);
-    }
+    // [CRITICAL FIX] Removed dangerous "Hot-Start Promotion" block.
+    // It was causing the previous session's 'allPosts' to be copied into the new session's cache slot
+    // because state.activeSessionId had just been updated to the new ID.
 
     // [CRITICAL FIX] Enable Read-Cache for performance
     if (state.postCache.has(id)) {
