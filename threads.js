@@ -348,43 +348,14 @@ async function switchSession(id) {
         console.log(`🚀 Loading Session: ${session.name} (ID: ${id})`);
         const colRef = db.collection(COLLECTION_NAME).doc(id).collection('posts');
 
-        // Step 1: Rapid 300-post fetch (Only if not cached)
-        if (!isCached) {
-            updateProgressBar(30, "최신 글 불러오는 중...");
-            try {
-                // Try getting latest posts first
-                const firstSnap = await colRef.orderBy('date', 'desc').limit(300).get();
-
-                // [CRITICAL FIX] Abort if session changed during fast-fetch
-                if (state.activeSessionId !== id) return;
-
-                const initialPosts = firstSnap.docs.map(doc => {
-                    const data = doc.data();
-                    const ts = new Date((data.date || '') + (data.time ? 'T' + data.time : '')).getTime() || 0;
-                    return { ...data, id: doc.id, _ts: ts };
-                });
-
-                if (initialPosts.length === 0) {
-                    // Do not show error yet, wait for full sync
-                    console.log("Initial fetch empty, relying on full sync.");
-                } else {
-                    state.allPosts = initialPosts.sort((a, b) => (b._ts || 0) - (a._ts || 0));
-                    updateUI();
-                }
-            } catch (e) {
-                console.warn("Fast fetch failed, falling back to full sync", e);
-            }
-        }
-
-        // [CRITICAL FIX] Capture state synchronously!
-        // This snapshot ensures that the background loader uses the data that belonged to THIS session
-        const safeInitialPosts = [...state.allPosts];
+        // Step 1: Rapid 300-post fetch (REMOVED for Stability)
+        // We rely on Phase 0 (Cache) for instant load, and Phase 1 (Server) for full load.
+        // This eliminates the "300 items stuck" and "mixed data" issues caused by race conditions.
 
         // Step 2: Robust Recursive Batch Sync
         const loadAllBatches = async () => {
             const unifiedMap = new Map();
-            // [CRITICAL FIX] Isolation Strategy: Seed from the CAPTURED safe snapshot.
-            safeInitialPosts.forEach(p => unifiedMap.set(p.id, p));
+            // No seeding needed from Step 1. Start fresh.
 
             // [SPEED] Phase 0: Try to load from Disk Cache FIRST (Instant)
             try {
