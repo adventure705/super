@@ -865,13 +865,19 @@ async function handleFileUpload(e) {
 
             // [FIX] Fallback: If renamed, try to match by Thread ID
             if (!s && extractedId) {
-                const candidates = state.sessions.filter(x => x.threadId === extractedId);
-                if (candidates.length > 0) {
-                    // If the active session matches the ID, prefer it
-                    if (state.activeSessionId && candidates.some(c => c.id === state.activeSessionId)) {
-                        s = state.sessions.find(x => x.id === state.activeSessionId);
-                    } else {
-                        // Otherwise pick the most likely one (first found, usually latest due to sort)
+                // 1. Check Active Session First (For Incremental Updates)
+                if (state.activeSessionId) {
+                    const active = state.sessions.find(x => x.id === state.activeSessionId);
+                    if (active && active.threadId === extractedId) {
+                        console.log("⚡ Match: Uploaded file ID matches Active Session ID. Merging...");
+                        s = active;
+                    }
+                }
+
+                // 2. If not active, check other sessions
+                if (!s) {
+                    const candidates = state.sessions.filter(x => x.threadId === extractedId);
+                    if (candidates.length > 0) {
                         s = candidates[0];
                     }
                 }
