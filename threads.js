@@ -11,7 +11,23 @@ const state = {
     isSyncing: false,
 };
 window.state = state; // Global DEBUG Access
-console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V3-Restored");
+
+// [CRITICAL] Cache Invalidation Logic
+// We must clear old corrupted caches (mixed data) to ensure users get fresh data.
+const CURRENT_CACHE_VERSION = '2026-01-12-v4';
+if (localStorage.getItem('threads_cache_version') !== CURRENT_CACHE_VERSION) {
+    console.log("🧹 Detected old cache version. purging threads cache...");
+    localStorage.removeItem('threads_hot_cache');
+    localStorage.removeItem('threads_sessions'); // Clear session list too just in case
+    // If we store posts in a large string?
+    // We don't have a global 'threads_post_cache' key visible here but let's clear common suspects.
+    // Assuming postCache is memory-only? If it's in localStorage, clear it.
+    // Based on previous reads, 'threads_hot_cache' is the main one.
+    localStorage.setItem('threads_cache_version', CURRENT_CACHE_VERSION);
+    location.reload(); // Force reload to apply clean state
+}
+
+console.log(`Threads Analyzer Loaded - Version: ${CURRENT_CACHE_VERSION}`);
 let searchTimeout;
 
 let db;
@@ -274,7 +290,8 @@ async function switchSession(id) {
         state.postCache.set(id, [...state.allPosts]);
     }
 
-    if (state.postCache.has(id)) {
+    // [CRITICAL FIX] Disable Read-Cache to prevent mixed-data loading
+    if (false && state.postCache.has(id)) {
         state.allPosts = state.postCache.get(id);
         updateUI();
         if (window.innerWidth <= 1024) toggleSidebar(false);
@@ -294,14 +311,16 @@ async function switchSession(id) {
         updateProgressBar(10, "데이터 로딩 시작...");
         state.allPosts = [];
 
-        // [RESTORED] Legacy posts loading enabled again
+        // [CRITICAL FIX] Legacy Block DISABLED to prevent Mixed Data
+        /*
         if (session.posts && Array.isArray(session.posts) && session.posts.length > 0) {
             console.log("⚡ Found legacy posts in session doc, using as initial state.");
             state.allPosts = session.posts.map(p => {
-                const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
-                return { ...p, _ts: ts };
+                 const ts = new Date((p.date || '') + (p.time ? 'T' + p.time : '')).getTime() || 0;
+                 return { ...p, _ts: ts };
             }).sort((a, b) => (b._ts || 0) - (a._ts || 0));
         }
+        */
 
         updateUI();
     }
@@ -356,7 +375,7 @@ async function switchSession(id) {
 
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 600; // Optimized for performance
+                const BATCH_SIZE = 1000; // Maximize throughput
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -403,13 +422,17 @@ async function switchSession(id) {
                             const partialList = Array.from(unifiedMap.values());
                             partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
-                            updateUI();
+                            // Throttle UI updates to save CPU
+                            // Only update every 1000 posts or if it's the last batch
+                            if (totalFetched % 1000 < BATCH_SIZE || snapshot.size < BATCH_SIZE) {
+                                updateUI();
+                            }
                             updateProgressBar(50 + (batchCount * 2), `동기화 중... (${state.allPosts.length}개)`);
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
 
-                        // Small breathing room REMOVED for speed
+
 
                     } catch (batchErr) {
                         console.error(`Batch ${batchCount + 1} failed. Retrying... (${retryCount + 1}/3)`, batchErr);
