@@ -856,6 +856,12 @@ async function handleFileUpload(e) {
             const sName = file.name.replace('.md', '').replace(/_part\d+$/, '');
             let s = state.sessions.find(x => x.name === sName);
 
+            // [CRITICAL FIX] Strict Isolation: If names match but Thread IDs differ, FORCE NEW SESSION.
+            if (s && s.threadId && extractedId && s.threadId !== extractedId) {
+                console.log(`⚠️ Isolation Enforcement: Name matches '${s.name}' but Thread IDs differ (${s.threadId} vs ${extractedId}). Creating new session.`);
+                s = null;
+            }
+
             // [FIX] Fallback: If renamed, try to match by Thread ID
             if (!s && extractedId) {
                 const candidates = state.sessions.filter(x => x.threadId === extractedId);
