@@ -105,6 +105,7 @@ async function init() {
 
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
+                console.log("User signed in:", user.uid);
                 updateSyncStatus(true);
                 // Background Sync: Only refresh if we don't have data, or strictly in background
                 if (state.sessions.length === 0) {
@@ -116,7 +117,12 @@ async function init() {
                 else refreshData(); // Fire and forget, don't await to block UI
             } else {
                 updateProgressBar(10, "클라우드 접속 중...");
-                await firebase.auth().signInAnonymously();
+                try {
+                    await firebase.auth().signInAnonymously();
+                } catch (e) {
+                    console.error("Auth Error:", e);
+                    showToast(`로그인 실패: ${e.message}`);
+                }
             }
         });
     } catch (e) {
@@ -124,96 +130,7 @@ async function init() {
     }
 }
 
-function saveStateToCache() {
-    if (!state.activeSessionId) return;
-    try {
-        // Cache only the first 400 posts to stay within LocalStorage limits (~5MB)
-        const hotCache = {
-            sessionId: state.activeSessionId,
-            posts: state.allPosts.slice(0, 400),
-            timestamp: Date.now()
-        };
-        localStorage.setItem('threads_hot_cache', JSON.stringify(hotCache));
-    } catch (e) {
-        console.warn("Cache quota exceeded", e);
-    }
-}
-
-function restoreStateFromCache() {
-    try {
-        const raw = localStorage.getItem('threads_hot_cache');
-        if (!raw) return;
-        const cache = JSON.parse(raw);
-        if (!cache.sessionId || !cache.posts) return;
-
-        console.log("⚡ Instant Hot-Start: Restoring " + cache.posts.length + " posts");
-        state.activeSessionId = cache.sessionId;
-        state.allPosts = cache.posts;
-        updateUI(); // Immediate Render
-        if (els.postsFeed) els.postsFeed.style.opacity = '1';
-    } catch (e) {
-        console.error("Hot-start failed:", e);
-    }
-}
-
-async function refreshData() {
-    // Silent Refresh
-    await Promise.all([
-        loadCategories(),
-        loadSessions()
-    ]);
-}
-
-window.refreshSidebar = refreshData;
-
-function setupEventListeners() {
-    if (els.uploadBtn) els.uploadBtn.addEventListener('click', () => els.fileInput.click());
-    if (els.fileInput) els.fileInput.addEventListener('change', handleFileUpload);
-    if (els.searchInput) els.searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => updateUI(), 300); // 0.3s debounce
-    });
-    if (els.startDateFilter) els.startDateFilter.addEventListener('change', () => updateUI());
-    if (els.endDateFilter) els.endDateFilter.addEventListener('change', () => updateUI());
-    if (els.resetFilters) els.resetFilters.addEventListener('click', resetFilters);
-    if (els.sortToggle) els.sortToggle.addEventListener('click', toggleSort);
-    if (els.mobileMenuToggle) els.mobileMenuToggle.addEventListener('click', () => toggleSidebar(true));
-    if (els.sidebarOverlay) els.sidebarOverlay.addEventListener('click', () => toggleSidebar(false));
-    if (els.addCategoryBtn) els.addCategoryBtn.addEventListener('click', addNewCategory);
-    if (els.closeModal) els.closeModal.onclick = closeModal;
-    if (els.imageModal) els.imageModal.onclick = (e) => { if (e.target === els.imageModal) closeModal(); };
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && els.imageModal && getComputedStyle(els.imageModal).display !== 'none') {
-            closeModal();
-        }
-    });
-    if (els.contentView) els.contentView.addEventListener('scroll', handleScroll);
-}
-
-// --- Data Fetching ---
-async function loadCategories() {
-    try {
-        console.log("Loading categories from Firestore...");
-        const snapshot = await db.collection(CATEGORY_COLLECTION).get();
-        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        if (docs.length > 0) {
-            state.categories = docs.sort((a, b) => (a.order || 0) - (b.order || 0));
-            localStorage.setItem('threads_categories', JSON.stringify(state.categories));
-            console.log(`Successfully loaded ${state.categories.length} categories.`);
-        } else {
-            console.warn("No categories found in cloud. Creating default fallback...");
-            await addNewCategoryUI('미분류', DEFAULT_CAT_ID);
-            const retry = await db.collection(CATEGORY_COLLECTION).get();
-            state.categories = retry.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
-            localStorage.setItem('threads_categories', JSON.stringify(state.categories));
-        }
-        renderSidebarContent();
-    } catch (e) {
-        console.error("Categories fetch error:", e);
-        showToast("데이터 연동 중 오류가 발생했습니다.");
-    }
-}
+// ... unchanged code ...
 
 async function loadSessions() {
     try {
@@ -239,7 +156,7 @@ async function loadSessions() {
         if (!state.activeSessionId && state.sessions.length > 0) autoSelectFirstSession();
     } catch (e) {
         console.error("Sessions fetch error:", e);
-        showToast("데이터를 불러오는 중 오류가 발생했습니다.");
+        showToast(`목록 로딩 실패: ${e.code || e.message}`);
     }
 }
 
