@@ -721,22 +721,23 @@ function updateUI() {
     const start = els.startDateFilter?.value || '';
     const end = els.endDateFilter?.value || '';
 
-    // [CRITICAL FIX] Render-Time Deduplication (Aggressive)
-    // Removing all whitespace (\s+) ensures that invisible formatting differences don't cause duplicates.
-    // This is a fast operation (milliseconds) and does not slow down the app.
+    // [CRITICAL FIX] Render-Time Deduplication (Safe Mode)
+    // Reverted aggressive whitespace removal to prevent over-merging.
+    // Standard TRIM is sufficient for most cases.
     const uniqueSigs = new Set();
     const uniqueSource = [];
 
     (state.allPosts || []).forEach(p => {
-        // Aggressive: Remove ALL whitespace/newlines to match content purely by text
-        const c = (p.content || '').replace(/\s+/g, '');
-        // Normalize time: treat missing time as 00:00
+        // Safe: Just remove \r and trim.
+        const c = (p.content || '').replace(/\r/g, '').trim();
+        // Normalize time
         const t = p.time || '00:00';
+        const d = p.date || 'NODATE';
 
-        // Normalize images: strip query params to handle expiring CDN tokens
+        // Normalize images: strip query params
         const i = (p.images || []).map(url => (url || '').split('?')[0]).join(',');
 
-        const sig = `${p.date}|${t}|${c}|${i}`;
+        const sig = `${d}|${t}|${c}|${i}`;
 
         if (!uniqueSigs.has(sig)) {
             uniqueSigs.add(sig);
