@@ -340,6 +340,10 @@ async function switchSession(id) {
             }
         }
 
+        // [CRITICAL FIX] Capture state synchronously!
+        // This snapshot ensures that the background loader uses the data that belonged to THIS session
+        const safeInitialPosts = [...state.allPosts];
+
         // Step 2: Robust Recursive Batch Sync
         const loadAllBatches = async () => {
             try {
@@ -347,9 +351,8 @@ async function switchSession(id) {
                 const unifiedMap = new Map();
 
                 // [CRITICAL FIX] Isolation Strategy
-                // We seed ONLY from the current state.allPosts which contains Step 1 (Fresh) data.
-                // We do NOT use state.postCache because it might be contaminated.
-                state.allPosts.forEach(p => unifiedMap.set(p.id, p));
+                // Seed from the CAPTURED safe snapshot.
+                safeInitialPosts.forEach(p => unifiedMap.set(p.id, p));
 
                 let lastSnap = null;
                 let hasMore = true;
