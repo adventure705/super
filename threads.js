@@ -385,7 +385,7 @@ async function switchSession(id) {
 
                 let lastSnap = null;
                 let hasMore = true;
-                const BATCH_SIZE = 1000; // Maximize throughput
+                const BATCH_SIZE = 500; // [OPTIMIZATION] Smaller batches for more frequent updates
                 let batchCount = 0;
                 let totalFetched = 0;
                 let retryCount = 0;
@@ -434,12 +434,10 @@ async function switchSession(id) {
                             const partialList = Array.from(unifiedMap.values());
                             partialList.sort((a, b) => (b._ts || 0) - (a._ts || 0));
                             state.allPosts = partialList;
-                            // Throttle UI updates to save CPU
-                            // Only update every 1000 posts or if it's the last batch
-                            if (totalFetched % 1000 < BATCH_SIZE || snapshot.size < BATCH_SIZE) {
-                                updateUI();
-                            }
-                            updateProgressBar(50 + (batchCount * 2), `동기화 중... (${state.allPosts.length}개)`);
+
+                            // [OPTIMIZATION] Real-time rendering: Update UI on every batch!
+                            updateUI();
+                            updateProgressBar(50 + (batchCount * 2), `🚀 데이터 초고속 로딩 중... (${state.allPosts.length}개)`);
                         }
 
                         if (snapshot.size < BATCH_SIZE) hasMore = false;
