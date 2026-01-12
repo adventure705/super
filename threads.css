@@ -717,6 +717,9 @@ body {
 
     .main-content {
         width: 100%;
+        overflow-y: auto;
+        display: block;
+        height: 100vh;
     }
 
     .top-bar {
@@ -738,6 +741,8 @@ body {
 
     .content-view {
         padding: 20px;
+        overflow: visible;
+        height: auto;
     }
 
     .view-header {

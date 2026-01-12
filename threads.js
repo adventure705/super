@@ -11,7 +11,7 @@ const state = {
     isSyncing: false,
 };
 window.state = state; // Global DEBUG Access
-console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V1");
+console.log("Threads Analyzer Loaded - Version: 2026-01-12-Stable-V2");
 let searchTimeout;
 
 let db;
@@ -1086,7 +1086,10 @@ window.exportData = () => {
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = `threads_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const timestamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        a.download = `threads_backup_${timestamp}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
