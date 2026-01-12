@@ -118,26 +118,23 @@ async function init() {
         }
         renderSidebarContent();
 
+        // [MASTER MODE] Proactive Sync - Don't wait for Auth if rules are public
+        console.log(`Connecting to Master Database: ${firebaseConfig.projectId}`);
+        refreshData().catch(e => console.log("Initial sync failed (might need auth):", e));
+
         firebase.auth().onAuthStateChanged(async (user) => {
             if (user) {
-                console.log("User signed in:", user.uid);
+                console.log("Master Identity Confirmed:", user.uid);
                 updateSyncStatus(true);
-                // Background Sync: Only refresh if we don't have data, or strictly in background
-                if (state.sessions.length === 0) {
-                    updateProgressBar(20, "클라우드 데이터 동기화 중...");
-                    await refreshData();
-                    updateProgressBar(100, "동기화 완료");
-                    setTimeout(hideProgressBar, 1000);
-                }
-                else refreshData(); // Fire and forget, don't await to block UI
+                // Background Sync
+                refreshData();
             } else {
-                updateProgressBar(10, "서버 접속 중 (Master Mode)...");
+                console.log("Requesting Master Mode Access...");
                 try {
-                    // [MASTER MODE] Anonymous Access + No Persistence = Always Fetch Latest
                     await firebase.auth().signInAnonymously();
                 } catch (e) {
                     console.error("Auth Error:", e);
-                    showToast(`로그인 실패: ${e.message}`);
+                    showToast(`마스터 접속 실패: ${e.message}`);
                 }
             }
         });
