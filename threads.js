@@ -437,7 +437,9 @@ async function switchSession(id) {
                     }
 
                     try {
-                        const snapshot = await query.get();
+                        // [CRITICAL FIX] Force SERVER fetch to bypass partial cache
+                        // This ensures we get all 4000+ items, not just the 300 cached ones.
+                        const snapshot = await query.get({ source: 'server' });
 
                         // [BACKGROUND SYNC] Continued even if switched...
                         // if (state.activeSessionId !== id) return; // Removed to allow background cache fill
