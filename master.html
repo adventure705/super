@@ -3063,8 +3063,7 @@
             async analyzeGemini(videoData, comments, apiKey) {
                 const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
                 const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", generationConfig: { responseMimeType: "application/json" } });
-
+                           const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest",generationConfig: { responseMimeType: "application/json" } });
                 const prompt = `
             너는 유튜브 데이터 및 여론 분석 전문가야. 아래 영상 정보와 댓글을 분석하여 JSON 형식으로 답해줘.
             
