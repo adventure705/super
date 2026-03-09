@@ -836,7 +836,7 @@
         async function fetchAllVideos(uploadsId) {
             let videos = [];
             let nextPageToken = '';
-            let maxPages = 50; 
+            let maxPages = 1000; 
             
             do {
                 const url = `${API_BASE_URL}playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50&pageToken=${nextPageToken}&key=${currentApiKey}`;
@@ -1736,5 +1736,6 @@
     </script>
 </body>
 </html>
+
 
 
