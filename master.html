@@ -1832,7 +1832,7 @@
                     const meta = { id: item.id, title: item.snippet.title, description: item.snippet.description, subscribers: item.statistics.subscriberCount, totalViews: item.statistics.viewCount, totalVideos: item.statistics.videoCount, thumbnail: item.snippet.thumbnails.default?.url || '', publishedAt: item.snippet.publishedAt, country: item.snippet.country || 'N/A' };
 
                     let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, apiKey);
-                    videos = videos.slice(0, 2000);
+                    videos = videos.slice(0, 200);
                     const sMap = await this.fetchStats(videos.map(v => v.videoId), apiKey);
                     videos = videos.map(i => {
                         const s = sMap[i.videoId] || {};
@@ -2338,7 +2338,7 @@
                     const item = chData.items[0];
                     const meta = { id: item.id, title: item.snippet.title, description: item.snippet.description, subscribers: item.statistics.subscriberCount, totalViews: item.statistics.viewCount, totalVideos: item.statistics.videoCount, thumbnail: item.snippet.thumbnails.default?.url || '', publishedAt: item.snippet.publishedAt, country: item.snippet.country || 'N/A' };
                     let videos = await this.fetchVids(item.contentDetails.relatedPlaylists.uploads, k);
-                    videos = videos.slice(0, 2000);
+                    videos = videos.slice(0, 200);
                     const sMap = await this.fetchStats(videos.map(v => v.videoId), k);
                     videos = videos.map(i => { const s = sMap[i.videoId] || {}; return { ...i, ...s, viewCount: Number(s.viewCount || 0), likeCount: Number(s.likeCount || 0), durationSeconds: this.parseDur(s.duration) }; });
                     const stats90 = this.calc90(videos);
