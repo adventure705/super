@@ -836,7 +836,7 @@
         async function fetchAllVideos(uploadsId) {
             let videos = [];
             let nextPageToken = '';
-            let maxPages = 10; 
+            let maxPages = 50; 
             
             do {
                 const url = `${API_BASE_URL}playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50&pageToken=${nextPageToken}&key=${currentApiKey}`;
@@ -1396,7 +1396,7 @@
                 return 0;
             });
 
-            filtered.slice(0, 200).forEach((v, idx) => {
+            filtered.slice(0, 2000).forEach((v, idx) => {
                 const rowId = `row-${idx}`;
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-bg-dark/30 border-t border-bg-dark/50';
@@ -1736,4 +1736,5 @@
     </script>
 </body>
 </html>
+
 
