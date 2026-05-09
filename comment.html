@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -23,61 +24,287 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;600;700&display=swap');
-        body { font-family: 'Pretendard', sans-serif; background-color: #121212; color: #E0E0E0; scroll-behavior: smooth; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #121212; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
-        .loader { border: 3px solid #333; border-top: 3px solid #FF4E45; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .markdown-raw { white-space: pre-wrap; line-height: 1.6; font-family: 'Menlo', 'Monaco', monospace; font-size: 0.85em; background-color: #000; color: #4ade80; padding: 1.5rem; border-radius: 0.5rem; border: 1px solid #333; overflow-x: auto; }
-        .highlight-text strong { color: #FF4E45; background-color: rgba(255, 78, 69, 0.1); padding: 0 4px; border-radius: 2px; font-weight: 700; }
-        .hover-card { transition: all 0.2s ease; }
-        .hover-card:hover { transform: translateY(-2px); border-color: #FF4E45; }
-        .custom-checkbox { appearance: none; background-color: #333; margin: 0; font: inherit; color: currentColor; width: 1.15em; height: 1.15em; border: 0.1em solid #555; border-radius: 0.15em; display: grid; place-content: center; cursor: pointer; }
-        .custom-checkbox::before { content: ""; width: 0.65em; height: 0.65em; transform: scale(0); transition: 120ms transform ease-in-out; box-shadow: inset 1em 1em white; transform-origin: center; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
-        .custom-checkbox:checked { background-color: #FF4E45; border-color: #FF4E45; }
-        .custom-checkbox:checked::before { transform: scale(1); }
-        .type-badge { padding: 4px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; }
-        .type-trend { background-color: rgba(255, 78, 69, 0.15); color: #FF4E45; border: 1px solid rgba(255, 78, 69, 0.3); }
-        .type-evergreen { background-color: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .type-seasonal { background-color: rgba(251, 191, 36, 0.15); color: #FBBF24; border: 1px solid rgba(251, 191, 36, 0.3); }
-        .comment-quote { background-color: #252525; border-left: 3px solid #555; padding: 10px 14px; margin-top: 10px; font-size: 0.9rem; color: #ccc; border-radius: 0 6px 6px 0; }
-        .comment-author { font-size: 0.75rem; font-weight: 700; color: #888; margin-bottom: 4px; display: block; }
-        .comment-table th { background-color: #252525; color: #bbb; font-weight: 600; padding: 1rem; text-align: left; border-bottom: 1px solid #333; }
-        .comment-table td { padding: 1rem; border-bottom: 1px solid #333; color: #ddd; vertical-align: top; }
-        .comment-table tr:hover td { background-color: #2a2a2a; }
-        .history-table th { background-color: #252525; color: #9ca3af; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 1rem; text-align: left; white-space: nowrap; user-select: none; }
-        .history-table td { padding: 1rem; border-top: 1px solid #333; vertical-align: middle; color: #e5e7eb; }
-        .history-table tr:hover { background-color: #1a1a1a; }
-        input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active{ -webkit-box-shadow: 0 0 0 30px #1E1E1E inset !important; -webkit-text-fill-color: white !important; }
-        #scrollTopBtn { position: fixed; bottom: 30px; right: 30px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-        #scrollTopBtn.visible { opacity: 1; pointer-events: auto; }
-        
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #121212;
+            color: #E0E0E0;
+            scroll-behavior: smooth;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #121212;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .loader {
+            border: 3px solid #333;
+            border-top: 3px solid #FF4E45;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .markdown-raw {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-family: 'Menlo', 'Monaco', monospace;
+            font-size: 0.85em;
+            background-color: #000;
+            color: #4ade80;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #333;
+            overflow-x: auto;
+        }
+
+        .highlight-text strong {
+            color: #FF4E45;
+            background-color: rgba(255, 78, 69, 0.1);
+            padding: 0 4px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+
+        .hover-card {
+            transition: all 0.2s ease;
+        }
+
+        .hover-card:hover {
+            transform: translateY(-2px);
+            border-color: #FF4E45;
+        }
+
+        .custom-checkbox {
+            appearance: none;
+            background-color: #333;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 0.1em solid #555;
+            border-radius: 0.15em;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+
+        .custom-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em white;
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .custom-checkbox:checked {
+            background-color: #FF4E45;
+            border-color: #FF4E45;
+        }
+
+        .custom-checkbox:checked::before {
+            transform: scale(1);
+        }
+
+        .type-badge {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .type-trend {
+            background-color: rgba(255, 78, 69, 0.15);
+            color: #FF4E45;
+            border: 1px solid rgba(255, 78, 69, 0.3);
+        }
+
+        .type-evergreen {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34D399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .type-seasonal {
+            background-color: rgba(251, 191, 36, 0.15);
+            color: #FBBF24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .comment-quote {
+            background-color: #252525;
+            border-left: 3px solid #555;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #ccc;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .comment-author {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #888;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .comment-table th {
+            background-color: #252525;
+            color: #bbb;
+            font-weight: 600;
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        .comment-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #333;
+            color: #ddd;
+            vertical-align: top;
+        }
+
+        .comment-table tr:hover td {
+            background-color: #2a2a2a;
+        }
+
+        .history-table th {
+            background-color: #252525;
+            color: #9ca3af;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 1rem;
+            text-align: left;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .history-table td {
+            padding: 1rem;
+            border-top: 1px solid #333;
+            vertical-align: middle;
+            color: #e5e7eb;
+        }
+
+        .history-table tr:hover {
+            background-color: #1a1a1a;
+        }
+
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px #1E1E1E inset !important;
+            -webkit-text-fill-color: white !important;
+        }
+
+        #scrollTopBtn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        #scrollTopBtn.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         /* Modal Styles */
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 50; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .modal-bg.active { opacity: 1; pointer-events: auto; }
-        .modal-content { background: #1E1E1E; border: 1px solid #333; border-radius: 1rem; width: 95%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.2s; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4); }
-        .modal-bg.active .modal-content { transform: scale(1); }
+        .modal-bg {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-bg.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: #1E1E1E;
+            border: 1px solid #333;
+            border-radius: 1rem;
+            width: 95%;
+            max-width: 900px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.2s;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-bg.active .modal-content {
+            transform: scale(1);
+        }
     </style>
 </head>
+
 <body class="min-h-screen relative">
 
-    <button id="scrollTopBtn" onclick="window.scrollTo(0,0)" class="bg-brand-red text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-red-600 transition">
+    <button id="scrollTopBtn" onclick="window.scrollTo(0,0)"
+        class="bg-brand-red text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-red-600 transition">
         <i class="fas fa-arrow-up"></i>
     </button>
 
     <div class="max-w-7xl mx-auto p-4 md:p-8">
         <header class="text-center mb-10">
             <h1 class="text-3xl md:text-4xl font-bold text-white mb-2 flex justify-center items-center gap-3">
-                <i class="fab fa-youtube text-brand-red"></i> 
+                <i class="fab fa-youtube text-brand-red"></i>
                 <span>YOUTUBE <span class="text-brand-red">INSIGHT PRO</span></span>
             </h1>
             <p class="text-dark-muted text-sm md:text-base">심층 논쟁 분석 · 다국어 자동 번역 · 클라우드 동기화</p>
         </header>
 
         <!-- API Settings Header -->
-        <div class="bg-dark-card rounded-xl p-4 mb-8 border border-dark-border shadow-lg flex justify-between items-center">
+        <div
+            class="bg-dark-card rounded-xl p-4 mb-8 border border-dark-border shadow-lg flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue">
                     <i class="fas fa-cloud"></i>
@@ -87,69 +314,99 @@
                     <p class="text-xs text-dark-muted" id="activeKeyLabel">연동 대기 중...</p>
                 </div>
             </div>
-            <button onclick="openApiModal()" class="bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-lg text-xs font-bold transition border border-dark-border flex items-center gap-2">
+            <button onclick="openApiModal()"
+                class="bg-[#333] hover:bg-[#444] text-white px-4 py-2 rounded-lg text-xs font-bold transition border border-dark-border flex items-center gap-2">
                 <i class="fas fa-cog"></i> 키 관리
             </button>
         </div>
 
         <div class="bg-dark-card rounded-xl border border-dark-border shadow-lg overflow-hidden min-h-[500px]">
             <div class="flex border-b border-dark-border">
-                <button onclick="setMode('link')" id="tab-link" class="flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors border-b-2 border-brand-red text-brand-red bg-[#252525]"><i class="fas fa-link mr-2"></i>영상 링크 분석</button>
-                <button onclick="setMode('channel')" id="tab-channel" class="flex-1 py-4 text-center font-bold text-sm md:text-base text-dark-muted hover:text-white transition-colors border-b-2 border-transparent hover:bg-[#252525]"><i class="fas fa-tv mr-2"></i>채널 인기 영상</button>
-                <button onclick="setMode('history')" id="tab-history" class="flex-1 py-4 text-center font-bold text-sm md:text-base text-dark-muted hover:text-white transition-colors border-b-2 border-transparent hover:bg-[#252525]"><i class="fas fa-history mr-2"></i>클라우드 히스토리</button>
+                <button onclick="setMode('link')" id="tab-link"
+                    class="flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors border-b-2 border-brand-red text-brand-red bg-[#252525]"><i
+                        class="fas fa-link mr-2"></i>영상 링크 분석</button>
+                <button onclick="setMode('channel')" id="tab-channel"
+                    class="flex-1 py-4 text-center font-bold text-sm md:text-base text-dark-muted hover:text-white transition-colors border-b-2 border-transparent hover:bg-[#252525]"><i
+                        class="fas fa-tv mr-2"></i>채널 인기 영상</button>
+                <button onclick="setMode('history')" id="tab-history"
+                    class="flex-1 py-4 text-center font-bold text-sm md:text-base text-dark-muted hover:text-white transition-colors border-b-2 border-transparent hover:bg-[#252525]"><i
+                        class="fas fa-history mr-2"></i>클라우드 히스토리</button>
             </div>
 
             <div class="p-6 md:p-8">
                 <div id="view-link" class="block">
                     <div class="flex flex-col md:flex-row gap-3 mb-8">
-                        <input type="text" id="videoUrl" class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg focus:ring-2 focus:ring-brand-red outline-none" placeholder="https://youtu.be/...">
-                        <button onclick="analyzeSingleVideo()" class="bg-brand-red hover:bg-red-600 text-white px-8 py-3 rounded-lg font-bold transition shadow-lg shadow-red-900/20">분석하기</button>
+                        <input type="text" id="videoUrl"
+                            class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg focus:ring-2 focus:ring-brand-red outline-none"
+                            placeholder="https://youtu.be/...">
+                        <button onclick="analyzeSingleVideo()"
+                            class="bg-brand-red hover:bg-red-600 text-white px-8 py-3 rounded-lg font-bold transition shadow-lg shadow-red-900/20">분석하기</button>
                     </div>
                 </div>
 
                 <div id="view-channel" class="hidden">
                     <div class="flex flex-col md:flex-row gap-3 mb-6">
-                        <input type="text" id="channelHandle" class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg focus:ring-2 focus:ring-brand-red outline-none" placeholder="채널 URL, @핸들, 또는 채널명">
-                        <button onclick="searchChannelVideos()" class="bg-[#333] hover:bg-[#444] text-white px-8 py-3 rounded-lg font-bold transition border border-dark-border">조회하기</button>
+                        <input type="text" id="channelHandle"
+                            class="flex-1 bg-[#121212] border border-dark-border text-white p-3 rounded-lg focus:ring-2 focus:ring-brand-red outline-none"
+                            placeholder="채널 URL, @핸들, 또는 채널명">
+                        <button onclick="searchChannelVideos()"
+                            class="bg-[#333] hover:bg-[#444] text-white px-8 py-3 rounded-lg font-bold transition border border-dark-border">조회하기</button>
                     </div>
-                    <div id="channelControls" class="hidden mb-6 p-4 bg-[#252525] rounded-lg border border-dark-border flex flex-wrap gap-4 items-center justify-between">
+                    <div id="channelControls"
+                        class="hidden mb-6 p-4 bg-[#252525] rounded-lg border border-dark-border flex flex-wrap gap-4 items-center justify-between">
                         <div class="flex gap-2 items-center flex-wrap">
                             <span class="text-xs font-bold text-dark-muted uppercase mr-1">정렬:</span>
-                            <select id="sortOption" onchange="sortChannelVideos()" class="bg-[#121212] text-white text-sm p-2 rounded border border-dark-border outline-none focus:border-brand-red">
+                            <select id="sortOption" onchange="sortChannelVideos()"
+                                class="bg-[#121212] text-white text-sm p-2 rounded border border-dark-border outline-none focus:border-brand-red">
                                 <option value="viewCount">조회수</option>
                                 <option value="likeCount">좋아요</option>
                                 <option value="commentCount">댓글수</option>
                                 <option value="date">날짜</option>
                             </select>
-                            <select id="orderOption" onchange="sortChannelVideos()" class="bg-[#121212] text-white text-sm p-2 rounded border border-dark-border outline-none focus:border-brand-red">
+                            <select id="orderOption" onchange="sortChannelVideos()"
+                                class="bg-[#121212] text-white text-sm p-2 rounded border border-dark-border outline-none focus:border-brand-red">
                                 <option value="desc">내림차순 (높은순)</option>
                                 <option value="asc">오름차순 (낮은순)</option>
                             </select>
                         </div>
                         <div class="flex items-center gap-3">
                             <span id="selectedCount" class="text-sm text-brand-blue font-bold">0개 선택됨</span>
-                            <button onclick="analyzeSelectedVideos()" class="bg-brand-blue hover:bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold transition shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed" id="btnBatchAnalyze" disabled><i class="fas fa-magic mr-1"></i> 선택 영상 일괄 분석</button>
+                            <button onclick="analyzeSelectedVideos()"
+                                class="bg-brand-blue hover:bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold transition shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                id="btnBatchAnalyze" disabled><i class="fas fa-magic mr-1"></i> 선택 영상 일괄 분석</button>
                         </div>
                     </div>
-                    <div id="videoGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6"></div>
+                    <div id="videoGrid"
+                        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6"></div>
                     <div id="loadMoreContainer" class="hidden text-center mt-8">
-                        <button onclick="loadMoreChannelVideos()" class="bg-[#333] hover:bg-[#444] text-white px-6 py-3 rounded-full font-bold text-sm transition border border-dark-border shadow-lg"><i class="fas fa-plus mr-2"></i> 영상 더 불러오기</button>
+                        <button onclick="loadMoreChannelVideos()"
+                            class="bg-[#333] hover:bg-[#444] text-white px-6 py-3 rounded-full font-bold text-sm transition border border-dark-border shadow-lg"><i
+                                class="fas fa-plus mr-2"></i> 영상 더 불러오기</button>
                     </div>
                 </div>
 
                 <div id="view-history" class="hidden">
                     <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                        <h3 class="text-white font-bold text-lg flex items-center gap-2"><i class="fas fa-list text-brand-blue"></i> 분석 기록 (Cloud)</h3>
+                        <h3 class="text-white font-bold text-lg flex items-center gap-2"><i
+                                class="fas fa-list text-brand-blue"></i> 분석 기록 (Cloud)</h3>
                         <div class="flex gap-3 w-full md:w-auto items-center">
                             <div class="relative flex-1 md:w-64">
-                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-muted"></i>
-                                <input type="text" id="historySearch" oninput="filterHistory()" placeholder="기록 검색" class="w-full bg-[#121212] border border-dark-border text-white pl-9 p-2 rounded text-sm focus:border-brand-blue outline-none">
+                                <i
+                                    class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-muted"></i>
+                                <input type="text" id="historySearch" oninput="filterHistory()" placeholder="기록 검색"
+                                    class="w-full bg-[#121212] border border-dark-border text-white pl-9 p-2 rounded text-sm focus:border-brand-blue outline-none">
                             </div>
-                            <button onclick="downloadSelectedHistory()" class="bg-brand-blue hover:bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold transition whitespace-nowrap disabled:opacity-50" id="btnHistoryBatchDown" disabled><i class="fas fa-download mr-1"></i> 선택 다운로드</button>
-                            <button onclick="clearAllHistory()" class="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap">전체 삭제</button>
+                            <button onclick="downloadSelectedHistory()"
+                                class="bg-brand-blue hover:bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold transition whitespace-nowrap disabled:opacity-50"
+                                id="btnHistoryBatchDown" disabled><i class="fas fa-download mr-1"></i> 선택 다운로드</button>
+                            <button onclick="clearAllHistory()"
+                                class="text-xs text-red-400 hover:text-red-300 underline whitespace-nowrap">전체
+                                삭제</button>
                         </div>
                     </div>
-                    <div id="historyLoading" class="text-center py-8 text-dark-muted hidden"><div class="loader mb-2 w-6 h-6"></div> 기록 불러오는 중...</div>
+                    <div id="historyLoading" class="text-center py-8 text-dark-muted hidden">
+                        <div class="loader mb-2 w-6 h-6"></div> 기록 불러오는 중...
+                    </div>
                     <div id="historyContainer" class="overflow-x-auto rounded-lg border border-dark-border"></div>
                     <div id="noHistoryMsg" class="text-center text-dark-muted py-10 hidden">저장된 분석 기록이 없습니다.</div>
                 </div>
@@ -162,7 +419,8 @@
                         <p class="text-dark-muted animate-pulse" id="loadingText">데이터 수집 중...</p>
                     </div>
                     <div id="webReport" class="hidden space-y-8">
-                        <div class="bg-gradient-to-r from-blue-900/20 to-transparent border-l-4 border-brand-blue p-5 rounded-r-lg">
+                        <div
+                            class="bg-gradient-to-r from-blue-900/20 to-transparent border-l-4 border-brand-blue p-5 rounded-r-lg">
                             <h4 class="font-bold text-brand-blue mb-3 text-lg">📝 상세 요약</h4>
                             <p id="ui-summary" class="text-gray-300 leading-relaxed highlight-text"></p>
                         </div>
@@ -178,21 +436,29 @@
     <div id="apiModal" class="modal-bg">
         <div class="modal-content overflow-hidden flex flex-col h-[90vh]">
             <div class="p-4 border-b border-dark-border flex justify-between items-center bg-[#252525]">
-                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-key text-brand-blue"></i> API 키 관리 (개별 설정)</h3>
-                <button onclick="closeApiModal()" class="text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button>
+                <h3 class="font-bold text-white flex items-center gap-2"><i class="fas fa-key text-brand-blue"></i> API
+                    키 관리 (개별 설정)</h3>
+                <button onclick="closeApiModal()" class="text-gray-400 hover:text-white transition"><i
+                        class="fas fa-times"></i></button>
             </div>
-            
+
             <div class="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#181818]">
-                
+
                 <!-- YouTube API Section -->
                 <div class="bg-[#121212] rounded-xl border border-dark-border p-4 flex flex-col">
-                    <h4 class="font-bold text-white mb-4 flex items-center gap-2 text-lg"><i class="fab fa-youtube text-brand-red"></i> YouTube API</h4>
-                    
+                    <h4 class="font-bold text-white mb-4 flex items-center gap-2 text-lg"><i
+                            class="fab fa-youtube text-brand-red"></i> YouTube API</h4>
+
                     <div class="bg-[#1E1E1E] p-3 rounded-lg border border-dark-border mb-4 space-y-2">
                         <input type="hidden" id="editId_yt">
-                        <input type="text" id="alias_yt" class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-red outline-none" placeholder="별칭 (예: 메인 유튜브키)">
-                        <input type="password" id="key_yt" class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-red outline-none" placeholder="YouTube API Key" onkeydown="if(event.key === 'Enter') saveKey('yt')">
-                        <button onclick="saveKey('yt')" id="btnSave_yt" class="w-full bg-brand-red hover:bg-red-600 text-white p-2 rounded font-bold text-sm transition">추가하기</button>
+                        <input type="text" id="alias_yt"
+                            class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-red outline-none"
+                            placeholder="별칭 (예: 메인 유튜브키)">
+                        <input type="password" id="key_yt"
+                            class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-red outline-none"
+                            placeholder="YouTube API Key" onkeydown="if(event.key === 'Enter') saveKey('yt')">
+                        <button onclick="saveKey('yt')" id="btnSave_yt"
+                            class="w-full bg-brand-red hover:bg-red-600 text-white p-2 rounded font-bold text-sm transition">추가하기</button>
                     </div>
 
                     <div class="flex-1 overflow-y-auto min-h-[150px]">
@@ -204,13 +470,19 @@
 
                 <!-- Gemini API Section -->
                 <div class="bg-[#121212] rounded-xl border border-dark-border p-4 flex flex-col">
-                    <h4 class="font-bold text-white mb-4 flex items-center gap-2 text-lg"><i class="fas fa-star text-brand-blue"></i> Gemini API</h4>
-                    
+                    <h4 class="font-bold text-white mb-4 flex items-center gap-2 text-lg"><i
+                            class="fas fa-star text-brand-blue"></i> Gemini API</h4>
+
                     <div class="bg-[#1E1E1E] p-3 rounded-lg border border-dark-border mb-4 space-y-2">
                         <input type="hidden" id="editId_gemini">
-                        <input type="text" id="alias_gemini" class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-blue outline-none" placeholder="별칭 (예: 제미나이 프로)">
-                        <input type="password" id="key_gemini" class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-blue outline-none" placeholder="Gemini API Key" onkeydown="if(event.key === 'Enter') saveKey('gemini')">
-                        <button onclick="saveKey('gemini')" id="btnSave_gemini" class="w-full bg-brand-blue hover:bg-blue-600 text-white p-2 rounded font-bold text-sm transition">추가하기</button>
+                        <input type="text" id="alias_gemini"
+                            class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-blue outline-none"
+                            placeholder="별칭 (예: 제미나이 프로)">
+                        <input type="password" id="key_gemini"
+                            class="w-full bg-[#121212] border border-dark-border text-white p-2 rounded text-sm focus:border-brand-blue outline-none"
+                            placeholder="Gemini API Key" onkeydown="if(event.key === 'Enter') saveKey('gemini')">
+                        <button onclick="saveKey('gemini')" id="btnSave_gemini"
+                            class="w-full bg-brand-blue hover:bg-blue-600 text-white p-2 rounded font-bold text-sm transition">추가하기</button>
                     </div>
 
                     <div class="flex-1 overflow-y-auto min-h-[150px]">
@@ -221,9 +493,10 @@
                 </div>
 
             </div>
-            
+
             <div class="p-4 border-t border-dark-border bg-[#252525] text-right">
-                <button onclick="closeApiModal()" class="bg-[#444] hover:bg-[#555] text-white px-6 py-2 rounded-lg text-sm font-bold transition">닫기</button>
+                <button onclick="closeApiModal()"
+                    class="bg-[#444] hover:bg-[#555] text-white px-6 py-2 rounded-lg text-sm font-bold transition">닫기</button>
             </div>
         </div>
     </div>
@@ -239,7 +512,7 @@
         import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // === [중요] UI 함수를 먼저 전역에 등록하여 스크립트 에러 발생 시에도 버튼이 반응하도록 함 ===
-        
+
         window.setMode = (mode) => {
             ['link', 'channel', 'history'].forEach(t => {
                 const view = document.getElementById(`view-${t}`);
@@ -252,8 +525,8 @@
                     tab.className = "flex-1 py-4 text-center font-bold text-sm md:text-base transition-colors text-dark-muted hover:text-white border-b-2 border-transparent hover:bg-[#252525]";
                 }
             });
-            if(mode === 'history') {
-                if(typeof window.filterHistory === 'function') window.filterHistory();
+            if (mode === 'history') {
+                if (typeof window.filterHistory === 'function') window.filterHistory();
                 else console.warn("filterHistory function is not loaded yet.");
             }
         };
@@ -263,17 +536,17 @@
 
         // 전역 변수 설정
         let app, auth, db, appId;
-        
+
         // === Firebase 초기화 및 앱 실행 ===
         (async function initializeSystem() {
             let firebaseConfig = null;
-            
+
             try {
                 // 1. Canvas 환경 변수 확인
                 if (typeof __firebase_config !== 'undefined') {
                     firebaseConfig = JSON.parse(__firebase_config);
                     appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                } 
+                }
                 // 2. 외부 환경(GitHub/Local): firebase-config.json 파일 로드 시도 (이름 변경 반영)
                 else {
                     console.log("Detecting external environment. Looking for firebase-config.json...");
@@ -281,7 +554,7 @@
                         const response = await fetch('./firebase-config.json');
                         if (response.ok) {
                             const configData = await response.json();
-                            firebaseConfig = configData.config || configData; 
+                            firebaseConfig = configData.config || configData;
                             appId = configData.appId || 'github-web-app';
                             console.log("Config loaded from file.");
                         } else {
@@ -295,15 +568,15 @@
                 if (!firebaseConfig) {
                     console.error("Firebase Configuration is missing.");
                     const labelEl = document.getElementById('activeKeyLabel');
-                    if(labelEl) labelEl.innerHTML = '<span class="text-red-500 font-bold">설정 파일 없음 (firebase-config.json 필요)</span>';
+                    if (labelEl) labelEl.innerHTML = '<span class="text-red-500 font-bold">설정 파일 없음 (firebase-config.json 필요)</span>';
                     // 여기서 return하면 DB관련 기능만 안되고 UI는 작동해야 함
-                    return; 
+                    return;
                 }
 
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                
+
                 // 전역 객체에 할당 (다른 함수에서 사용 가능하도록)
                 window.db = db;
                 window.auth = auth;
@@ -322,7 +595,7 @@
                         window.currentUser = user;
                         window.dispatchEvent(new Event('auth-ready'));
                         // 로그인 후 초기 데이터 로드 시도
-                        if(typeof window.loadApiConfig === 'function') await window.loadApiConfig();
+                        if (typeof window.loadApiConfig === 'function') await window.loadApiConfig();
                     }
                 });
 
@@ -333,20 +606,20 @@
         })();
 
         // Global State
-        let currentMarkdownText = ""; 
-        let currentVideoInfo = null; 
-        let currentVideoId = null; 
-        let currentAnalysisTimestamp = null; 
-        let progressInterval; 
-        let channelVideosCache = []; 
-        let selectedVideoIds = new Set(); 
-        let selectedHistoryIds = new Set(); 
-        let currentChannelId = null; 
-        let nextPageToken = null; 
+        let currentMarkdownText = "";
+        let currentVideoInfo = null;
+        let currentVideoId = null;
+        let currentAnalysisTimestamp = null;
+        let progressInterval;
+        let channelVideosCache = [];
+        let selectedVideoIds = new Set();
+        let selectedHistoryIds = new Set();
+        let currentChannelId = null;
+        let nextPageToken = null;
         let currentHistoryKeys = [];
-        let lastBatchZipBlob = null; 
+        let lastBatchZipBlob = null;
         let lastBatchFilename = "";
-        
+
         // API Management State
         let youtubeKeys = [];
         let geminiKeys = [];
@@ -357,14 +630,14 @@
         let historySortState = { key: 'timestamp', order: 'desc' };
 
         // --- Data Loading Functions ---
-        window.loadApiConfig = async function() {
-            if(!window.db) return;
+        window.loadApiConfig = async function () {
+            if (!window.db) return;
             try {
                 // Use imported 'doc' and 'getDoc' directly inside module scope is safer if window.doc fails
                 // But here we use window properties set in init.
                 const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
                 const docSnap = await getDoc(docRef);
-                
+
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     youtubeKeys = data.youtubeKeys || [];
@@ -380,7 +653,7 @@
         }
 
         async function saveApiConfig() {
-            if(!window.db) return alert("데이터베이스 연결이 되어있지 않습니다.");
+            if (!window.db) return alert("데이터베이스 연결이 되어있지 않습니다.");
             try {
                 const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'api_settings', 'config');
                 await setDoc(docRef, {
@@ -398,11 +671,11 @@
         }
 
         // type: 'yt' or 'gemini'
-        window.saveKey = async function(type) {
+        window.saveKey = async function (type) {
             const aliasEl = document.getElementById(`alias_${type}`);
             const keyEl = document.getElementById(`key_${type}`);
             const editIdEl = document.getElementById(`editId_${type}`);
-            
+
             const alias = aliasEl.value.trim();
             const key = keyEl.value.trim();
             const editId = editIdEl.value;
@@ -410,22 +683,22 @@
             if (!alias || !key) return alert("별칭과 키 값을 모두 입력해주세요.");
 
             if (type === 'yt') {
-                if(editId) {
+                if (editId) {
                     const idx = youtubeKeys.findIndex(k => k.id === editId);
-                    if(idx !== -1) youtubeKeys[idx] = { ...youtubeKeys[idx], alias, key };
+                    if (idx !== -1) youtubeKeys[idx] = { ...youtubeKeys[idx], alias, key };
                 } else {
                     const newId = 'yt_' + Date.now();
                     youtubeKeys.push({ id: newId, alias, key });
-                    if(!activeYtId) activeYtId = newId;
+                    if (!activeYtId) activeYtId = newId;
                 }
             } else {
-                if(editId) {
+                if (editId) {
                     const idx = geminiKeys.findIndex(k => k.id === editId);
-                    if(idx !== -1) geminiKeys[idx] = { ...geminiKeys[idx], alias, key };
+                    if (idx !== -1) geminiKeys[idx] = { ...geminiKeys[idx], alias, key };
                 } else {
                     const newId = 'gem_' + Date.now();
                     geminiKeys.push({ id: newId, alias, key });
-                    if(!activeGeminiId) activeGeminiId = newId;
+                    if (!activeGeminiId) activeGeminiId = newId;
                 }
             }
 
@@ -436,15 +709,15 @@
             const btn = document.getElementById(`btnSave_${type}`);
             btn.innerText = "추가하기";
             btn.classList.remove("bg-green-600", "hover:bg-green-700");
-            if(type==='yt') btn.classList.add("bg-brand-red", "hover:bg-red-600");
+            if (type === 'yt') btn.classList.add("bg-brand-red", "hover:bg-red-600");
             else btn.classList.add("bg-brand-blue", "hover:bg-blue-600");
 
             await saveApiConfig();
         };
 
-        window.deleteKey = async function(type, id) {
+        window.deleteKey = async function (type, id) {
             if (!confirm("정말로 이 API 키를 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.")) return;
-            
+
             if (type === 'yt') {
                 youtubeKeys = youtubeKeys.filter(k => k.id !== id);
                 if (activeYtId === id) activeYtId = youtubeKeys.length > 0 ? youtubeKeys[0].id : null;
@@ -455,21 +728,21 @@
             await saveApiConfig();
         };
 
-        window.setActiveKey = async function(type, id) {
+        window.setActiveKey = async function (type, id) {
             if (type === 'yt') activeYtId = id;
             else activeGeminiId = id;
             await saveApiConfig();
         };
 
-        window.editKey = function(type, id) {
+        window.editKey = function (type, id) {
             const list = type === 'yt' ? youtubeKeys : geminiKeys;
             const item = list.find(k => k.id === id);
-            if(!item) return;
+            if (!item) return;
 
             document.getElementById(`editId_${type}`).value = item.id;
             document.getElementById(`alias_${type}`).value = item.alias;
             document.getElementById(`key_${type}`).value = item.key;
-            
+
             const btn = document.getElementById(`btnSave_${type}`);
             btn.innerText = "수정 내용 저장";
             btn.classList.remove("bg-brand-red", "bg-brand-blue", "hover:bg-red-600", "hover:bg-blue-600");
@@ -527,7 +800,7 @@
             const labelEl = document.getElementById('activeKeyLabel');
             const activeYt = youtubeKeys.find(k => k.id === activeYtId);
             const activeGem = geminiKeys.find(k => k.id === activeGeminiId);
-            
+
             if (activeYt && activeGem) {
                 labelEl.innerHTML = `<span class="text-green-400"><i class="fas fa-check-circle mr-1"></i> 준비 완료 (${activeYt.alias} / ${activeGem.alias})</span>`;
             } else {
@@ -538,7 +811,7 @@
         // --- Helpers ---
         function formatNumber(num) { return new Intl.NumberFormat('ko-KR').format(num); }
         function formatDate(isoString) { return new Date(isoString).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }); }
-        function timeSince(isoString) { 
+        function timeSince(isoString) {
             const seconds = Math.floor((new Date() - new Date(isoString)) / 1000);
             let interval = seconds / 31536000;
             if (interval > 1) return Math.floor(interval) + "년 전";
@@ -550,7 +823,7 @@
         }
         function parseBold(text) { return text ? text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') : ""; }
         function sanitizeFilename(str) { return str.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "_"); }
-        
+
         function getFormattedDate(dateObj) {
             const y = dateObj.getFullYear();
             const m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -572,18 +845,18 @@
                 const idMatch = input.match(/\/channel\/([^/?]+)/);
                 if (idMatch) return idMatch[1];
                 const handleMatch = input.match(/\/@([^/?]+)/);
-                if (handleMatch) return handleMatch[1]; 
+                if (handleMatch) return handleMatch[1];
                 const userMatch = input.match(/\/user\/([^/?]+)/);
                 if (userMatch) return userMatch[1];
                 const customMatch = input.match(/\/c\/([^/?]+)/);
                 if (customMatch) return customMatch[1];
             }
             if (input.startsWith('@')) return input.substring(1);
-            return input; 
+            return input;
         }
 
         // Updated getKeys to use separate logic
-        window.getKeys = function() {
+        window.getKeys = function () {
             if (!activeYtId || !activeGeminiId) {
                 alert("YouTube 또는 Gemini API 키가 활성화되지 않았습니다. [키 관리]에서 설정해주세요.");
                 window.openApiModal();
@@ -591,7 +864,7 @@
             }
             const ytItem = youtubeKeys.find(k => k.id === activeYtId);
             const gemItem = geminiKeys.find(k => k.id === activeGeminiId);
-            
+
             if (!ytItem || !gemItem) {
                 alert("활성화된 키 정보를 찾을 수 없습니다.");
                 return null;
@@ -618,31 +891,31 @@
 
         function updateLoadingText(percent, text) {
             const el = document.getElementById('loadingText');
-            if(el) el.innerHTML = `${text} <span class="text-brand-red font-bold">(${Math.min(percent, 99)}%)</span>`;
+            if (el) el.innerHTML = `${text} <span class="text-brand-red font-bold">(${Math.min(percent, 99)}%)</span>`;
         }
 
         function hideLoading() {
             document.getElementById('loading').classList.add('hidden');
-            if(progressInterval) clearInterval(progressInterval);
+            if (progressInterval) clearInterval(progressInterval);
         }
 
         // --- Cloud History Logic ---
-        
-        window.saveAnalysis = async function(videoId, videoData, analysisData) {
+
+        window.saveAnalysis = async function (videoId, videoData, analysisData) {
             const timestamp = Date.now();
             try {
-                if(!window.db) throw new Error("DB not initialized");
+                if (!window.db) throw new Error("DB not initialized");
                 const docRef = doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', videoId);
                 await setDoc(docRef, {
                     timestamp: timestamp,
                     video: videoData,
                     analysis: analysisData
                 });
-                
-                if(document.getElementById('view-history').classList.contains('hidden') === false) {
-                    window.filterHistory(); 
+
+                if (document.getElementById('view-history').classList.contains('hidden') === false) {
+                    window.filterHistory();
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error("Save failed:", e);
                 alert("클라우드 저장 실패: " + e.message);
             }
@@ -650,42 +923,42 @@
         }
 
         // --- History Management (Cloud) ---
-        window.clearAllHistory = async function() {
-            if(!confirm("모든 분석 기록을 클라우드에서 삭제하시겠습니까? 복구할 수 없습니다.")) return;
-            if(!window.db) return alert("DB 연결 안됨");
+        window.clearAllHistory = async function () {
+            if (!confirm("모든 분석 기록을 클라우드에서 삭제하시겠습니까? 복구할 수 없습니다.")) return;
+            if (!window.db) return alert("DB 연결 안됨");
 
             try {
                 const q = query(collection(window.db, 'artifacts', window.appId, 'public', 'data', 'history'));
                 const snapshot = await getDocs(q);
-                
+
                 snapshot.forEach(async (d) => {
                     await deleteDoc(d.ref);
                 });
-                
+
                 selectedHistoryIds.clear();
                 window.filterHistory();
                 alert("삭제 완료되었습니다.");
-            } catch(e) {
+            } catch (e) {
                 alert("삭제 중 오류: " + e.message);
             }
         }
 
-        window.deleteHistoryItem = async function(e, id) {
+        window.deleteHistoryItem = async function (e, id) {
             e.stopPropagation();
-            if(!confirm("이 기록을 삭제하시겠습니까?")) return;
-            if(!window.db) return alert("DB 연결 안됨");
+            if (!confirm("이 기록을 삭제하시겠습니까?")) return;
+            if (!window.db) return alert("DB 연결 안됨");
 
             try {
                 await deleteDoc(doc(window.db, 'artifacts', window.appId, 'public', 'data', 'history', id));
                 selectedHistoryIds.delete(id);
                 window.filterHistory();
-            } catch(e) {
+            } catch (e) {
                 alert("삭제 실패: " + e.message);
             }
         }
 
-        window.fetchCloudHistory = async function() {
-            if(!window.db) return {};
+        window.fetchCloudHistory = async function () {
+            if (!window.db) return {};
             document.getElementById('historyLoading').classList.remove('hidden');
             try {
                 const q = query(
@@ -707,7 +980,7 @@
         }
 
         // Sort Helper Function
-        window.sortHistory = function(key) {
+        window.sortHistory = function (key) {
             if (historySortState.key === key) {
                 // Toggle order
                 historySortState.order = historySortState.order === 'asc' ? 'desc' : 'asc';
@@ -719,27 +992,27 @@
             window.filterHistory(); // Re-filter and sort
         };
 
-        window.filterHistory = async function() {
+        window.filterHistory = async function () {
             const history = await window.fetchCloudHistory();
             const query = document.getElementById('historySearch').value.toLowerCase();
             let keys = Object.keys(history);
-            
+
             // 1. Filter
             keys = keys.filter(k => {
                 const item = history[k];
                 if (!item || !item.video) return false;
-                return item.video.title.toLowerCase().includes(query) || 
-                       item.video.channelTitle.toLowerCase().includes(query);
+                return item.video.title.toLowerCase().includes(query) ||
+                    item.video.channelTitle.toLowerCase().includes(query);
             });
 
             // 2. Sort
             keys.sort((a, b) => {
                 const itemA = history[a];
                 const itemB = history[b];
-                
+
                 let valA, valB;
 
-                switch(historySortState.key) {
+                switch (historySortState.key) {
                     case 'title':
                         valA = itemA.video.title;
                         valB = itemB.video.title;
@@ -771,22 +1044,22 @@
         function renderHistoryTable(keys, history) {
             const container = document.getElementById('historyContainer');
             const noMsg = document.getElementById('noHistoryMsg');
-            
+
             if (keys.length === 0) {
                 container.classList.add('hidden');
                 noMsg.classList.remove('hidden');
-                window.updateHistoryBatchBtn(); 
+                window.updateHistoryBatchBtn();
                 return;
             }
-            
+
             container.classList.remove('hidden');
             noMsg.classList.add('hidden');
 
             // Helper to get sort icon class
             const getSortIcon = (key) => {
                 if (historySortState.key !== key) return '<i class="fas fa-sort text-gray-600 ml-1"></i>';
-                return historySortState.order === 'asc' 
-                    ? '<i class="fas fa-sort-up text-brand-blue ml-1"></i>' 
+                return historySortState.order === 'asc'
+                    ? '<i class="fas fa-sort-up text-brand-blue ml-1"></i>'
                     : '<i class="fas fa-sort-down text-brand-blue ml-1"></i>';
             };
 
@@ -818,8 +1091,8 @@
             keys.forEach(id => {
                 const item = history[id];
                 const isSelected = selectedHistoryIds.has(id);
-                if (!item || !item.video) return; 
-                
+                if (!item || !item.video) return;
+
                 const filename = getReportFilename(item.video, item.timestamp);
 
                 html += `
@@ -852,26 +1125,26 @@
 
             html += '</tbody></table>';
             container.innerHTML = html;
-            
+
             const allCheckbox = document.getElementById('selectAllHistory');
-            if(allCheckbox && keys.length > 0) {
+            if (allCheckbox && keys.length > 0) {
                 allCheckbox.checked = keys.every(k => selectedHistoryIds.has(k));
             }
             window.updateHistoryBatchBtn(); // Fixed: window.updateHistoryBatchBtn()
         }
 
         // --- Added Missing Function ---
-        window.updateHistoryBatchBtn = function() {
+        window.updateHistoryBatchBtn = function () {
             const btn = document.getElementById('btnHistoryBatchDown');
             if (!btn) return;
             btn.disabled = selectedHistoryIds.size === 0;
-            btn.innerHTML = selectedHistoryIds.size > 0 ? 
-                `<i class="fas fa-download mr-1"></i> 선택 다운로드 (${selectedHistoryIds.size})` : 
+            btn.innerHTML = selectedHistoryIds.size > 0 ?
+                `<i class="fas fa-download mr-1"></i> 선택 다운로드 (${selectedHistoryIds.size})` :
                 `<i class="fas fa-download mr-1"></i> 선택 다운로드`;
         };
 
         // --- Core Functions ---
-        window.analyzeSingleVideo = async function() {
+        window.analyzeSingleVideo = async function () {
             const k = window.getKeys(); if (!k) return;
             const url = document.getElementById('videoUrl').value;
             const id = extractVideoId(url);
@@ -879,10 +1152,10 @@
             await window.runAnalysis(id, k);
         }
 
-        window.runAnalysis = async function(id, k) {
-            if(progressInterval) clearInterval(progressInterval);
+        window.runAnalysis = async function (id, k) {
+            if (progressInterval) clearInterval(progressInterval);
 
-            showLoading("데이터 수집 시작..."); 
+            showLoading("데이터 수집 시작...");
             updateLoadingText(5, "데이터 수집 시작...");
 
             try {
@@ -892,34 +1165,34 @@
                 updateLoadingText(40, "댓글 데이터 수집 완료");
 
                 if (!video || !comments) throw new Error("데이터 수집 실패. API 키나 영상 상태를 확인하세요.");
-                
-                window.renderStats(video); 
-                
+
+                window.renderStats(video);
+
                 let currentP = 40;
                 progressInterval = setInterval(() => {
-                    if(currentP < 95) {
-                        currentP += Math.floor(Math.random() * 3) + 1; 
+                    if (currentP < 95) {
+                        currentP += Math.floor(Math.random() * 3) + 1;
                         updateLoadingText(currentP, "AI 심층 분석 및 번역 진행 중...");
                     }
                 }, 500);
 
                 const data = await window.analyzeWithGemini(video, comments, k.geminiKey);
-                
+
                 clearInterval(progressInterval);
                 updateLoadingText(100, "분석 완료!");
 
                 currentVideoInfo = video;
-                currentVideoId = id; 
+                currentVideoId = id;
                 const ts = await window.saveAnalysis(id, video, data);
-                currentAnalysisTimestamp = ts; 
+                currentAnalysisTimestamp = ts;
 
                 setTimeout(() => {
-                     hideLoading();
-                     window.renderWebUI(data, id); 
-                     const md = window.generateMarkdown(data, video);
-                     currentMarkdownText = md;
-                     // Raw Data rendering removed as requested
-                     document.getElementById('webReport').scrollIntoView({behavior: 'smooth'});
+                    hideLoading();
+                    window.renderWebUI(data, id);
+                    const md = window.generateMarkdown(data, video);
+                    currentMarkdownText = md;
+                    // Raw Data rendering removed as requested
+                    document.getElementById('webReport').scrollIntoView({ behavior: 'smooth' });
                 }, 500);
 
             } catch (e) {
@@ -928,9 +1201,9 @@
             }
         }
 
-        window.analyzeWithGemini = async function(videoData, comments, apiKey) {
+        window.analyzeWithGemini = async function (videoData, comments, apiKey) {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025", generationConfig: { responseMimeType: "application/json" } });
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", generationConfig: { responseMimeType: "application/json" } });
 
             const prompt = `
             너는 유튜브 데이터 및 여론 분석 전문가야. 아래 영상 정보와 댓글을 분석하여 JSON 형식으로 답해줘.
@@ -996,12 +1269,12 @@
             try {
                 const result = await model.generateContent(prompt);
                 return JSON.parse(result.response.text());
-            } catch (e) { 
+            } catch (e) {
                 let msg = e.message;
-                if(msg.includes('429') || msg.includes('quota') || msg.includes('403')) {
+                if (msg.includes('429') || msg.includes('quota') || msg.includes('403')) {
                     throw new Error("Gemini API 할당량을 초과했거나 권한이 없습니다.\nGemini API 키를 확인하거나 변경해주세요.");
                 }
-                throw new Error("Gemini API Error: " + msg); 
+                throw new Error("Gemini API Error: " + msg);
             }
         }
 
@@ -1010,34 +1283,34 @@
             const btn = document.getElementById('btnBatchAnalyze');
             const countSpan = document.getElementById('selectedCount');
             const count = selectedVideoIds.size;
-            
+
             countSpan.innerText = `${count}개 선택됨`;
-            
+
             btn.onclick = window.analyzeSelectedVideos;
             btn.classList.remove('bg-brand-green', 'hover:bg-emerald-600', 'bg-gray-500');
             btn.classList.add('bg-brand-blue', 'hover:bg-blue-600');
             btn.innerHTML = `<i class="fas fa-magic mr-1"></i> 선택 영상 일괄 분석`;
-            
+
             btn.disabled = count === 0;
-            
-            if(count > 0) {
+
+            if (count > 0) {
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
                 btn.classList.add('opacity-50', 'cursor-not-allowed');
             }
         }
 
-        window.searchChannelVideos = async function() {
+        window.searchChannelVideos = async function () {
             const k = window.getKeys(); if (!k) return;
             let q = document.getElementById('channelHandle').value;
             if (!q) return alert("채널 정보를 입력해주세요.");
-            
+
             const grid = document.getElementById('videoGrid');
             grid.innerHTML = '<div class="col-span-full text-center py-8 text-dark-muted"><div class="loader mb-2"></div>채널 검색 및 데이터 수집 중...</div>';
             document.getElementById('channelControls').classList.add('hidden');
             document.getElementById('loadMoreContainer').classList.add('hidden');
-            document.getElementById('resultArea').classList.add('hidden'); 
-            
+            document.getElementById('resultArea').classList.add('hidden');
+
             try {
                 channelVideosCache = [];
                 nextPageToken = null;
@@ -1046,9 +1319,9 @@
 
                 let cid = q;
                 const parsedQ = parseChannelInput(q);
-                
+
                 if (!q.startsWith('UC')) {
-                    const s = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${parsedQ}&type=channel&key=${k.ytKey}`).then(r=>r.json());
+                    const s = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${parsedQ}&type=channel&key=${k.ytKey}`).then(r => r.json());
                     if (!s.items?.length) throw new Error("채널을 찾을 수 없습니다.");
                     cid = s.items[0].id.channelId;
                 }
@@ -1058,10 +1331,10 @@
             } catch (e) { grid.innerHTML = `<div class="col-span-full text-center text-brand-red font-bold">${e.message}</div>`; }
         }
 
-        window.loadMoreChannelVideos = async function() {
+        window.loadMoreChannelVideos = async function () {
             const k = window.getKeys(); if (!k) return;
             if (!currentChannelId) return;
-            
+
             const btn = document.querySelector('#loadMoreContainer button');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<div class="loader w-4 h-4 border-2 border-white/30 border-t-white inline-block mr-2"></div> 로딩 중...';
@@ -1069,7 +1342,7 @@
 
             try {
                 await window.fetchChannelVideosPage(k.ytKey);
-            } catch(e) {
+            } catch (e) {
                 alert("추가 영상을 불러오는데 실패했습니다.");
             } finally {
                 btn.innerHTML = originalText;
@@ -1077,16 +1350,16 @@
             }
         }
 
-        window.fetchChannelVideosPage = async function(apiKey) {
-            const maxResults = 50; 
+        window.fetchChannelVideosPage = async function (apiKey) {
+            const maxResults = 50;
             let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${currentChannelId}&order=date&maxResults=${maxResults}&type=video&key=${apiKey}`;
             if (nextPageToken) url += `&pageToken=${nextPageToken}`;
 
             const vRes = await fetch(url);
             const vData = await vRes.json();
-            
+
             if (!vData.items?.length) {
-                if(channelVideosCache.length === 0) document.getElementById('videoGrid').innerHTML = 'No Videos';
+                if (channelVideosCache.length === 0) document.getElementById('videoGrid').innerHTML = 'No Videos';
                 document.getElementById('loadMoreContainer').classList.add('hidden');
                 return;
             }
@@ -1111,22 +1384,22 @@
 
             channelVideosCache = [...channelVideosCache, ...newItems];
             document.getElementById('channelControls').classList.remove('hidden');
-            window.sortChannelVideos(); 
+            window.sortChannelVideos();
         }
 
-        window.analyzeSelectedVideos = async function() {
+        window.analyzeSelectedVideos = async function () {
             const k = window.getKeys(); if (!k) return;
             const ids = Array.from(selectedVideoIds);
             if (ids.length === 0) return;
 
-            if(!confirm(`${ids.length}개의 영상을 순차적으로 분석하시겠습니까?\n시간이 다소 소요될 수 있으며 API 사용량이 증가합니다.`)) return;
+            if (!confirm(`${ids.length}개의 영상을 순차적으로 분석하시겠습니까?\n시간이 다소 소요될 수 있으며 API 사용량이 증가합니다.`)) return;
 
             document.getElementById('resultArea').classList.add('hidden');
-            
+
             const btn = document.getElementById('btnBatchAnalyze');
             btn.disabled = true;
             btn.classList.add('cursor-not-allowed', 'opacity-70');
-            
+
             const zip = new JSZip();
             let successCount = 0;
             const batchDate = getFormattedDate(new Date());
@@ -1138,16 +1411,16 @@
                 try {
                     const video = await window.fetchVideoDetails(vid, k.ytKey);
                     const comments = await window.fetchComments(vid, k.ytKey);
-                    
+
                     if (video && comments) {
-                        await new Promise(r => setTimeout(r, 1500)); 
+                        await new Promise(r => setTimeout(r, 1500));
                         const analysis = await window.analyzeWithGemini(video, comments, k.geminiKey);
                         const ts = await window.saveAnalysis(vid, video, analysis);
                         const singleMd = window.generateMarkdown(analysis, video);
-                        
+
                         const filename = getReportFilename(video, ts);
                         zip.file(filename, singleMd);
-                        
+
                         successCount++;
                     }
                 } catch (e) {
@@ -1156,12 +1429,12 @@
                 }
             }
 
-            const content = await zip.generateAsync({type:"blob"});
+            const content = await zip.generateAsync({ type: "blob" });
             lastBatchZipBlob = content;
             lastBatchFilename = `Batch_Analysis_${ids.length}Videos_${batchDate}.zip`;
-            
+
             triggerDownloadBlob(lastBatchZipBlob, lastBatchFilename);
-            
+
             btn.innerHTML = `<i class="fas fa-file-download mr-1"></i> 분석 결과 다운로드 (ZIP)`;
             btn.classList.remove('bg-brand-blue', 'hover:bg-blue-600', 'opacity-70', 'cursor-not-allowed');
             btn.classList.add('bg-green-600', 'hover:bg-green-700');
@@ -1170,67 +1443,67 @@
 
             alert(`${successCount}/${ids.length}개 영상 분석 완료. ZIP 파일이 다운로드되었습니다.`);
             selectedVideoIds.clear();
-            window.renderChannelGrid(); 
+            window.renderChannelGrid();
         }
 
         // --- History Filter & Toggle ---
-        window.toggleHistorySelection = async function(id) {
+        window.toggleHistorySelection = async function (id) {
             if (selectedHistoryIds.has(id)) selectedHistoryIds.delete(id);
             else selectedHistoryIds.add(id);
-            
+
             const allCheckbox = document.getElementById('selectAllHistory');
-            if(allCheckbox) {
+            if (allCheckbox) {
                 const allSelected = currentHistoryKeys.length > 0 && currentHistoryKeys.every(k => selectedHistoryIds.has(k));
                 allCheckbox.checked = allSelected;
             }
             window.updateHistoryBatchBtn();
         }
 
-        window.toggleAllHistorySelection = async function() {
+        window.toggleAllHistorySelection = async function () {
             const allCheckbox = document.getElementById('selectAllHistory');
             const isChecked = allCheckbox.checked;
-            
+
             currentHistoryKeys.forEach(key => {
-                if(isChecked) selectedHistoryIds.add(key);
+                if (isChecked) selectedHistoryIds.add(key);
                 else selectedHistoryIds.delete(key);
             });
-            
-            window.filterHistory(); 
+
+            window.filterHistory();
             window.updateHistoryBatchBtn();
         }
 
-        window.downloadSelectedHistory = async function() {
+        window.downloadSelectedHistory = async function () {
             const ids = Array.from(selectedHistoryIds);
             if (ids.length === 0) return alert("선택된 항목이 없습니다.");
-            
+
             const zip = new JSZip();
-            const history = await window.fetchCloudHistory(); 
+            const history = await window.fetchCloudHistory();
             const batchDate = getFormattedDate(new Date());
             let addedCount = 0;
-            
+
             ids.forEach((vid) => {
                 const item = history[vid];
-                if(item) {
+                if (item) {
                     const md = window.generateMarkdown(item.analysis, item.video);
                     const filename = getReportFilename(item.video, item.timestamp);
                     zip.file(filename, md);
                     addedCount++;
                 }
             });
-            
+
             if (addedCount === 0) return alert("다운로드할 데이터가 유효하지 않습니다.");
 
-            const content = await zip.generateAsync({type:"blob"});
+            const content = await zip.generateAsync({ type: "blob" });
             const zipFilename = `History_Export_${ids.length}files_${batchDate}.zip`;
-            
+
             triggerDownloadBlob(content, zipFilename);
         }
 
-        window.loadSavedAnalysis = async function(videoId) {
+        window.loadSavedAnalysis = async function (videoId) {
             const history = await window.fetchCloudHistory();
             const saved = history[videoId];
-            
-            if(saved) {
+
+            if (saved) {
                 currentVideoInfo = saved.video;
                 currentVideoId = videoId;
                 currentAnalysisTimestamp = saved.timestamp;
@@ -1241,15 +1514,15 @@
                 document.getElementById('statsDashboard').classList.remove('hidden');
                 document.getElementById('loading').classList.add('hidden');
                 window.renderStats(saved.video);
-                window.renderWebUI(saved.analysis, videoId); 
+                window.renderWebUI(saved.analysis, videoId);
                 const md = window.generateMarkdown(saved.analysis, saved.video);
                 currentMarkdownText = md;
                 // Removed Raw Data rendering
-                document.getElementById('resultArea').scrollIntoView({behavior: 'smooth'});
+                document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
             }
         }
 
-        window.downloadSavedReport = async function(e, videoId, filename) {
+        window.downloadSavedReport = async function (e, videoId, filename) {
             e.stopPropagation();
             const history = await window.fetchCloudHistory();
             const saved = history[videoId];
@@ -1258,10 +1531,10 @@
             triggerDownload(md, filename);
         }
 
-        window.sortChannelVideos = function() {
+        window.sortChannelVideos = function () {
             const sortKey = document.getElementById('sortOption').value;
             const order = document.getElementById('orderOption').value;
-            
+
             channelVideosCache.sort((a, b) => {
                 let valA = sortKey === 'date' ? a.date : a[sortKey];
                 let valB = sortKey === 'date' ? b.date : b[sortKey];
@@ -1271,21 +1544,21 @@
             window.renderChannelGrid();
         }
 
-        window.toggleVideoSelection = function(id) {
+        window.toggleVideoSelection = function (id) {
             if (selectedVideoIds.has(id)) selectedVideoIds.delete(id);
             else selectedVideoIds.add(id);
-            window.renderChannelGrid(); 
+            window.renderChannelGrid();
             updateBatchButton();
         }
 
-        window.runSingleAnalysisFromGrid = function(e, id) {
+        window.runSingleAnalysisFromGrid = function (e, id) {
             e.stopPropagation();
             const keys = window.getKeys();
-            if(!keys) return;
-            
+            if (!keys) return;
+
             const resultArea = document.getElementById('resultArea');
             resultArea.classList.remove('hidden');
-            
+
             setTimeout(() => {
                 resultArea.scrollIntoView({ behavior: 'smooth' });
             }, 100);
@@ -1293,28 +1566,28 @@
             window.runAnalysis(id, keys);
         }
 
-        window.downloadReport = function() {
+        window.downloadReport = function () {
             if (!currentMarkdownText || !currentVideoInfo) return alert("다운로드할 내용이 없습니다.");
             const filename = getReportFilename(currentVideoInfo, currentAnalysisTimestamp);
             triggerDownload(currentMarkdownText, filename);
         };
 
         // --- Explicitly Assign renderChannelGrid to window ---
-        window.renderChannelGrid = function() {
+        window.renderChannelGrid = function () {
             const grid = document.getElementById('videoGrid');
-            if (!grid) return; 
+            if (!grid) return;
             grid.innerHTML = '';
-            
+
             channelVideosCache.forEach(v => {
                 const isSelected = selectedVideoIds.has(v.id);
                 const borderClass = isSelected ? 'border-brand-blue ring-2 ring-brand-blue' : 'border-dark-border';
-                
+
                 const d = document.createElement('div');
                 d.className = `bg-dark-card border ${borderClass} rounded-lg overflow-hidden cursor-pointer hover-card shadow-lg relative`;
-                
+
                 d.onclick = (e) => {
-                    if(e.target.closest('.analyze-btn')) return;
-                    window.toggleVideoSelection(v.id); 
+                    if (e.target.closest('.analyze-btn')) return;
+                    window.toggleVideoSelection(v.id);
                 };
 
                 d.innerHTML = `
@@ -1342,18 +1615,18 @@
             });
         }
 
-        window.fetchVideoDetails = async function(videoId, apiKey) {
+        window.fetchVideoDetails = async function (videoId, apiKey) {
             try {
                 const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`);
                 const data = await res.json();
-                
+
                 if (data.error) {
-                    if(data.error.code === 403) {
-                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
+                    if (data.error.code === 403) {
+                        throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
                     }
                     throw new Error(data.error.message);
                 }
-                
+
                 if (!data.items?.length) return null;
                 return {
                     title: data.items[0].snippet.title,
@@ -1364,23 +1637,23 @@
                     commentCount: data.items[0].statistics.commentCount,
                     description: data.items[0].snippet.description
                 };
-            } catch(e) { throw e; }
+            } catch (e) { throw e; }
         }
 
-        window.fetchComments = async function(videoId, apiKey) {
+        window.fetchComments = async function (videoId, apiKey) {
             try {
                 const res = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=relevance&key=${apiKey}`);
                 const data = await res.json();
-                
+
                 if (data.error) {
-                    if(data.error.code === 403) {
-                         throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
+                    if (data.error.code === 403) {
+                        throw new Error("YouTube API 할당량을 초과했거나 권한이 없습니다.\nYouTube API 키를 확인하거나 변경해주세요.");
                     }
                     throw new Error(data.error.message);
                 }
 
                 return data.items ? data.items.map(i => `- ${i.snippet.topLevelComment.snippet.authorDisplayName}: ${i.snippet.topLevelComment.snippet.textDisplay.replace(/<br>/g, ' ')}`).join("\n") : null;
-            } catch(e) { throw e; }
+            } catch (e) { throw e; }
         }
 
         const extractVideoId = (url) => {
@@ -1412,7 +1685,7 @@
             URL.revokeObjectURL(url);
         }
 
-        window.renderStats = function(data) {
+        window.renderStats = function (data) {
             const dashboard = document.getElementById('statsDashboard');
             dashboard.classList.remove('hidden');
             dashboard.innerHTML = [
@@ -1430,21 +1703,21 @@
             `).join('');
         };
 
-        window.renderWebUI = function(data, videoId) {
+        window.renderWebUI = function (data, videoId) {
             document.getElementById('webReport').classList.remove('hidden');
-            const setHtml = (id, text) => { 
+            const setHtml = (id, text) => {
                 const el = document.getElementById(id);
-                if(el) el.innerHTML = parseBold(text);
+                if (el) el.innerHTML = parseBold(text);
             };
-            
+
             setHtml('ui-summary', data.summary);
-            
+
             const d = document.getElementById('dynamicReportContent');
             const v = data.viral_analysis;
             const s = data.content_type_analysis;
             const c = data.controversy_deep_analysis;
-            const fmt = (list) => (list||[]).map(e => `<div class="comment-quote"><span class="comment-author">${e.user}</span>"${e.text}"</div>`).join('');
-            
+            const fmt = (list) => (list || []).map(e => `<div class="comment-quote"><span class="comment-author">${e.user}</span>"${e.text}"</div>`).join('');
+
             let html = '';
 
             if (videoId) {
@@ -1500,7 +1773,7 @@
                     <div class="overflow-x-auto rounded-lg border border-dark-border">
                         <table class="w-full text-left comment-table">
                             <thead><tr><th class="w-1/4">유형</th><th class="w-3/4">내용</th></tr></thead>
-                            <tbody>${(data.best_comments_detailed||[]).map(x => `<tr><td class="font-bold text-brand-blue">${x.type}</td><td>"${x.text}"<span class="block text-xs text-gray-500 mt-1">@${x.author}</span></td></tr>`).join('')}</tbody>
+                            <tbody>${(data.best_comments_detailed || []).map(x => `<tr><td class="font-bold text-brand-blue">${x.type}</td><td>"${x.text}"<span class="block text-xs text-gray-500 mt-1">@${x.author}</span></td></tr>`).join('')}</tbody>
                         </table>
                     </div>
                 </div>
@@ -1535,18 +1808,18 @@
                     </div>
                     <div class="bg-dark-card border border-dark-border p-6 rounded-xl">
                         <h4 class="font-bold text-white mb-4">🔑 핵심 키워드</h4>
-                        <div class="flex flex-wrap gap-2">${(data.keywords_detailed||[]).map(k=>`<span class="px-3 py-1 bg-[#252525] text-gray-300 rounded-full text-xs border border-dark-border">${k}</span>`).join('')}</div>
+                        <div class="flex flex-wrap gap-2">${(data.keywords_detailed || []).map(k => `<span class="px-3 py-1 bg-[#252525] text-gray-300 rounded-full text-xs border border-dark-border">${k}</span>`).join('')}</div>
                     </div>
                 </div>
             `;
-            
+
             d.innerHTML = html;
         };
 
         window.generateMarkdown = (data, video) => {
             const v = data.viral_analysis, s = data.content_type_analysis, c = data.controversy_deep_analysis;
             const fmt = (ex) => ex.map(e => `  - **${e.user}**: "${e.text}"`).join('\n');
-            const tbl = (data.best_comments_detailed||[]).map(x => `| ${x.type} | "${x.text}" (@${x.author}) |`).join('\n');
+            const tbl = (data.best_comments_detailed || []).map(x => `| ${x.type} | "${x.text}" (@${x.author}) |`).join('\n');
 
             return `# 🎬 YouTube 심층 분석 리포트
 
@@ -1604,4 +1877,5 @@ ${tbl}
 
     </script>
 </body>
+
 </html>
