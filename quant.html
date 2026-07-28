@@ -6,7 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>퀀트 매수·매도 수량 계산기</title>
+<title>퀀트 수량 계산기</title>
 <style>
 * { box-sizing: border-box; }
 body {
@@ -34,7 +34,7 @@ h1 {
 }
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 6px;
   background: white;
@@ -51,6 +51,7 @@ h1 {
 }
 .tabs .buy.active { background: #4338ca; color: white; }
 .tabs .sell.active { background: #be123c; color: white; }
+.tabs .average.active { background: #0f766e; color: white; }
 .tabs button:not(.active) { background: #eef2f7; color: #4b5563; }
 
 .common {
@@ -62,6 +63,9 @@ h1 {
   box-shadow: 0 5px 14px rgba(0,0,0,.08);
 }
 .sell-common { border-color: #fb7185; }
+.average-common { border-color: #2dd4bf; }
+.average-card { border: 2px solid #5eead4; }
+.average-result { background: #0f766e; }
 .common-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -150,6 +154,7 @@ input {
 .result div:last-child{background:#facc15;border:2px solid #f59e0b;box-shadow:0 0 12px rgba(250,204,21,.7);transform:scale(1.03);}
 .buy-result div:last-child strong{color:#b91c1c;font-size:20px;font-weight:900;}
 .sell-result div:last-child strong{color:#991b1b;font-size:20px;font-weight:900;}
+.average-result div:last-child strong{color:#92400e;font-size:20px;font-weight:900;}
 .result div:last-child small{color:#7c2d12;font-weight:800;font-size:11px;}
 .result strong {display:block;margin-top:2px;font-size:14px;overflow-wrap:anywhere;font-weight:800;}
 .error {
@@ -177,7 +182,7 @@ input {
   .result { grid-template-columns: 1fr 1fr; padding: 10px; }
   .result small { font-size: 11px; }
   .result strong { font-size: 20px; }
-  .buy-result div:last-child strong,.sell-result div:last-child strong{font-size:28px;}
+  .buy-result div:last-child strong,.sell-result div:last-child strong,.average-result div:last-child strong{font-size:28px;}
   .amount-box strong { font-size: 20px; }
 }
 
@@ -199,6 +204,7 @@ input {
     <div class="tabs">
       <button id="buyTab" class="buy active" onclick="showTab('buy')">📈 매수</button>
       <button id="sellTab" class="sell" onclick="showTab('sell')">📉 매도</button>
+      <button id="averageTab" class="average" onclick="showTab('average')">🧮 평단계산기</button>
     </div>
   </div>
 
@@ -332,6 +338,70 @@ input {
     
     </div>
   </section>
+
+  <section id="averageSection" class="hidden">
+    <div class="common average-common">
+      <div class="common-grid">
+        <div>
+          <label for="currentAverage">현재 평단가</label>
+          <input id="currentAverage" inputmode="decimal" oninput="calculateAverage()">
+        </div>
+        <div>
+          <label for="currentQuantity">현재 보유수량</label>
+          <input id="currentQuantity" inputmode="decimal" oninput="calculateAverage()">
+        </div>
+        <div>
+          <label for="targetAverage">목표 평단가</label>
+          <input id="targetAverage" inputmode="decimal" oninput="calculateAverage()">
+        </div>
+        <div>
+          <label for="additionalPrice">추가 매수 단가</label>
+          <input id="additionalPrice" inputmode="decimal" oninput="calculateAverage()">
+        </div>
+      </div>
+      <p class="formula">보유수량 × (현재 평단 − 목표 평단) ÷ (목표 평단 − 추가 매수가)</p>
+    </div>
+
+    <div class="cards">
+      <article class="card average-card">
+        <h2>필요 매수수량</h2>
+        <div class="amount-box">
+          <small>정확한 계산 수량</small>
+          <strong id="averageExactQuantity">0.00</strong>
+        </div>
+        <div class="result average-result">
+          <div><small>반내림 수량</small><strong id="averageFloorQuantity">0</strong></div>
+          <div><small>반올림 수량</small><strong id="averageCeilQuantity">0</strong></div>
+        </div>
+        <p id="averageError" class="error"></p>
+      </article>
+
+      <article class="card average-card">
+        <h2>추가 매수금액</h2>
+        <div class="amount-box">
+          <small>정확한 계산 수량 기준</small>
+          <strong id="averageExactAmount">0.00</strong>
+        </div>
+        <div class="result average-result">
+          <div><small>반내림 수량 기준</small><strong id="averageFloorAmount">0.00</strong></div>
+          <div><small>반올림 수량 기준</small><strong id="averageCeilAmount">0.00</strong></div>
+        </div>
+      </article>
+
+      <article class="card average-card">
+        <h2>예상 평단가</h2>
+        <div class="amount-box">
+          <small>정확한 계산 수량 매수 후</small>
+          <strong id="averageExactExpected">0.0000</strong>
+        </div>
+        <div class="result average-result">
+          <div><small>반내림 수량 매수 후</small><strong id="averageFloorExpected">0.0000</strong></div>
+          <div><small>반올림 수량 매수 후</small><strong id="averageCeilExpected">0.0000</strong></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
 </div>
 
 <script>
@@ -343,10 +413,14 @@ function fmt2(v) {
 }
 function showTab(tab) {
   const buy = tab === "buy";
+  const sell = tab === "sell";
+  const average = tab === "average";
   document.getElementById("buySection").classList.toggle("hidden", !buy);
-  document.getElementById("sellSection").classList.toggle("hidden", buy);
+  document.getElementById("sellSection").classList.toggle("hidden", !sell);
+  document.getElementById("averageSection").classList.toggle("hidden", !average);
   document.getElementById("buyTab").classList.toggle("active", buy);
-  document.getElementById("sellTab").classList.toggle("active", !buy);
+  document.getElementById("sellTab").classList.toggle("active", sell);
+  document.getElementById("averageTab").classList.toggle("active", average);
 }
 function calculateAllBuy() {
   for (let i=1; i<=3; i++) calculateBuy(i);
@@ -403,6 +477,99 @@ function calculateSell(i) {
     if (totalPctRaw !== "" && totalPct <= 0) error.textContent = "총 매수 비율은 0보다 커야 합니다.";
   }
 }
+
+function fmt4(v) {
+  return v.toLocaleString("en-US", {minimumFractionDigits:4, maximumFractionDigits:4});
+}
+
+function resetAverageResult() {
+  document.getElementById("averageExactQuantity").textContent = "0.00";
+  document.getElementById("averageFloorQuantity").textContent = "0";
+  document.getElementById("averageCeilQuantity").textContent = "0";
+  document.getElementById("averageExactAmount").textContent = "0.00";
+  document.getElementById("averageFloorAmount").textContent = "0.00";
+  document.getElementById("averageCeilAmount").textContent = "0.00";
+  document.getElementById("averageExactExpected").textContent = "0.0000";
+  document.getElementById("averageFloorExpected").textContent = "0.0000";
+  document.getElementById("averageCeilExpected").textContent = "0.0000";
+}
+
+function calculateAverage() {
+  const currentAvgRaw = document.getElementById("currentAverage").value.trim();
+  const currentQtyRaw = document.getElementById("currentQuantity").value.trim();
+  const targetAvgRaw = document.getElementById("targetAverage").value.trim();
+  const priceRaw = document.getElementById("additionalPrice").value.trim();
+  const error = document.getElementById("averageError");
+  error.textContent = "";
+
+  if ([currentAvgRaw, currentQtyRaw, targetAvgRaw, priceRaw].some(v => v === "")) {
+    resetAverageResult();
+    return;
+  }
+
+  const currentAvg = n(currentAvgRaw);
+  const currentQty = n(currentQtyRaw);
+  const targetAvg = n(targetAvgRaw);
+  const price = n(priceRaw);
+
+  if ([currentAvg, currentQty, targetAvg, price].some(v => !Number.isFinite(v) || v <= 0)) {
+    resetAverageResult();
+    error.textContent = "모든 항목에 0보다 큰 숫자를 입력해주세요.";
+    return;
+  }
+
+  if (currentAvg === targetAvg) {
+    resetAverageResult();
+    document.getElementById("averageExactExpected").textContent = fmt4(currentAvg);
+    document.getElementById("averageFloorExpected").textContent = fmt4(currentAvg);
+    document.getElementById("averageCeilExpected").textContent = fmt4(currentAvg);
+    return;
+  }
+
+  const reachable =
+    (price < targetAvg && targetAvg < currentAvg) ||
+    (currentAvg < targetAvg && targetAvg < price);
+
+  if (!reachable) {
+    resetAverageResult();
+    if (currentAvg > targetAvg && price >= targetAvg) {
+      error.textContent = "목표 평단까지 낮추려면 추가 매수 단가가 목표 평단보다 낮아야 합니다.";
+    } else if (currentAvg < targetAvg && price <= targetAvg) {
+      error.textContent = "목표 평단까지 높이려면 추가 매수 단가가 목표 평단보다 높아야 합니다.";
+    } else {
+      error.textContent = "목표 평단은 현재 평단과 추가 매수 단가 사이여야 합니다.";
+    }
+    return;
+  }
+
+  const exactQty = currentQty * (currentAvg - targetAvg) / (targetAvg - price);
+  const floorQty = Math.floor(exactQty);
+  const ceilQty = Math.ceil(exactQty);
+
+  const exactAmount = price * exactQty;
+  const floorAmount = price * floorQty;
+  const ceilAmount = price * ceilQty;
+
+  const currentAmount = currentAvg * currentQty;
+  const exactExpected = (currentAmount + exactAmount) / (currentQty + exactQty);
+  const floorExpected = floorQty === 0
+    ? currentAvg
+    : (currentAmount + floorAmount) / (currentQty + floorQty);
+  const ceilExpected = ceilQty === 0
+    ? currentAvg
+    : (currentAmount + ceilAmount) / (currentQty + ceilQty);
+
+  document.getElementById("averageExactQuantity").textContent = fmt2(exactQty);
+  document.getElementById("averageFloorQuantity").textContent = floorQty.toLocaleString("en-US");
+  document.getElementById("averageCeilQuantity").textContent = ceilQty.toLocaleString("en-US");
+  document.getElementById("averageExactAmount").textContent = fmt2(exactAmount);
+  document.getElementById("averageFloorAmount").textContent = fmt2(floorAmount);
+  document.getElementById("averageCeilAmount").textContent = fmt2(ceilAmount);
+  document.getElementById("averageExactExpected").textContent = fmt4(exactExpected);
+  document.getElementById("averageFloorExpected").textContent = fmt4(floorExpected);
+  document.getElementById("averageCeilExpected").textContent = fmt4(ceilExpected);
+}
+
 </script>
 </body>
 </html>
